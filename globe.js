@@ -188,6 +188,15 @@ class GlobeVis {
         // Clear any existing paths
         this.globeGroup.selectAll('.country').remove();
         
+        // Add ocean circle with a much darker blue color
+        this.globeGroup.append('circle')
+            .attr('class', 'ocean')
+            .attr('cx', 0)
+            .attr('cy', 0)
+            .attr('r', this.radius)
+            .attr('fill', '#002733')  // Very dark ocean blue color
+            .attr('fill-opacity', 0.8);
+        
         // Add countries to the globe with rendering optimizations
         this.globeGroup.selectAll('.country')
             .data(countries.features)
