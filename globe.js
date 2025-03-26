@@ -13,6 +13,12 @@ class GlobeVis {
         // Earth radius - increased for a bigger globe
         this.radius = 260; // Increased from 220
         
+        // Auto-rotation properties
+        this.autoRotate = true;
+        this.autoRotateSpeed = 0.2; // Speed of auto-rotation in degrees per frame
+        this.lastFrameTime = 0;
+        this.animationFrameId = null;
+        
         // Initialize the visualization
         this.initVis();
         
@@ -77,6 +83,9 @@ class GlobeVis {
             .on("wheel", event => {
                 event.preventDefault(); // Prevent page scrolling
             });
+        
+        // Start auto-rotation after initialization
+        this.startAutoRotation();
         
         try {
             // Load the world map data
@@ -331,7 +340,52 @@ class GlobeVis {
         }
     }
     
+    startAutoRotation() {
+        if (!this.autoRotate) return;
+        
+        const animate = (timestamp) => {
+            if (!this.autoRotate) return;
+            
+            // Initialize lastFrameTime if needed to prevent large first step
+            if (!this.lastFrameTime) {
+                this.lastFrameTime = timestamp;
+            }
+            
+            // Calculate time elapsed since last frame for smooth rotation regardless of frame rate
+            const elapsed = timestamp - this.lastFrameTime;
+            this.lastFrameTime = timestamp;
+            
+            // Cap elapsed time to avoid jumps after tab switch or sleep
+            const cappedElapsed = Math.min(elapsed, 100);
+            
+            // Update rotation based on elapsed time (smooth motion)
+            this.currentRotation[0] += this.autoRotateSpeed * cappedElapsed / 16; // Normalize to ~60fps
+            this.projection.rotate(this.currentRotation);
+            
+            // Update paths with new projection
+            this.globeGroup.selectAll('path')
+                .attr('d', this.path);
+                
+            // Continue animation loop
+            this.animationFrameId = requestAnimationFrame(animate);
+        };
+        
+        // Start animation loop
+        this.animationFrameId = requestAnimationFrame(animate);
+    }
+    
+    stopAutoRotation() {
+        this.autoRotate = false;
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+    }
+    
     dragstarted(event) {
+        // Stop auto-rotation when user starts dragging
+        this.stopAutoRotation();
+        
         // Store initial rotation and mouse position
         this.drag.initialRotation = [...this.currentRotation];
         this.drag.startPos = [event.x, event.y];
@@ -366,6 +420,9 @@ class GlobeVis {
     }
     
     zoomed(event) {
+        // Stop auto-rotation when zooming
+        this.stopAutoRotation();
+        
         console.log("Zoom event detected:", event.transform.k); // Debug log
         
         // Get the scale from the zoom transform
@@ -407,18 +464,44 @@ class GlobeVis {
     }
     
     resetView() {
-        // Reset rotation and zoom with smooth animation
-        this.currentRotation = [0, 0, 0];
+        // Stop any current auto-rotation
+        this.stopAutoRotation();
+        
+        // Set target rotation for reset animation
+        const targetRotation = [0, 0, 0];
+        
+        // Reset lastFrameTime to ensure smooth first frame when rotation restarts
+        this.lastFrameTime = 0;
         
         // Smooth rotation transition
         d3.transition()
             .duration(1000)
             .tween('rotate', () => {
-                const r = d3.interpolate(this.projection.rotate(), this.currentRotation);
+                const r = d3.interpolate(this.projection.rotate(), targetRotation);
                 return t => {
-                    this.projection.rotate(r(t));
+                    // Get the interpolated rotation at this point in the animation
+                    const rotation = r(t);
+                    
+                    // Update projection with interpolated rotation
+                    this.projection.rotate(rotation);
+                    
+                    // Important: Keep currentRotation synchronized with the animation
+                    this.currentRotation = [...rotation];
+                    
+                    // Update the globe paths
                     this.globeGroup.selectAll('path').attr('d', this.path);
                 };
+            })
+            .on('end', () => {
+                // Ensure we're at exactly [0,0,0]
+                this.projection.rotate([0,0,0]);
+                this.currentRotation = [0,0,0];
+                
+                // Add a tiny delay before starting rotation to prevent visual jump
+                setTimeout(() => {
+                    this.autoRotate = true;
+                    this.startAutoRotation();
+                }, 20);
             });
         
         // Reset zoom transform with animation
@@ -438,21 +521,18 @@ class GlobeVis {
             this.resetView();
         });
         
+        // Remove the mouseenter event handler that was stopping auto-rotation
+        // Stop rotation only when actually interacting with the globe (dragging or zooming)
+        
+        // Add wheel event handler to stop rotation when zooming
+        this.svg.on('wheel', () => {
+            this.stopAutoRotation();
+        });
+        
         // Handle window resize
         window.addEventListener('resize', () => {
             this.resize();
         });
-    }
-    
-    resize() {
-        // Keep a fixed size for the globe rather than resizing with window
-        // Only update the SVG container, not the globe radius
-        this.svg
-            .attr('width', this.width)
-            .attr('viewBox', `0 0 ${this.width} ${this.height}`);
-            
-        // Update translation of globe group - maintain the right offset
-        this.globeGroup.attr('transform', `translate(${this.width / 2 + 30}, ${this.height / 2})`);
     }
 }
 
