@@ -67,13 +67,16 @@ class GlobeVis {
         // Add drag behavior to SVG
         this.svg.call(this.drag);
         
-        // Set up zoom behavior
+        // Set up zoom behavior - fixed configuration for better responsiveness
         this.zoom = d3.zoom()
-            .scaleExtent([0.9, 4]) // Limit zoom range to avoid extreme distortions
+            .scaleExtent([0.7, 5]) // Wider zoom range
             .on('zoom', this.zoomed.bind(this));
             
-        // Add zoom behavior to SVG
-        this.svg.call(this.zoom);
+        // Add zoom behavior to SVG with explicit handling of wheel events
+        this.svg.call(this.zoom)
+            .on("wheel", event => {
+                event.preventDefault(); // Prevent page scrolling
+            });
         
         try {
             // Load the world map data
@@ -363,23 +366,36 @@ class GlobeVis {
     }
     
     zoomed(event) {
-        // We keep the globe radius constant, but still allow "zooming" for details
+        console.log("Zoom event detected:", event.transform.k); // Debug log
+        
+        // Get the scale from the zoom transform
         const scale = event.transform.k;
         
-        // Important: Use fixed radius for the globe's spherical shape
-        this.projection.scale(this.radius);
+        // Adjust the globe radius based on the zoom scale
+        const adjustedRadius = this.radius * scale;
         
-        // Apply scale transform to the group containing countries
-        this.globeGroup.selectAll('.country')
-            .attr('stroke-width', 0.3 / scale + 'px')
+        // Update projection scale with the adjusted radius
+        this.projection.scale(adjustedRadius);
+        
+        // Update all paths with new projection
+        this.globeGroup.selectAll('path')
             .attr('d', this.path);
+            
+        // Update the ocean circle radius
+        this.globeGroup.select('.ocean')
+            .attr('r', adjustedRadius);
+            
+        // Update the backdrop circle radius too
+        this.svg.select('.globe-backdrop')
+            .attr('r', adjustedRadius + 5);
+            
+        // Update stroke widths inversely proportional to zoom level
+        this.globeGroup.selectAll('.country')
+            .attr('stroke-width', (0.3 / scale) + 'px');
             
         // Update graticule lines
         this.globeGroup.select('.graticule')
-            .attr('stroke-width', 0.5 / scale + 'px')
-            .attr('d', this.path);
-            
-        // Note: we don't scale the atmosphere or light effects to keep globe radius constant
+            .attr('stroke-width', (0.5 / scale) + 'px');
     }
     
     updateDataType(dataType) {
