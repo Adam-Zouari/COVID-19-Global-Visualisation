@@ -1,0 +1,247 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+}
+
+/* Enhanced full-screen starry background */
+body {
+    background-color: #000000;
+    color: #ffffff;
+    position: relative;
+    min-height: 100vh;
+    overflow-x: hidden;
+    background: #000000;
+}
+
+/* Full screen starry background with improved stars */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -2; /* Changed from -1 to -2 to place it below globe */
+    background-image: 
+        radial-gradient(circle at 20% 30%, #0a0a25 0%, transparent 80%),
+        radial-gradient(circle at 80% 60%, #0e0e30 0%, transparent 70%),
+        radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 40px),
+        radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 30px),
+        radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 40px),
+        radial-gradient(rgba(255,255,255,.4), rgba(255,255,255,.1) 2px, transparent 30px);
+    background-size: 100% 100%, 100% 100%, 550px 550px, 350px 350px, 250px 250px, 150px 150px;
+    background-position: 0 0, 0 0, 40px 60px, 130px 270px, 70px 100px, 0 0;
+    pointer-events: none;
+}
+
+/* Additional larger stars using pseudo-element */
+body::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -2; /* Changed from -1 to -2 to place it below globe */
+    background-image: 
+        radial-gradient(circle at 25% 25%, white 0%, transparent 1px),
+        radial-gradient(circle at 75% 15%, white 0%, transparent 1px),
+        radial-gradient(circle at 35% 60%, white 0%, transparent 1px),
+        radial-gradient(circle at 85% 85%, white 0%, transparent 1px),
+        radial-gradient(circle at 15% 85%, white 0%, transparent 1px);
+    background-size: 100% 100%;
+    filter: blur(1px);
+    pointer-events: none;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    position: relative;
+}
+
+.header {
+    text-align: center;
+    padding: 10px 0;
+    margin-bottom: 15px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+}
+
+/* Main content layout */
+.main-content {
+    display: flex;
+    flex-direction: row;
+    gap: 30px; /* Increased gap between panels */
+    align-items: flex-start;
+}
+
+@media (max-width: 900px) {
+    .main-content {
+        flex-direction: column-reverse;
+    }
+}
+
+.data-panel {
+    flex: 0.50; /* Increased from 0.3 to make data panel wider */
+    min-width: 200px;
+    max-width: 400px; /* Increased from 250px to 300px */
+}
+
+/* Make the globe container background transparent with proper isolation */
+.globe-container {
+    flex: 1.7; /* Increased from 1.6 to give more space to the globe */
+    position: relative;
+    height: 650px; /* Increased height for a bigger globe */
+    display: flex;
+    justify-content: flex-end; /* Changed from center to flex-end to move globe right */
+    align-items: center;
+    min-width: 300px;
+    background-color: transparent;
+    margin-right: -50px; /* Negative margin to push globe more to the right */
+    z-index: 0; /* Ensure proper stacking context */
+    isolation: isolate; /* Create stacking context for the globe */
+}
+
+#globe {
+    width: 100%;
+    height: 100%;
+    cursor: move;
+    position: relative;
+    background-color: transparent;
+    overflow: visible; /* Changed from hidden to allow the stars to extend beyond */
+    z-index: 1; /* Position above background */
+}
+
+/* Ensure the SVG is also transparent */
+#globe svg {
+    background-color: transparent !important;
+    isolation: isolate;
+}
+
+.controls {
+    margin-top: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#resetBtn {
+    padding: 8px 14px;
+    background-color: rgba(66, 133, 244, 0.3);
+    color: white;
+    border: 1px solid rgba(66, 133, 244, 0.5);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    transition: all 0.2s ease;
+}
+
+#resetBtn:hover {
+    background-color: rgba(66, 133, 244, 0.5);
+}
+
+.data-toggle {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.data-toggle label {
+    font-size: 12px;
+    color: #8a8a8a;
+}
+
+#dataSelector {
+    padding: 6px 10px;
+    background-color: rgba(42, 42, 42, 0.4);
+    color: white;
+    border: 1px solid rgba(68, 68, 68, 0.5);
+    border-radius: 4px;
+    width: 100%;
+    font-size: 12px;
+}
+
+.country-info {
+    padding: 15px;
+    background-color: rgba(15, 15, 38, 0.3);
+    border-radius: 8px;
+    text-align: left;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(55, 55, 135, 0.15);
+}
+
+#countryName {
+    margin-bottom: 12px;
+    font-size: 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: 1fr; /* Changed to single column for narrower panel */
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.stat-item {
+    padding: 10px;
+    background-color: rgba(30, 30, 60, 0.25);
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(72, 72, 120, 0.15);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stat-item:hover {
+    background-color: rgba(40, 40, 80, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.land {
+    fill: #1a5601;
+}
+
+.graticule {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.15);
+    stroke-width: 0.5px;
+}
+
+.country {
+    stroke: rgba(255, 255, 255, 0.3);
+    stroke-width: 0.3px;
+    transition: fill 0.3s;
+}
+
+.country:hover {
+    stroke-width: 1px;
+    stroke: rgba(255, 255, 255, 0.8);
+}
+
+.selected-country {
+    stroke: #fff;
+    stroke-width: 1px;
+}
+
+.tooltip {
+    position: absolute;
+    background-color: rgba(15, 15, 38, 0.85);
+    color: #fff;
+    padding: 8px;
+    border-radius: 4px;
+    pointer-events: none;
+    font-size: 12px;
+    z-index: 100;
+    box-shadow: 0 0 15px rgba(0, 150, 255, 0.3);
+    border: 1px solid rgba(0, 100, 255, 0.2);
+}

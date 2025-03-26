@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COVID-19 Global Visualization</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<!-- Remove any potential body background setting -->
+<body>
+    <!-- No background styles here -->
+    <div class="container">
+        <div class="header">
+            <h1>COVID-19 Global Visualization</h1>
+        </div>
+        
+        <div class="main-content">
+            <div class="data-panel">
+                <div class="country-info" id="countryInfo">
+                    <h2 id="countryName">Select a country</h2>
+                    <div class="stats">
+                        <div class="stat-item">
+                            <div class="stat-label">Total Cases:</div>
+                            <div class="stat-value" id="totalCases">-</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Active:</div>
+                            <div class="stat-value" id="activeCases">-</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Recovered:</div>
+                            <div class="stat-value" id="recovered">-</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Deaths:</div>
+                            <div class="stat-value" id="deaths">-</div>
+                        </div>
+                    </div>
+                    
+                    <div class="controls">
+                        <button id="resetBtn">Reset View</button>
+                        <div class="data-toggle">
+                            <label>Data to Display:</label>
+                            <select id="dataSelector">
+                                <option value="cases">Total Cases</option>
+                                <option value="deaths">Total Deaths</option>
+                                <option value="recovered">Total Recovered</option>
+                                <option value="active">Active Cases</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="globe-container">
+                <!-- No separate background styling here -->
+                <div id="globe"></div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Data source: disease.sh API | Created with D3.js</p>
+        </div>
+    </div>
+
+    <!-- Load D3.js and other dependencies -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://d3js.org/topojson.v3.min.js"></script>
+    
+    <!-- Load our custom scripts -->
+    <script src="dataService.js"></script>
+    <script src="globe.js"></script>
+</body>
+</html>
