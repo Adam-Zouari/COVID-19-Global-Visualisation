@@ -1,8 +1,8 @@
 // Globe Visualization with COVID-19 Data
 class GlobeVis {
     constructor() {
-        this.width = window.innerWidth < 800 ? window.innerWidth - 40 : 650; // Increased from 550
-        this.height = 650; // Increased from 550
+        this.width = window.innerWidth < 800 ? window.innerWidth - 40 : 780;
+        this.height = 680; // Reduced from 780 to match container height
         this.currentRotation = [0, 0, 0];
         this.sensitivity = 5; // Decreased from 75 for more responsive rotation
         this.selectedCountry = null;
@@ -11,7 +11,7 @@ class GlobeVis {
         this.countryData = null;
         
         // Earth radius - increased for a bigger globe
-        this.radius = 260; // Increased from 220
+        this.radius = 270; // Increased from 260
         
         // Auto-rotation properties
         this.autoRotate = true;
@@ -39,9 +39,9 @@ class GlobeVis {
         // Add a starfield background to the SVG
         this.addStarfield();
             
-        // Create a group for the globe - shifted to the right
+        // Create a group for the globe - shifted to the right and higher
         this.globeGroup = this.svg.append('g')
-            .attr('transform', `translate(${this.width / 2 + 30}, ${this.height / 2})`); // Added 30px offset
+            .attr('transform', `translate(${this.width / 2 + 30}, ${this.height / 2 - 50})`); // Adjusted from -80 to -50
         
         // Set up the projection with fixed radius
         this.projection = d3.geoOrthographic()
@@ -112,7 +112,7 @@ class GlobeVis {
         // Create a black backdrop for the globe to prevent background bleeding
         this.svg.append('circle')
             .attr('cx', this.width / 2 + 30)
-            .attr('cy', this.height / 2)
+            .attr('cy', this.height / 2 - 50) // Adjusted from -80 to -50
             .attr('r', this.radius + 5)  // Slightly larger than the globe
             .attr('fill', '#000000')
             .attr('opacity', 0.7)        // Semi-transparent

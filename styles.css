@@ -65,10 +65,48 @@ body::after {
 
 .header {
     text-align: center;
-    padding: 10px 0;
-    margin-bottom: 15px;
-    background-color: rgba(0, 0, 0, 0.5);
-    border-radius: 8px;
+    padding: 15px 0;
+    margin-bottom: 20px;
+    background-color: transparent; /* Removed background for better blending */
+    position: relative;
+    z-index: 1;
+}
+
+.header h1 {
+    color: #ffffff;
+    font-size: 2.2rem;
+    font-weight: 300; /* Lighter font weight */
+    letter-spacing: 4px; /* Spaced out text */
+    text-shadow: 
+        0 0 5px rgba(255, 255, 255, 0.8),
+        0 0 10px rgba(100, 170, 255, 0.6),
+        0 0 20px rgba(100, 170, 255, 0.4),
+        0 0 30px rgba(100, 170, 255, 0.2); /* Multi-layered glow effect */
+    margin: 0;
+    opacity: 0.95;
+    animation: titleGlow 3s ease-in-out infinite; /* Subtle animation */
+}
+
+/* Animation for the title glow effect */
+@keyframes titleGlow {
+    0% {
+        text-shadow: 
+            0 0 5px rgba(255, 255, 255, 0.8),
+            0 0 10px rgba(100, 170, 255, 0.5),
+            0 0 20px rgba(100, 170, 255, 0.3);
+    }
+    50% {
+        text-shadow: 
+            0 0 7px rgba(255, 255, 255, 0.9),
+            0 0 15px rgba(100, 170, 255, 0.7),
+            0 0 25px rgba(100, 170, 255, 0.5);
+    }
+    100% {
+        text-shadow: 
+            0 0 5px rgba(255, 255, 255, 0.8),
+            0 0 10px rgba(100, 170, 255, 0.5),
+            0 0 20px rgba(100, 170, 255, 0.3);
+    }
 }
 
 /* Main content layout */
@@ -93,17 +131,19 @@ body::after {
 
 /* Make the globe container background transparent with proper isolation */
 .globe-container {
-    flex: 1.7; /* Increased from 1.6 to give more space to the globe */
+    flex: 1.7;
     position: relative;
-    height: 650px; /* Increased height for a bigger globe */
+    height: 600px; /* Reduced from 780px to eliminate scrollbar */
     display: flex;
-    justify-content: flex-end; /* Changed from center to flex-end to move globe right */
-    align-items: center;
+    justify-content: flex-end;
+    align-items: flex-start;
+    padding-top: 30px; /* Reduced from 50px */
     min-width: 300px;
     background-color: transparent;
-    margin-right: -50px; /* Negative margin to push globe more to the right */
-    z-index: 0; /* Ensure proper stacking context */
-    isolation: isolate; /* Create stacking context for the globe */
+    margin-right: -70px;
+    z-index: 0;
+    isolation: isolate;
+    overflow: hidden; /* Added to prevent any overflow from causing scrollbars */
 }
 
 #globe {
