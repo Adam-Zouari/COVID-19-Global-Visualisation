@@ -285,3 +285,228 @@ body::after {
     box-shadow: 0 0 15px rgba(0, 150, 255, 0.3);
     border: 1px solid rgba(0, 100, 255, 0.2);
 }
+
+/* Dataset Selection Buttons */
+.dataset-buttons {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    display: flex;
+    gap: 10px;
+}
+
+.dataset-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid rgba(100, 170, 255, 0.5);
+    background-color: rgba(15, 15, 38, 0.5);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(5px);
+}
+
+.dataset-btn:hover {
+    background-color: rgba(40, 40, 80, 0.7);
+    transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(100, 170, 255, 0.7);
+}
+
+.dataset-btn.active {
+    border-color: #4CAF50;
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.7);
+}
+
+/* Date Control */
+.date-control {
+    margin-top: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#dateSlider {
+    width: 100%;
+    cursor: pointer;
+    accent-color: rgba(66, 133, 244, 0.8);
+}
+
+.date-navigation {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+}
+
+.date-navigation button {
+    background-color: rgba(66, 133, 244, 0.3);
+    border: 1px solid rgba(66, 133, 244, 0.5);
+    color: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.date-navigation button:hover {
+    background-color: rgba(66, 133, 244, 0.5);
+}
+
+#currentDate {
+    font-weight: bold;
+    color: #4CAF50;
+}
+
+/* Country Stats */
+#countryStats {
+    max-height: 200px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 170, 255, 0.5) rgba(15, 15, 38, 0.3);
+}
+
+#countryStats::-webkit-scrollbar {
+    width: 6px;
+}
+
+#countryStats::-webkit-scrollbar-track {
+    background: rgba(15, 15, 38, 0.3);
+    border-radius: 3px;
+}
+
+#countryStats::-webkit-scrollbar-thumb {
+    background-color: rgba(100, 170, 255, 0.5);
+    border-radius: 3px;
+}
+
+/* Error and loading indicators */
+.error-display {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.error-content {
+    background: rgba(15, 15, 38, 0.9);
+    padding: 20px;
+    border-radius: 8px;
+    max-width: 500px;
+    text-align: center;
+    border: 1px solid rgba(255,0,0,0.3);
+    box-shadow: 0 0 20px rgba(255,0,0,0.3);
+}
+
+.error-content h3 {
+    color: #ff5555;
+    margin-top: 0;
+}
+
+.error-content button {
+    padding: 8px 16px;
+    background-color: rgba(255,0,0,0.3);
+    color: white;
+    border: 1px solid rgba(255,0,0,0.5);
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 15px;
+}
+
+.error-content button:hover {
+    background-color: rgba(255,0,0,0.5);
+}
+
+.loading-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(15, 15, 38, 0.7);
+    padding: 15px 20px;
+    border-radius: 8px;
+    color: #4CAF50;
+    box-shadow: 0 0 15px rgba(0, 150, 255, 0.3);
+}
+
+.error-message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(15, 15, 38, 0.7);
+    padding: 15px 20px;
+    border-radius: 8px;
+    color: #ff5555;
+    box-shadow: 0 0 15px rgba(255, 0, 0, 0.3);
+    max-width: 80%;
+    text-align: center;
+}
+
+.status-indicator {
+    margin-top: 10px;
+    text-align: center;
+    font-size: 12px;
+    color: #4CAF50;
+    padding: 5px;
+    border-radius: 4px;
+    background-color: rgba(15, 15, 38, 0.3);
+}
+
+/* File upload controls in error dialog */
+.file-upload-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.file-upload {
+    text-align: left;
+}
+
+.file-upload label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#processUploads {
+    padding: 8px 16px;
+    background-color: rgba(66, 133, 244, 0.3);
+    color: white;
+    border: 1px solid rgba(66, 133, 244, 0.5);
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px;
+    align-self: center;
+}
+
+#processUploads:hover {
+    background-color: rgba(66, 133, 244, 0.5);
+}
+
+.warning-text {
+    color: #FFC107;
+    font-weight: bold;
+}
+
+.error-text {
+    color: #ff5555;
+    font-size: 12px;
+    text-align: center;
+    width: 100%;
+}

@@ -5,35 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>COVID-19 Global Visualization</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-<!-- Remove any potential body background setting -->
 <body>
-    <!-- No background styles here -->
     <div class="container">
         <div class="header">
             <h1>COVID-19 Global Visualization</h1>
+            
+            <!-- Dataset Selection Buttons -->
+            <div class="dataset-buttons">
+                <button id="epidemBtn" class="dataset-btn active" title="Epidemiology Data">
+                    <i class="fas fa-virus"></i>
+                </button>
+                <button id="hospitalBtn" class="dataset-btn" title="Hospitalization Data">
+                    <i class="fas fa-hospital"></i>
+                </button>
+            </div>
         </div>
         
         <div class="main-content">
             <div class="data-panel">
                 <div class="country-info" id="countryInfo">
                     <h2 id="countryName">Select a country</h2>
-                    <div class="stats">
+                    <div id="countryStats" class="stats">
+                        <!-- Stats will be dynamically populated -->
                         <div class="stat-item">
-                            <div class="stat-label">Total Cases:</div>
-                            <div class="stat-value" id="totalCases">-</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-label">Active:</div>
-                            <div class="stat-value" id="activeCases">-</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-label">Recovered:</div>
-                            <div class="stat-value" id="recovered">-</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-label">Deaths:</div>
-                            <div class="stat-value" id="deaths">-</div>
+                            <div class="stat-label">Select a country</div>
+                            <div class="stat-value">to see stats</div>
                         </div>
                     </div>
                     
@@ -42,19 +40,33 @@
                         <div class="data-toggle">
                             <label>Data to Display:</label>
                             <select id="dataSelector">
-                                <option value="cases">Total Cases</option>
-                                <option value="deaths">Total Deaths</option>
-                                <option value="recovered">Total Recovered</option>
-                                <option value="active">Active Cases</option>
+                                <!-- Options will be populated dynamically -->
                             </select>
+                        </div>
+                        
+                        <!-- Date Control -->
+                        <div class="date-control">
+                            <label>Date: <span id="currentDate">Loading...</span></label>
+                            <input type="range" id="dateSlider" min="0" max="100" value="100">
+                            <div class="date-navigation">
+                                <button id="prevDateBtn"><i class="fas fa-chevron-left"></i></button>
+                                <button id="nextDateBtn"><i class="fas fa-chevron-right"></i></button>
+                            </div>
+                        </div>
+                        
+                        <!-- Status indicator -->
+                        <div class="status-indicator">
+                            <span id="dataStatus">Loading data...</span>
                         </div>
                     </div>
                 </div>
             </div>
             
             <div class="globe-container">
-                <!-- No separate background styling here -->
-                <div id="globe"></div>
+                <div id="globe">
+                    <!-- Loading indicator -->
+                    <div class="loading-indicator">Loading globe data...</div>
+                </div>
             </div>
         </div>
     </div>
@@ -66,5 +78,14 @@
     <!-- Load our custom scripts -->
     <script src="dataService.js"></script>
     <script src="globe.js"></script>
+    
+    <!-- Error display -->
+    <div id="errorDisplay" style="display:none" class="error-display">
+        <div class="error-content">
+            <h3>Error Loading Data</h3>
+            <p id="errorMessage"></p>
+            <button id="errorClose">Close</button>
+        </div>
+    </div>
 </body>
 </html>
