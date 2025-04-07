@@ -2,31 +2,47 @@
 class GlobeVis {
     constructor() {
         this.width = window.innerWidth < 800 ? window.innerWidth - 40 : 780;
-        this.height = 680; // Reduced from 780 to match container height
+        this.height = 680;
         this.currentRotation = [0, 0, 0];
-        this.sensitivity = 5; // Decreased from 75 for more responsive rotation
+        this.sensitivity = 5;
         this.selectedCountry = null;
-        this.dataType = 'cases';
         this.worldData = null;
-        this.countryData = null;
         
-        // Earth radius - increased for a bigger globe
-        this.radius = 270; // Increased from 260
+        // Earth radius
+        this.radius = 270;
         
         // Auto-rotation properties
         this.autoRotate = true;
-        this.autoRotateSpeed = 0.2; // Speed of auto-rotation in degrees per frame
+        this.autoRotateSpeed = 0.2;
         this.lastFrameTime = 0;
         this.animationFrameId = null;
+        
+        // Debug flag
+        this.debug = true;
         
         // Initialize the visualization
         this.initVis();
         
         // Set up event listeners
         this.setupEventListeners();
+        
+        // Store the instance globally for access
+        window.globeInstance = this;
+    }
+    
+    // Utility method for logging
+    log(message, data) {
+        if (this.debug) {
+            if (data) {
+                console.log(`[GlobeVis] ${message}`, data);
+            } else {
+                console.log(`[GlobeVis] ${message}`);
+            }
+        }
     }
     
     async initVis() {
+        this.log("Initializing visualization");
         // Create SVG canvas with transparent background
         this.svg = d3.select('#globe')
             .append('svg')
@@ -34,14 +50,14 @@ class GlobeVis {
             .attr('height', this.height)
             .attr('viewBox', `0 0 ${this.width} ${this.height}`)
             .attr('preserveAspectRatio', 'xMidYMid meet')
-            .style('background-color', 'transparent'); // Ensure SVG background is transparent
+            .style('background-color', 'transparent');
             
         // Add a starfield background to the SVG
         this.addStarfield();
             
-        // Create a group for the globe - shifted to the right and higher
+        // Create a group for the globe
         this.globeGroup = this.svg.append('g')
-            .attr('transform', `translate(${this.width / 2 + 30}, ${this.height / 2 - 50})`); // Adjusted from -80 to -50
+            .attr('transform', `translate(${this.width / 2 + 30}, ${this.height / 2 - 50})`);
         
         // Set up the projection with fixed radius
         this.projection = d3.geoOrthographic()
@@ -73,27 +89,40 @@ class GlobeVis {
         // Add drag behavior to SVG
         this.svg.call(this.drag);
         
-        // Set up zoom behavior - fixed configuration for better responsiveness
+        // Set up zoom behavior
         this.zoom = d3.zoom()
-            .scaleExtent([0.7, 5]) // Wider zoom range
+            .scaleExtent([0.7, 5])
             .on('zoom', this.zoomed.bind(this));
             
-        // Add zoom behavior to SVG with explicit handling of wheel events
+        // Add zoom behavior to SVG
         this.svg.call(this.zoom)
             .on("wheel", event => {
-                event.preventDefault(); // Prevent page scrolling
+                event.preventDefault();
             });
         
-        // Start auto-rotation after initialization
-        this.startAutoRotation();
-        
         try {
-            // Load the world map data
+            // Hide loading indicator
+            const loadingIndicator = document.querySelector('#globe .loading-indicator');
+            if (loadingIndicator) {
+                loadingIndicator.textContent = "Loading data...";
+            }
+            
+            this.log("Loading data...");
+            // Load data from data service first - this gives us country mappings
+            await dataService.loadData();
+            
+            // Now load the world map data
+            this.log("Loading world map data...");
             const worldData = await d3.json('https://unpkg.com/world-atlas@2/countries-110m.json');
             this.worldData = worldData;
             
-            // Load COVID-19 data
-            const covidData = await dataService.fetchAllData();
+            // Remove loading indicator
+            if (loadingIndicator) {
+                loadingIndicator.style.display = 'none';
+            }
+            
+            // Build country mapping table for GeoJSON features
+            this.buildCountryFeatureMap();
             
             // Create the globe with data
             this.createGlobe();
@@ -101,39 +130,338 @@ class GlobeVis {
             // Add ambient light shading to enhance 3D effect
             this.addLightEffect();
             
-            // Update country info with world data initially
+            // Update data selector dropdown
+            this.updateDataSelector();
+            
+            // Set up date slider
+            this.setupDateSlider();
+            
+            // Update country info panel initially
             this.updateCountryInfoPanel(null);
+            
+            // Show sample data notice if using fallback
+            if (dataService.usingFallbackData) {
+                document.getElementById('dataStatus').innerHTML = 
+                    '<span class="warning-text">Using sample data - real data files not found</span>';
+            }
+            
+            // Start auto-rotation after everything is loaded
+            this.startAutoRotation();
         } catch (error) {
             console.error('Error loading data:', error);
+            document.getElementById('globe').innerHTML = 
+                `<div class="error-message">Error loading data: ${error.message}</div>`;
         }
     }
     
+    // Build lookup for countries in the GeoJSON
+    buildCountryFeatureMap() {
+        if (!this.worldData) return;
+        
+        this.log("Building country feature map");
+        this.countryFeatureMap = new Map();
+        
+        // Country name mappings from the GeoJSON to ISO codes
+        // This mapping table handles common naming differences between datasets
+        const countryNameMappings = {
+            // Africa
+            "Algeria": "dz",
+            "Angola": "ao",
+            "Benin": "bj",
+            "Botswana": "bw",
+            "Burkina Faso": "bf",
+            "Burundi": "bi",
+            "Cameroon": "cm",
+            "Central African Rep.": "cf",
+            "Central African Republic": "cf",
+            "Chad": "td",
+            "Congo": "cg",
+            "Dem. Rep. Congo": "cd",
+            "Democratic Republic of the Congo": "cd",
+            "Djibouti": "dj",
+            "Egypt": "eg",
+            "Eq. Guinea": "gq",
+            "Equatorial Guinea": "gq",
+            "Eritrea": "er",
+            "eSwatini": "sz",
+            "Swaziland": "sz",
+            "Ethiopia": "et",
+            "Gabon": "ga",
+            "Gambia": "gm",
+            "Ghana": "gh",
+            "Guinea": "gn",
+            "Guinea-Bissau": "gw",
+            "Côte d'Ivoire": "ci",
+            "Ivory Coast": "ci",
+            "Kenya": "ke",
+            "Lesotho": "ls",
+            "Liberia": "lr",
+            "Libya": "ly",
+            "Madagascar": "mg",
+            "Malawi": "mw",
+            "Mali": "ml",
+            "Mauritania": "mr",
+            "Morocco": "ma",
+            "Mozambique": "mz",
+            "Namibia": "na",
+            "Niger": "ne",
+            "Nigeria": "ng",
+            "Rwanda": "rw",
+            "Senegal": "sn",
+            "Sierra Leone": "sl",
+            "Somalia": "so",
+            "Somaliland": "so",
+            "S. Sudan": "ss",
+            "South Sudan": "ss",
+            "Sudan": "sd",
+            "Tanzania": "tz",
+            "Togo": "tg",
+            "Tunisia": "tn",
+            "Uganda": "ug",
+            "W. Sahara": "eh",
+            "Western Sahara": "eh",
+            "Zambia": "zm",
+            "Zimbabwe": "zw",
+            
+            // Americas
+            "Argentina": "ar",
+            "Bahamas": "bs",
+            "Belize": "bz",
+            "Bolivia": "bo",
+            "Brazil": "br",
+            "Canada": "ca",
+            "Chile": "cl",
+            "Colombia": "co",
+            "Costa Rica": "cr",
+            "Cuba": "cu",
+            "Dominican Rep.": "do",
+            "Dominican Republic": "do",
+            "Ecuador": "ec",
+            "El Salvador": "sv",
+            "Falkland Is.": "fk",
+            "Falkland Islands": "fk",
+            "Fr. S. Antarctic Lands": "tf",
+            "French Southern Territories": "tf",
+            "Greenland": "gl",
+            "Guatemala": "gt",
+            "Guyana": "gy",
+            "Haiti": "ht",
+            "Honduras": "hn",
+            "Jamaica": "jm",
+            "Mexico": "mx",
+            "Nicaragua": "ni",
+            "Panama": "pa",
+            "Paraguay": "py",
+            "Peru": "pe",
+            "Puerto Rico": "pr",
+            "Suriname": "sr",
+            "Trinidad and Tobago": "tt",
+            "United States of America": "us",
+            "United States": "us",
+            "Uruguay": "uy",
+            "Venezuela": "ve",
+            
+            // Asia
+            "Afghanistan": "af",
+            "Armenia": "am",
+            "Azerbaijan": "az",
+            "Bangladesh": "bd",
+            "Bhutan": "bt",
+            "Brunei": "bn",
+            "Cambodia": "kh",
+            "China": "cn",
+            "Cyprus": "cy",
+            "N. Cyprus": "cy",
+            "Georgia": "ge",
+            "India": "in",
+            "Indonesia": "id",
+            "Iran": "ir",
+            "Iraq": "iq",
+            "Israel": "il",
+            "Japan": "jp",
+            "Jordan": "jo",
+            "Kazakhstan": "kz",
+            "Kuwait": "kw",
+            "Kyrgyzstan": "kg",
+            "Laos": "la",
+            "Lebanon": "lb",
+            "Malaysia": "my",
+            "Mongolia": "mn",
+            "Myanmar": "mm",
+            "Burma": "mm",
+            "Nepal": "np",
+            "North Korea": "kp",
+            "Oman": "om",
+            "Pakistan": "pk",
+            "Palestine": "ps",
+            "Philippines": "ph",
+            "Qatar": "qa",
+            "Russia": "ru",
+            "Russian Federation": "ru",
+            "Saudi Arabia": "sa",
+            "South Korea": "kr",
+            "Sri Lanka": "lk",
+            "Syria": "sy",
+            "Tajikistan": "tj",
+            "Thailand": "th",
+            "Timor-Leste": "tl",
+            "East Timor": "tl",
+            "Turkey": "tr",
+            "Turkmenistan": "tm",
+            "Taiwan": "tw",
+            "United Arab Emirates": "ae",
+            "Uzbekistan": "uz",
+            "Vietnam": "vn",
+            "Yemen": "ye",
+            
+            // Europe
+            "Albania": "al",
+            "Austria": "at",
+            "Belarus": "by",
+            "Belgium": "be",
+            "Bosnia and Herz.": "ba",
+            "Bosnia and Herzegovina": "ba",
+            "Bulgaria": "bg",
+            "Croatia": "hr",
+            "Czechia": "cz",
+            "Czech Republic": "cz",
+            "Denmark": "dk",
+            "Estonia": "ee",
+            "Finland": "fi",
+            "France": "fr",
+            "Germany": "de",
+            "Greece": "gr",
+            "Hungary": "hu",
+            "Iceland": "is",
+            "Ireland": "ie",
+            "Italy": "it",
+            "Kosovo": "xk",
+            "Latvia": "lv",
+            "Lithuania": "lt",
+            "Luxembourg": "lu",
+            "Macedonia": "mk",
+            "North Macedonia": "mk",
+            "Moldova": "md",
+            "Montenegro": "me",
+            "Netherlands": "nl",
+            "Norway": "no",
+            "Poland": "pl",
+            "Portugal": "pt",
+            "Romania": "ro",
+            "Serbia": "rs",
+            "Slovakia": "sk",
+            "Slovenia": "si",
+            "Spain": "es",
+            "Sweden": "se",
+            "Switzerland": "ch",
+            "Ukraine": "ua",
+            "United Kingdom": "gb",
+            
+            // Oceania
+            "Australia": "au",
+            "Fiji": "fj",
+            "New Caledonia": "nc",
+            "New Zealand": "nz",
+            "Papua New Guinea": "pg",
+            "Solomon Is.": "sb",
+            "Solomon Islands": "sb",
+            "Vanuatu": "vu",
+            
+            // Catch-all for Antarctica
+            "Antarctica": "aq"
+        };
+        
+        // Extract all countries from the GeoJSON
+        const countries = topojson.feature(this.worldData, this.worldData.objects.countries).features;
+        
+        // For each country in GeoJSON, try to find a matching country key
+        countries.forEach(country => {
+            if (!country.properties) return;
+            
+            const countryName = country.properties.name;
+            if (!countryName) return;
+            
+            // First try direct mapping from country name to ISO code
+            let countryKey = null;
+            if (countryNameMappings[countryName]) {
+                countryKey = countryNameMappings[countryName];
+            }
+            
+            // If that fails, try the data service mapping
+            if (!countryKey) {
+                countryKey = dataService.getCountryKeyFromName(countryName);
+            }
+            
+            // If still no match, try using the numeric ID (used in some datasets)
+            if (!countryKey && country.id) {
+                // Convert numeric ID to country code for known values
+                const idMapping = {
+                    '840': 'us',  // USA
+                    '826': 'gb',  // UK
+                    '250': 'fr',  // France
+                    '276': 'de',  // Germany
+                    '380': 'it',  // Italy
+                    '724': 'es',  // Spain
+                    '156': 'cn',  // China
+                    '392': 'jp',  // Japan
+                    '356': 'in',  // India
+                    '643': 'ru',  // Russia
+                    '076': 'br',  // Brazil
+                    '124': 'ca',  // Canada
+                    '036': 'au',  // Australia
+                    '410': 'kr',  // South Korea
+                    '408': 'kp',  // North Korea
+                    '364': 'ir',  // Iran
+                    '710': 'za'   // South Africa
+                };
+                
+                if (idMapping[country.id]) {
+                    countryKey = idMapping[country.id];
+                }
+            }
+            
+            if (countryKey) {
+                this.countryFeatureMap.set(country.id, {
+                    id: country.id,
+                    countryKey: countryKey,
+                    name: countryName
+                });
+                this.log(`Mapped ${countryName} (${country.id}) to ${countryKey}`);
+            } else {
+                // Only log major countries to reduce console spam
+                const majorCountries = ['United States', 'United Kingdom', 'China', 'Russia', 'India', 'Germany', 'France'];
+                if (majorCountries.includes(countryName)) {
+                    this.log(`Could not map major country: ${countryName} (ID: ${country.id})`);
+                }
+            }
+        });
+        
+        this.log(`Mapped ${this.countryFeatureMap.size} countries out of ${countries.length}`);
+    }
+    
     addStarfield() {
-        // Create a black backdrop for the globe to prevent background bleeding
+        // Create a black backdrop for the globe
         this.svg.append('circle')
             .attr('cx', this.width / 2 + 30)
-            .attr('cy', this.height / 2 - 50) // Adjusted from -80 to -50
-            .attr('r', this.radius + 5)  // Slightly larger than the globe
+            .attr('cy', this.height / 2 - 50)
+            .attr('r', this.radius + 5)
             .attr('fill', '#000000')
-            .attr('opacity', 0.7)        // Semi-transparent
+            .attr('opacity', 0.7)
             .attr('class', 'globe-backdrop');
             
-        // Add a few accent stars directly in the SVG for additional depth
-        
-        const numAccentStars = 50; // Just a few accent stars in the SVG
+        // Add accent stars
+        const numAccentStars = 50;
         const accentStars = [];
         
-        // Add some accent stars with varying sizes
         for (let i = 0; i < numAccentStars; i++) {
             const x = Math.random() * this.width;
             const y = Math.random() * this.height;
-            const radius = Math.random() * 2 + 0.5; // Slightly larger for accent effect
-            const opacity = Math.random() * 0.8 + 0.5; // Brighter
+            const radius = Math.random() * 2 + 0.5;
+            const opacity = Math.random() * 0.8 + 0.5;
             
             accentStars.push({x, y, radius, opacity});
         }
         
-        // Add the accent stars to the SVG (no background rect)
         const starsGroup = this.svg.append('g').attr('class', 'stars');
         
         starsGroup.selectAll('circle')
@@ -170,7 +498,7 @@ class GlobeVis {
     }
     
     addLightEffect() {
-        // Create a gradient to simulate lighting but avoid using it on an ocean circle
+        // Create a gradient to simulate lighting
         const lightGradient = this.svg.append('defs')
             .append('radialGradient')
             .attr('id', 'earth-light')
@@ -187,12 +515,15 @@ class GlobeVis {
             .attr('offset', '100%')
             .attr('stop-color', '#000000')
             .attr('stop-opacity', '0.8');
-        
-        // No light effect circle - this was causing the blue glitching
     }
     
     createGlobe() {
-        if (!this.worldData) return;
+        if (!this.worldData) {
+            this.log("No world data available, can't create globe");
+            return;
+        }
+        
+        this.log("Creating globe");
         
         // Extract the countries from TopoJSON
         const countries = topojson.feature(this.worldData, this.worldData.objects.countries);
@@ -200,52 +531,78 @@ class GlobeVis {
         // Clear any existing paths
         this.globeGroup.selectAll('.country').remove();
         
-        // Add ocean circle with a much darker blue color
+        // Add ocean circle with a more visible color
         this.globeGroup.append('circle')
             .attr('class', 'ocean')
             .attr('cx', 0)
             .attr('cy', 0)
             .attr('r', this.radius)
-            .attr('fill', '#002733')  // Very dark ocean blue color
-            .attr('fill-opacity', 0.8);
+            .attr('fill', '#003347') // Slightly brighter ocean blue
+            .attr('fill-opacity', 0.9); // More opaque
         
-        // Add countries to the globe with rendering optimizations
+        // Add countries to the globe
         this.globeGroup.selectAll('.country')
             .data(countries.features)
             .join('path')
             .attr('class', 'country')
             .attr('d', this.path)
             .attr('id', d => `country-${d.id}`)
+            .attr('data-country-code', d => this.getCountryCode(d))
             .attr('fill', d => this.getCountryColor(d))
-            .attr('fill-opacity', 0.9)  // Increased from 0.85 for better visibility
-            .attr('shape-rendering', 'geometricPrecision') // Improve rendering quality
+            .attr('fill-opacity', 0.9)
+            .attr('stroke', 'rgba(255, 255, 255, 0.5)') // Add visible borders
+            .attr('stroke-width', '0.3px')
+            .attr('shape-rendering', 'geometricPrecision')
             .on('mouseover', (event, d) => this.handleMouseOver(event, d))
             .on('mouseout', (event, d) => this.handleMouseOut(event, d))
             .on('click', (event, d) => this.handleCountryClick(event, d));
+            
+        this.log("Globe created with countries");
         
-        // No ocean or light effect circles to avoid glitching
+        // Update status
+        document.getElementById('dataStatus').textContent = 
+            dataService.usingFallbackData ? "Using sample data (files not found)" : "Ready";
     }
     
     getCountryColor(d) {
+        // Get country code using our mapping function
         const countryCode = this.getCountryCode(d);
-        const countryData = dataService.getCountryData(countryCode);
         
-        if (!countryData) {
-            // Default terrain color for countries with no data
-            return '#3c7521';
+        // If we don't have a country code, use a default visible color
+        if (!countryCode) {
+            return '#5da85d'; // Visible green for countries with no mapping
         }
         
-        const value = dataService.getDataByType(countryData, this.dataType);
-        if (!value) return '#3c7521';
-        
-        const colorScale = dataService.getColorScale(this.dataType);
-        return colorScale(value);
+        try {
+            const value = dataService.getDataValue(countryCode);
+            
+            // If no data value, use a different default color
+            if (!value || value === 0) {
+                return '#5da85d'; // Default green for no data
+            }
+            
+            const colorScale = dataService.getColorScale();
+            return colorScale(value);
+        } catch (e) {
+            console.error('Error getting color for country:', e);
+            return '#5da85d'; // Default on error
+        }
     }
     
     getCountryCode(d) {
-        if (!d || !d.properties) return null;
-        // Try to convert numeric ISO ID to country code
-        return d.id?.toString() || null;
+        if (!d || !d.id) return null;
+        
+        // Use our prepared mapping table
+        if (this.countryFeatureMap && this.countryFeatureMap.has(d.id)) {
+            return this.countryFeatureMap.get(d.id).countryKey;
+        }
+        
+        // Fallback to the old method
+        if (d.properties && d.properties.name) {
+            return dataService.getCountryKeyFromName(d.properties.name);
+        }
+        
+        return null;
     }
     
     handleMouseOver(event, d) {
@@ -260,13 +617,33 @@ class GlobeVis {
         
         // Show tooltip
         if (countryData) {
+            let tooltipContent = `<strong>${countryData.countryName}</strong><br>`;
+            tooltipContent += `Date: ${dataService.formatDate(countryData.date)}<br>`;
+            
+            // Add the current displayed metric
+            if (dataService.currentColumn) {
+                const value = countryData[dataService.currentColumn];
+                const formattedValue = dataService.formatNumber(value);
+                tooltipContent += `${dataService.currentColumn}: ${formattedValue}<br>`;
+            }
+            
             this.tooltip
                 .style('opacity', 1)
-                .html(`
-                    <strong>${countryData.country}</strong><br>
-                    Cases: ${dataService.formatNumber(countryData.cases)}<br>
-                    Deaths: ${dataService.formatNumber(countryData.deaths)}
-                `)
+                .html(tooltipContent)
+                .style('left', (event.pageX + 10) + 'px')
+                .style('top', (event.pageY - 20) + 'px');
+        } else if (countryCode) {
+            // If we have a country code but no data
+            this.tooltip
+                .style('opacity', 1)
+                .html(`<strong>${dataService.getCountryName(countryCode)}</strong><br>No data available`)
+                .style('left', (event.pageX + 10) + 'px')
+                .style('top', (event.pageY - 20) + 'px');
+        } else if (d.properties && d.properties.name) {
+            // If we only have the country name
+            this.tooltip
+                .style('opacity', 1)
+                .html(`<strong>${d.properties.name}</strong><br>No data available`)
                 .style('left', (event.pageX + 10) + 'px')
                 .style('top', (event.pageY - 20) + 'px');
         }
@@ -309,35 +686,125 @@ class GlobeVis {
     }
     
     updateCountryInfoPanel(countryData) {
-        const countryName = document.getElementById('countryName');
-        const totalCases = document.getElementById('totalCases');
-        const activeCases = document.getElementById('activeCases');
-        const recovered = document.getElementById('recovered');
-        const deaths = document.getElementById('deaths');
+        const countryNameEl = document.getElementById('countryName');
+        const countryStatsEl = document.getElementById('countryStats');
         
         if (countryData) {
-            countryName.textContent = countryData.country;
-            totalCases.textContent = dataService.formatNumber(countryData.cases);
-            activeCases.textContent = dataService.formatNumber(countryData.active);
-            recovered.textContent = dataService.formatNumber(countryData.recovered);
-            deaths.textContent = dataService.formatNumber(countryData.deaths);
-        } else {
-            // Show global data if no country selected
-            const worldData = dataService.getWorldData();
-            if (worldData) {
-                countryName.textContent = 'Global Overview';
-                totalCases.textContent = dataService.formatNumber(worldData.cases);
-                activeCases.textContent = dataService.formatNumber(worldData.active);
-                recovered.textContent = dataService.formatNumber(worldData.recovered);
-                deaths.textContent = dataService.formatNumber(worldData.deaths);
-            } else {
-                countryName.textContent = 'Select a country';
-                totalCases.textContent = '-';
-                activeCases.textContent = '-';
-                recovered.textContent = '-';
-                deaths.textContent = '-';
+            countryNameEl.textContent = countryData.countryName;
+            
+            // Clear existing stats
+            countryStatsEl.innerHTML = '';
+            
+            // Add all available metrics for this country
+            for (const key of dataService.availableColumns[dataService.currentDataset]) {
+                if (key in countryData) {
+                    const statItem = document.createElement('div');
+                    statItem.className = 'stat-item';
+                    
+                    const statLabel = document.createElement('div');
+                    statLabel.className = 'stat-label';
+                    statLabel.textContent = key + ':';
+                    
+                    const statValue = document.createElement('div');
+                    statValue.className = 'stat-value';
+                    statValue.textContent = dataService.formatNumber(countryData[key]);
+                    
+                    statItem.appendChild(statLabel);
+                    statItem.appendChild(statValue);
+                    countryStatsEl.appendChild(statItem);
+                }
             }
+        } else {
+            countryNameEl.textContent = 'Select a country';
+            countryStatsEl.innerHTML = `
+                <div class="stat-item">
+                    <div class="stat-label">Select a country</div>
+                    <div class="stat-value">to see stats</div>
+                </div>
+            `;
         }
+    }
+    
+    updateDataSelector() {
+        const dataSelector = document.getElementById('dataSelector');
+        dataSelector.innerHTML = ''; // Clear existing options
+        
+        // Add options based on available columns in current dataset
+        const columns = dataService.availableColumns[dataService.currentDataset];
+        columns.forEach(column => {
+            const option = document.createElement('option');
+            option.value = column;
+            option.textContent = column;
+            dataSelector.appendChild(option);
+        });
+        
+        // Set currently selected column
+        if (dataService.currentColumn) {
+            dataSelector.value = dataService.currentColumn;
+        }
+    }
+    
+    setupDateSlider() {
+        const dateSlider = document.getElementById('dateSlider');
+        const currentDateEl = document.getElementById('currentDate');
+        const prevDateBtn = document.getElementById('prevDateBtn');
+        const nextDateBtn = document.getElementById('nextDateBtn');
+        
+        // Set slider range based on available dates
+        if (dataService.availableDates.length > 0) {
+            dateSlider.min = 0;
+            dateSlider.max = dataService.availableDates.length - 1;
+            dateSlider.value = dataService.availableDates.length - 1; // Start at latest date
+            
+            // Update current date display
+            currentDateEl.textContent = dataService.formatDate(dataService.currentDate);
+        }
+        
+        // Handle slider change
+        dateSlider.addEventListener('input', () => {
+            const newDate = dataService.getDateFromIndex(parseInt(dateSlider.value));
+            dataService.changeDate(newDate);
+            currentDateEl.textContent = dataService.formatDate(newDate);
+            this.updateGlobeColors();
+            
+            // If a country is selected, update its info
+            if (this.selectedCountry) {
+                const countryEl = document.getElementById(`country-${this.selectedCountry}`);
+                if (countryEl) {
+                    const countryCode = countryEl.getAttribute('data-country-code');
+                    const countryData = dataService.getCountryData(countryCode);
+                    this.updateCountryInfoPanel(countryData);
+                }
+            }
+        });
+        
+        // Previous date button
+        prevDateBtn.addEventListener('click', () => {
+            const currentIndex = parseInt(dateSlider.value);
+            if (currentIndex > 0) {
+                dateSlider.value = currentIndex - 1;
+                dateSlider.dispatchEvent(new Event('input'));
+            }
+        });
+        
+        // Next date button
+        nextDateBtn.addEventListener('click', () => {
+            const currentIndex = parseInt(dateSlider.value);
+            if (currentIndex < dateSlider.max) {
+                dateSlider.value = currentIndex + 1;
+                dateSlider.dispatchEvent(new Event('input'));
+            }
+        });
+    }
+    
+    updateGlobeColors() {
+        this.log("Updating globe colors");
+        
+        // Update colors for all countries based on current data
+        this.globeGroup.selectAll('.country')
+            .attr('fill', d => this.getCountryColor(d));
+            
+        this.log("Globe colors updated");
     }
     
     startAutoRotation() {
@@ -346,31 +813,24 @@ class GlobeVis {
         const animate = (timestamp) => {
             if (!this.autoRotate) return;
             
-            // Initialize lastFrameTime if needed to prevent large first step
             if (!this.lastFrameTime) {
                 this.lastFrameTime = timestamp;
             }
             
-            // Calculate time elapsed since last frame for smooth rotation regardless of frame rate
             const elapsed = timestamp - this.lastFrameTime;
             this.lastFrameTime = timestamp;
             
-            // Cap elapsed time to avoid jumps after tab switch or sleep
             const cappedElapsed = Math.min(elapsed, 100);
             
-            // Update rotation based on elapsed time (smooth motion)
-            this.currentRotation[0] += this.autoRotateSpeed * cappedElapsed / 16; // Normalize to ~60fps
+            this.currentRotation[0] += this.autoRotateSpeed * cappedElapsed / 16;
             this.projection.rotate(this.currentRotation);
             
-            // Update paths with new projection
             this.globeGroup.selectAll('path')
                 .attr('d', this.path);
                 
-            // Continue animation loop
             this.animationFrameId = requestAnimationFrame(animate);
         };
         
-        // Start animation loop
         this.animationFrameId = requestAnimationFrame(animate);
     }
     
@@ -383,10 +843,7 @@ class GlobeVis {
     }
     
     dragstarted(event) {
-        // Stop auto-rotation when user starts dragging
         this.stopAutoRotation();
-        
-        // Store initial rotation and mouse position
         this.drag.initialRotation = [...this.currentRotation];
         this.drag.startPos = [event.x, event.y];
     }
@@ -394,117 +851,76 @@ class GlobeVis {
     dragged(event) {
         if (!this.drag.initialRotation) this.drag.initialRotation = [...this.currentRotation];
         
-        // Calculate change in position
         const dx = event.x - this.drag.startPos[0];
         const dy = event.y - this.drag.startPos[1];
         
-        // Calculate new rotation - using standard approach
         this.currentRotation[0] = this.drag.initialRotation[0] + dx / this.sensitivity;
         this.currentRotation[1] = Math.max(-90, Math.min(90, this.drag.initialRotation[1] - dy / this.sensitivity));
         
-        // Update projection with new rotation
         this.projection.rotate(this.currentRotation);
         
-        // Request animation frame for smoother rendering
         requestAnimationFrame(() => {
-            // Update all paths with new projection
             this.globeGroup.selectAll('path')
                 .attr('d', this.path);
         });
     }
     
     dragended(event) {
-        // Store the final rotation
         this.drag.initialRotation = undefined;
         this.drag.startPos = undefined;
     }
     
     zoomed(event) {
-        // Stop auto-rotation when zooming
         this.stopAutoRotation();
         
-        console.log("Zoom event detected:", event.transform.k); // Debug log
-        
-        // Get the scale from the zoom transform
         const scale = event.transform.k;
-        
-        // Adjust the globe radius based on the zoom scale
         const adjustedRadius = this.radius * scale;
         
-        // Update projection scale with the adjusted radius
         this.projection.scale(adjustedRadius);
         
-        // Update all paths with new projection
         this.globeGroup.selectAll('path')
             .attr('d', this.path);
             
-        // Update the ocean circle radius
         this.globeGroup.select('.ocean')
             .attr('r', adjustedRadius);
             
-        // Update the backdrop circle radius too
         this.svg.select('.globe-backdrop')
             .attr('r', adjustedRadius + 5);
             
-        // Update stroke widths inversely proportional to zoom level
         this.globeGroup.selectAll('.country')
             .attr('stroke-width', (0.3 / scale) + 'px');
             
-        // Update graticule lines
         this.globeGroup.select('.graticule')
             .attr('stroke-width', (0.5 / scale) + 'px');
     }
     
-    updateDataType(dataType) {
-        this.dataType = dataType;
-        
-        // Update all country colors
-        this.globeGroup.selectAll('.country')
-            .attr('fill', d => this.getCountryColor(d));
-    }
-    
     resetView() {
-        // Stop any current auto-rotation
         this.stopAutoRotation();
         
-        // Set target rotation for reset animation
         const targetRotation = [0, 0, 0];
-        
-        // Reset lastFrameTime to ensure smooth first frame when rotation restarts
         this.lastFrameTime = 0;
         
-        // Smooth rotation transition
         d3.transition()
             .duration(1000)
             .tween('rotate', () => {
                 const r = d3.interpolate(this.projection.rotate(), targetRotation);
                 return t => {
-                    // Get the interpolated rotation at this point in the animation
                     const rotation = r(t);
-                    
-                    // Update projection with interpolated rotation
                     this.projection.rotate(rotation);
-                    
-                    // Important: Keep currentRotation synchronized with the animation
                     this.currentRotation = [...rotation];
-                    
-                    // Update the globe paths
                     this.globeGroup.selectAll('path').attr('d', this.path);
                 };
             })
             .on('end', () => {
-                // Ensure we're at exactly [0,0,0]
                 this.projection.rotate([0,0,0]);
                 this.currentRotation = [0,0,0];
                 
-                // Add a tiny delay before starting rotation to prevent visual jump
                 setTimeout(() => {
                     this.autoRotate = true;
                     this.startAutoRotation();
                 }, 20);
             });
         
-        // Reset zoom transform with animation
         this.svg.transition()
             .duration(750)
             .call(this.zoom.transform, d3.zoomIdentity);
@@ -513,7 +929,8 @@ class GlobeVis {
     setupEventListeners() {
         // Handle data type selector change
         document.getElementById('dataSelector').addEventListener('change', (event) => {
-            this.updateDataType(event.target.value);
+            dataService.changeColumn(event.target.value);
+            this.updateGlobeColors();
         });
         
         // Handle reset button click
@@ -521,10 +938,16 @@ class GlobeVis {
             this.resetView();
         });
         
-        // Remove the mouseenter event handler that was stopping auto-rotation
-        // Stop rotation only when actually interacting with the globe (dragging or zooming)
+        // Handle dataset button clicks
+        document.getElementById('epidemBtn').addEventListener('click', () => {
+            this.changeDataset('epidem');
+        });
         
-        // Add wheel event handler to stop rotation when zooming
+        document.getElementById('hospitalBtn').addEventListener('click', () => {
+            this.changeDataset('hospitalizations');
+        });
+        
+        // Handle wheel event for stopping rotation when zooming
         this.svg.on('wheel', () => {
             this.stopAutoRotation();
         });
@@ -533,6 +956,42 @@ class GlobeVis {
         window.addEventListener('resize', () => {
             this.resize();
         });
+    }
+    
+    changeDataset(dataset) {
+        // Update active button styling
+        document.querySelectorAll('.dataset-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.getElementById(`${dataset}Btn`).classList.add('active');
+        
+        // Change dataset in data service
+        const result = dataService.changeDataset(dataset);
+        
+        // Update data selector with new columns
+        this.updateDataSelector();
+        
+        // Update globe colors
+        this.updateGlobeColors();
+        
+        // If a country is selected, update its info
+        if (this.selectedCountry) {
+            const countryEl = document.getElementById(`country-${this.selectedCountry}`);
+            if (countryEl) {
+                const countryCode = countryEl.getAttribute('data-country-code');
+                const countryData = dataService.getCountryData(countryCode);
+                this.updateCountryInfoPanel(countryData);
+            }
+        }
+    }
+    
+    resize() {
+        // Handle window resize - adjust dimensions and redraw
+        this.width = window.innerWidth < 800 ? window.innerWidth - 40 : 780;
+        this.svg.attr('width', this.width)
+            .attr('viewBox', `0 0 ${this.width} ${this.height}`);
+            
+        this.globeGroup.attr('transform', `translate(${this.width / 2 + 30}, ${this.height / 2 - 50})`);
     }
 }
 
