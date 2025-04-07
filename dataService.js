@@ -192,24 +192,46 @@ class DataService {
                         const value = d[column];
                         return value ? parseFloat(value) : 0;
                     })
-                    .filter(v => !isNaN(v) && v >= 0);
+                    .filter(v => !isNaN(v) && v > 0); // Filter out zero values
                 
                 if (!values.length) {
                     resolve();
                     return;
                 }
                 
-                // Calculate color scale
+                // Calculate statistics for better scaling
                 const max = d3.max(values);
+                const min = d3.min(values);
+                const median = d3.median(values);
+                const q1 = d3.quantile(values.sort(d3.ascending), 0.25);
+                const q3 = d3.quantile(values.sort(d3.ascending), 0.75);
                 
-                // Choose color scheme based on dataset
-                const colorInterpolator = datasetName === 'epidem' ? 
-                    d3.interpolateRgb('#5da85d', '#FF4500') :
-                    d3.interpolateRgb('#5da85d', '#1E90FF');
-                    
-                const colorScale = d3.scaleSequential()
-                    .domain([0, max])
-                    .interpolator(d => colorInterpolator(Math.sqrt(d / max)));
+                // Choose domain based on data distribution
+                let domainMax;
+                
+                // Check if we have extreme outliers
+                const iqr = q3 - q1;
+                const upperOutlierThreshold = q3 + 1.5 * iqr;
+                
+                if (max > upperOutlierThreshold && upperOutlierThreshold > 0) {
+                    // If we have outliers, cap at the upper outlier threshold for better visualization
+                    domainMax = upperOutlierThreshold;
+                } else {
+                    domainMax = max;
+                }
+                
+                // Choose color scheme based on dataset with more vibrant colors
+                let colorInterpolator;
+                if (datasetName === 'epidem') {
+                    // Virus data: vibrant green to red gradient
+                    colorInterpolator = d3.interpolateRgb('#2ECC40', '#FF4136');
+                } else {
+                    // Hospital data: vibrant green to blue gradient
+                    colorInterpolator = d3.interpolateRgb('#2ECC40', '#0074D9');
+                }
+                
+                // Power scale exponent for better visual distribution
+                const exponent = 0.5;
                 
                 // Cache colors for each country
                 if (!this.colorCache[datasetName][column]) {
@@ -231,8 +253,10 @@ class DataService {
                     const parsedValue = parseFloat(value);
                     if (isNaN(parsedValue) || parsedValue <= 0) return;
                     
-                    // Calculate and store the color
-                    this.colorCache[datasetName][column][date][countryKey] = colorScale(parsedValue);
+                    // Calculate and store the color using our improved scaling
+                    const normalizedValue = Math.min(1, parsedValue / domainMax);
+                    const scaledValue = Math.pow(normalizedValue, exponent);
+                    this.colorCache[datasetName][column][date][countryKey] = colorInterpolator(scaledValue);
                 });
                 
                 resolve();
@@ -730,6 +754,10 @@ class DataService {
             }
             
             const colorScale = this.getColorScale();
+            // Log color values for debugging
+            if (['us', 'gb', 'fr', 'de', 'jp'].includes(normalizedKey)) {
+                console.log(`Dynamic color for ${normalizedKey}: value=${value}, color=${colorScale(value)}`);
+            }
             return colorScale(value);
         } catch (e) {
             console.error('Error calculating country color:', e);
@@ -790,25 +818,61 @@ class DataService {
         const values = dataset.map(d => {
             const value = d[this.currentColumn];
             return value ? parseFloat(value) : 0;
-        }).filter(v => !isNaN(v) && v >= 0);
+        }).filter(v => !isNaN(v) && v > 0); // Filter out zero values for better scaling
         
         if (!values.length) {
             this.log("Using default color scale (no valid values)");
             return d3.scaleSequential(d3.interpolateGreens).domain([0, 1]);
         }
         
+        // Calculate statistics for better scaling
         const max = d3.max(values);
+        const min = d3.min(values);
+        const median = d3.median(values);
+        const q1 = d3.quantile(values.sort(d3.ascending), 0.25);
+        const q3 = d3.quantile(values.sort(d3.ascending), 0.75);
         
-        // Choose color scheme based on current dataset
-        const colorInterpolator = this.currentDataset === 'epidem' ? 
-            // Virus data: green to red gradient (starting more visible)
-            d3.interpolateRgb('#5da85d', '#FF4500') :
-            // Hospital data: green to blue gradient (starting more visible)
-            d3.interpolateRgb('#5da85d', '#1E90FF');
-            
+        console.log(`Color scale stats for ${this.currentColumn}: min=${min}, Q1=${q1}, median=${median}, Q3=${q3}, max=${max}`);
+        
+        // Choose domain based on data distribution
+        // Use quantile-based domain to handle skewed distributions better
+        let domainMax;
+        
+        // Check if we have extreme outliers
+        const iqr = q3 - q1;
+        const upperOutlierThreshold = q3 + 1.5 * iqr;
+        
+        if (max > upperOutlierThreshold && upperOutlierThreshold > 0) {
+            // If we have outliers, cap at the upper outlier threshold for better visualization
+            domainMax = upperOutlierThreshold;
+            console.log(`Using outlier-adjusted domain max: ${domainMax} (original max: ${max})`);
+        } else {
+            domainMax = max;
+        }
+        
+        // Choose color scheme based on current dataset with more vibrant colors
+        let colorInterpolator;
+        if (this.currentDataset === 'epidem') {
+            // Virus data: vibrant green to red gradient
+            colorInterpolator = d3.interpolateRgb('#2ECC40', '#FF4136');
+        } else {
+            // Hospital data: vibrant green to blue gradient
+            colorInterpolator = d3.interpolateRgb('#2ECC40', '#0074D9');
+        }
+        
+        // Create a power scale with adjustable exponent for better visual scaling
+        // Lower exponent (0.5) gives more emphasis to lower values
+        // Higher exponent (2) gives more emphasis to higher values
+        const exponent = 0.5; // Emphasize lower values for better visualization
+        
         return d3.scaleSequential()
-            .domain([0, max])
-            .interpolator(d => colorInterpolator(Math.sqrt(d / max))); // Square root scale for better visualization
+            .domain([0, domainMax])
+            .interpolator(value => {
+                // Apply power scale for better visual distribution
+                const normalizedValue = Math.min(1, value / domainMax);
+                const scaledValue = Math.pow(normalizedValue, exponent);
+                return colorInterpolator(scaledValue);
+            });
     }
     
     // Get date index for slider

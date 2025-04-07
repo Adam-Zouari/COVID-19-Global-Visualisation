@@ -545,7 +545,7 @@ class GlobeVis {
             .attr('d', this.path)
             .attr('id', d => `country-${d.id}`)
             .attr('data-country-code', d => this.getCountryCode(d))
-            .attr('fill', d => this.getCountryColor(d))
+            .attr('fill', '#5da85d') // Set initial color to default green
             .attr('fill-opacity', 0.9)
             .attr('stroke', 'rgba(255, 255, 255, 0.5)') // Add visible borders
             .attr('stroke-width', '0.3px')
@@ -555,6 +555,9 @@ class GlobeVis {
             .on('click', (event, d) => this.handleCountryClick(event, d));
             
         this.log("Globe created with countries");
+        
+        // Create color legend
+        this.createColorLegend();
         
         // Count how many countries have data
         const countriesWithData = countries.features.filter(d => {
@@ -574,6 +577,113 @@ class GlobeVis {
         }
     }
     
+    // Create a color legend for the current data
+    createColorLegend() {
+        // Remove any existing legend
+        d3.select('.color-legend').remove();
+        
+        // Create legend container
+        const legend = this.svg.append('g')
+            .attr('class', 'color-legend')
+            .attr('transform', `translate(${this.width - 120}, ${this.height - 100})`);
+        
+        // Add background for better readability
+        legend.append('rect')
+            .attr('width', 100)
+            .attr('height', 80)
+            .attr('fill', 'rgba(0, 0, 0, 0.7)')
+            .attr('rx', 5);
+            
+        // Title
+        legend.append('text')
+            .attr('x', 50)
+            .attr('y', 15)
+            .attr('text-anchor', 'middle')
+            .attr('fill', 'white')
+            .attr('font-size', '10px')
+            .text(dataService.currentColumn || 'Data');
+        
+        // Get the color scale
+        const colorScale = dataService.getColorScale();
+        const domain = colorScale.domain();
+        const min = domain[0];
+        const max = domain[1];
+        
+        // Create a gradient definition
+        const defs = this.svg.append('defs');
+        const gradient = defs.append('linearGradient')
+            .attr('id', 'legend-gradient')
+            .attr('x1', '0%')
+            .attr('y1', '0%')
+            .attr('x2', '100%')
+            .attr('y2', '0%');
+            
+        // Add color stops
+        const numSteps = 10;
+        for (let i = 0; i <= numSteps; i++) {
+            const t = i / numSteps;
+            const exponent = 0.5; // Match the exponent used in the color scale
+            const scaledT = Math.pow(t, exponent);
+            
+            // Get color from the same interpolator used in the data service
+            let color;
+            if (dataService.currentDataset === 'epidem') {
+                color = d3.interpolateRgb('#2ECC40', '#FF4136')(scaledT);
+            } else {
+                color = d3.interpolateRgb('#2ECC40', '#0074D9')(scaledT);
+            }
+            
+            gradient.append('stop')
+                .attr('offset', `${t * 100}%`)
+                .attr('stop-color', color);
+        }
+        
+        // Add gradient rectangle
+        legend.append('rect')
+            .attr('x', 10)
+            .attr('y', 25)
+            .attr('width', 80)
+            .attr('height', 15)
+            .attr('fill', 'url(#legend-gradient)');
+            
+        // Add min label
+        legend.append('text')
+            .attr('x', 10)
+            .attr('y', 55)
+            .attr('text-anchor', 'start')
+            .attr('fill', 'white')
+            .attr('font-size', '9px')
+            .text(dataService.formatNumber(min));
+            
+        // Add max label
+        legend.append('text')
+            .attr('x', 90)
+            .attr('y', 55)
+            .attr('text-anchor', 'end')
+            .attr('fill', 'white')
+            .attr('font-size', '9px')
+            .text(dataService.formatNumber(max));
+            
+        // Add mid label for context
+        const mid = (max - min) / 2 + min;
+        legend.append('text')
+            .attr('x', 50)
+            .attr('y', 55)
+            .attr('text-anchor', 'middle')
+            .attr('fill', 'white')
+            .attr('font-size', '9px')
+            .text(dataService.formatNumber(mid));
+            
+        // Add indicator that this is using a power scale for better distribution
+        legend.append('text')
+            .attr('x', 50)
+            .attr('y', 70)
+            .attr('text-anchor', 'middle')
+            .attr('fill', 'white')
+            .attr('font-size', '8px')
+            .text('(power scale: 0.5)');
+    }
+
     getCountryColor(d) {
         // Get country code using our mapping function
         const countryCode = this.getCountryCode(d);
@@ -835,6 +945,9 @@ class GlobeVis {
             
         console.log(`After color update: ${countriesWithData} out of ${totalCountries} countries have data values`);
         
+        // Update color legend with new data
+        this.createColorLegend();
+        
         // Update status
         if (countriesWithData === 0) {
             document.getElementById('dataStatus').textContent = `Warning: No countries have data for ${dataService.currentColumn}`;
@@ -1013,6 +1126,9 @@ class GlobeVis {
         
         // Update globe colors
         this.updateGlobeColors();
+        
+        // Update color legend
+        this.createColorLegend();
         
         // If a country is selected, update its info
         if (this.selectedCountry) {
