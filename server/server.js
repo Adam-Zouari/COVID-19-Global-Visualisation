@@ -62,6 +62,16 @@ app.get('/api/epidem', (req, res) => {
     }
     
     console.log(`Serving epidem data file from: ${filePath}`);
+    
+    // Read the first few lines to validate structure (optional)
+    try {
+        const fileContent = fs.readFileSync(filePath, 'utf8').split('\n').slice(0, 3).join('\n');
+        console.log("Sample epidem data structure:");
+        console.log(fileContent);
+    } catch (error) {
+        console.error("Error reading sample data:", error);
+    }
+    
     // Send the CSV file
     res.setHeader('Content-Type', 'text/csv');
     res.sendFile(filePath);
@@ -82,6 +92,16 @@ app.get('/api/hospitalizations', (req, res) => {
         const alternateFilePath = path.join(validDataPath, 'country_level_hospitalizations.csv');
         if (fs.existsSync(alternateFilePath)) {
             console.log(`Found alternate spelling: ${alternateFilePath}`);
+            
+            // Read the first few lines to validate structure (optional)
+            try {
+                const fileContent = fs.readFileSync(alternateFilePath, 'utf8').split('\n').slice(0, 3).join('\n');
+                console.log("Sample hospitalization data structure:");
+                console.log(fileContent);
+            } catch (error) {
+                console.error("Error reading sample data:", error);
+            }
+            
             res.setHeader('Content-Type', 'text/csv');
             return res.sendFile(alternateFilePath);
         }
@@ -90,6 +110,16 @@ app.get('/api/hospitalizations', (req, res) => {
     }
     
     console.log(`Serving hospitalization data file from: ${filePath}`);
+    
+    // Read the first few lines to validate structure (optional)
+    try {
+        const fileContent = fs.readFileSync(filePath, 'utf8').split('\n').slice(0, 3).join('\n');
+        console.log("Sample hospitalization data structure:");
+        console.log(fileContent);
+    } catch (error) {
+        console.error("Error reading sample data:", error);
+    }
+    
     // Send the CSV file
     res.setHeader('Content-Type', 'text/csv');
     res.sendFile(filePath);
@@ -109,6 +139,16 @@ app.get('/api/country-index', (req, res) => {
     }
     
     console.log(`Serving country index file from: ${filePath}`);
+    
+    // Read the first few lines to validate structure (optional)
+    try {
+        const fileContent = fs.readFileSync(filePath, 'utf8').split('\n').slice(0, 5).join('\n');
+        console.log("Sample country index data structure:");
+        console.log(fileContent);
+    } catch (error) {
+        console.error("Error reading sample data:", error);
+    }
+    
     // Send the CSV file
     res.setHeader('Content-Type', 'text/csv');
     res.sendFile(filePath);

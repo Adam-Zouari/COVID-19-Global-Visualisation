@@ -24,9 +24,6 @@ class DataService {
             hospitalizations: 'http://localhost:3000/api/hospitalizations',
             countryIndex: 'http://localhost:3000/api/country-index'
         };
-        
-        // Fallback mode flag
-        this.usingFallbackData = false;
     }
 
     // Load all necessary data
@@ -36,8 +33,10 @@ class DataService {
             document.getElementById('dataStatus').textContent = "Connecting to server...";
             
             try {
-                // Try loading data from API endpoints
-                this.log("Trying to load data from API endpoints");
+                // Load data from API endpoints
+                this.log("Loading data from API endpoints");
+                
+                console.log("API endpoints being accessed:", this.apiEndpoints);
                 
                 // Load all datasets in parallel
                 const [epidemData, hospitalizationsData, countryIndex] = await Promise.all([
@@ -45,6 +44,11 @@ class DataService {
                     d3.csv(this.apiEndpoints.hospitalizations),
                     d3.csv(this.apiEndpoints.countryIndex)
                 ]);
+                
+                // Log raw data for debugging
+                console.log("Epidem data sample (first 2 records):", epidemData.slice(0, 2));
+                console.log("Hospitalization data sample (first 2 records):", hospitalizationsData.slice(0, 2));
+                console.log("Country index sample (first 5 records):", countryIndex.slice(0, 5));
                 
                 if (epidemData && epidemData.length && 
                     hospitalizationsData && hospitalizationsData.length && 
@@ -60,6 +64,9 @@ class DataService {
                     this.log(`Loaded ${this.epidemData.length} epidem records`);
                     this.log(`Loaded ${this.hospitalizationsData.length} hospitalization records`);
                     this.log(`Loaded ${this.countryIndex.length} country index records`);
+                    
+                    // Check data structure to ensure required fields exist
+                    this.validateDataStructure();
                     
                     // Build a lookup table for country codes
                     this.buildCountryCodeMap();
@@ -78,27 +85,80 @@ class DataService {
                         availableDates: this.availableDates,
                         availableColumns: this.availableColumns
                     };
+                } else {
+                    throw new Error("One or more datasets are empty or invalid");
                 }
             } catch (error) {
                 this.log(`API endpoints failed: ${error.message}`);
                 document.getElementById('dataStatus').textContent = "Server connection failed";
-                // Show error and file upload option
+                // Show error message and file upload option
                 this.showDataFileError(`Server error: ${error.message}<br><br>Is the Express server running? Try running <code>node server.js</code> in the command line.`);
+                throw error; // Propagate the error
             }
-            
-            // If API endpoints fail, show error and switch to fallback mode
-            this.log("API endpoints failed, switching to fallback data mode");
-            document.getElementById('dataStatus').textContent = "Using sample data (server not running)";
-            
-            // Use fallback data
-            return await this.loadFallbackData();
         } catch (error) {
             console.error('Error loading data:', error);
             document.getElementById('dataStatus').textContent = "Error loading data";
             this.showDataFileError(error.message);
+            throw error; // Make sure the error propagates
+        }
+    }
+    
+    // New method: Validate data structure
+    validateDataStructure() {
+        if (this.epidemData.length > 0) {
+            const firstRecord = this.epidemData[0];
+            console.log("Epidem data fields:", Object.keys(firstRecord));
             
-            // Still try fallback data
-            return await this.loadFallbackData();
+            // Check for required fields
+            if (!('date' in firstRecord)) {
+                console.error("Epidem data is missing 'date' field!");
+            }
+            
+            // Check what field is used for country identification
+            const possibleCountryFields = ['country_key', 'country_code', 'location_key', 'country', 'iso_code'];
+            const foundCountryField = possibleCountryFields.find(field => field in firstRecord);
+            
+            if (foundCountryField && foundCountryField !== 'country_key') {
+                console.log(`Found country identifier in field '${foundCountryField}' instead of 'country_key'`);
+                // If we found a different field name, map it to country_key
+                this.epidemData = this.epidemData.map(record => {
+                    return {
+                        ...record,
+                        country_key: record[foundCountryField]
+                    };
+                });
+                console.log("Mapped data to include 'country_key' field");
+            } else if (!foundCountryField) {
+                console.error("Could not find any country identifier field in epidem data!");
+            }
+        }
+        
+        if (this.hospitalizationsData.length > 0) {
+            const firstRecord = this.hospitalizationsData[0];
+            console.log("Hospitalization data fields:", Object.keys(firstRecord));
+            
+            // Check for required fields
+            if (!('date' in firstRecord)) {
+                console.error("Hospitalization data is missing 'date' field!");
+            }
+            
+            // Check what field is used for country identification
+            const possibleCountryFields = ['country_key', 'country_code', 'location_key', 'country', 'iso_code'];
+            const foundCountryField = possibleCountryFields.find(field => field in firstRecord);
+            
+            if (foundCountryField && foundCountryField !== 'country_key') {
+                console.log(`Found country identifier in field '${foundCountryField}' instead of 'country_key'`);
+                // If we found a different field name, map it to country_key
+                this.hospitalizationsData = this.hospitalizationsData.map(record => {
+                    return {
+                        ...record,
+                        country_key: record[foundCountryField]
+                    };
+                });
+                console.log("Mapped data to include 'country_key' field");
+            } else if (!foundCountryField) {
+                console.error("Could not find any country identifier field in hospitalization data!");
+            }
         }
     }
     
@@ -177,8 +237,6 @@ class DataService {
             this.log(`Loaded ${this.hospitalizationsData.length} hospitalization records from upload`);
             this.log(`Loaded ${this.countryIndex.length} country index records from upload`);
             
-            // Clear fallback flag
-            this.usingFallbackData = false;
             document.getElementById('dataStatus').textContent = "Using uploaded data files";
             
             // Build a lookup table for country codes
@@ -233,152 +291,6 @@ class DataService {
         });
     }
     
-    async loadFallbackData() {
-        this.log("Loading fallback sample data");
-        this.usingFallbackData = true;
-        
-        // Create sample data for visualization
-        const sampleCountryIndex = this.createSampleCountryIndex();
-        const sampleEpidemData = this.createSampleEpidemData();
-        const sampleHospitalData = this.createSampleHospitalData();
-        
-        this.epidemData = sampleEpidemData;
-        this.hospitalizationsData = sampleHospitalData;
-        this.countryIndex = sampleCountryIndex;
-        
-        this.log(`Created ${this.epidemData.length} sample epidem records`);
-        this.log(`Created ${this.hospitalizationsData.length} sample hospital records`);
-        this.log(`Created ${this.countryIndex.length} sample country index records`);
-        
-        // Build a lookup table for country codes
-        this.buildCountryCodeMap();
-        
-        // Process the data
-        this.processData();
-        
-        // Set defaults
-        this.setDefaultValues();
-        
-        return {
-            epidemData: this.epidemData,
-            hospitalizationsData: this.hospitalizationsData,
-            countryIndex: this.countryIndex,
-            availableDates: this.availableDates,
-            availableColumns: this.availableColumns
-        };
-    }
-    
-    createSampleCountryIndex() {
-        // Create a simple mapping of country codes to names
-        return [
-            { location_key: 'us', country_name: 'United States' },
-            { location_key: 'gb', country_name: 'United Kingdom' },
-            { location_key: 'fr', country_name: 'France' },
-            { location_key: 'de', country_name: 'Germany' },
-            { location_key: 'it', country_name: 'Italy' },
-            { location_key: 'es', country_name: 'Spain' },
-            { location_key: 'cn', country_name: 'China' },
-            { location_key: 'jp', country_name: 'Japan' },
-            { location_key: 'kr', country_name: 'South Korea' },
-            { location_key: 'in', country_name: 'India' },
-            { location_key: 'br', country_name: 'Brazil' },
-            { location_key: 'ru', country_name: 'Russia' },
-            { location_key: 'au', country_name: 'Australia' },
-            { location_key: 'ca', country_name: 'Canada' },
-            { location_key: 'za', country_name: 'South Africa' }
-        ];
-    }
-    
-    createSampleEpidemData() {
-        const countries = this.createSampleCountryIndex();
-        const data = [];
-        
-        // Generate dates for the last 90 days
-        const dates = [];
-        const endDate = new Date();
-        for (let i = 90; i >= 0; i--) {
-            const date = new Date();
-            date.setDate(endDate.getDate() - i);
-            const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
-            dates.push(dateStr);
-        }
-        
-        // Generate sample data for each country and date
-        for (const country of countries) {
-            let cumulativeConfirmed = Math.floor(Math.random() * 1000000);
-            let cumulativeDeaths = Math.floor(cumulativeConfirmed * (Math.random() * 0.05));
-            let cumulativeRecovered = Math.floor(cumulativeConfirmed * (Math.random() * 0.7));
-            
-            for (const date of dates) {
-                // Increase values slightly for each day
-                cumulativeConfirmed += Math.floor(Math.random() * 10000);
-                cumulativeDeaths += Math.floor(Math.random() * 100);
-                cumulativeRecovered += Math.floor(Math.random() * 8000);
-                const active = cumulativeConfirmed - cumulativeDeaths - cumulativeRecovered;
-                
-                // Add daily record
-                data.push({
-                    country_key: country.location_key,
-                    date: date,
-                    new_confirmed: Math.floor(Math.random() * 5000),
-                    new_deceased: Math.floor(Math.random() * 50),
-                    new_recovered: Math.floor(Math.random() * 4000),
-                    new_tested: Math.floor(Math.random() * 20000),
-                    cumulative_confirmed: cumulativeConfirmed,
-                    cumulative_deceased: cumulativeDeaths,
-                    cumulative_recovered: cumulativeRecovered,
-                    cumulative_tested: cumulativeConfirmed * 5 + Math.floor(Math.random() * 100000),
-                    active_cases: active
-                });
-            }
-        }
-        
-        return data;
-    }
-    
-    createSampleHospitalData() {
-        const countries = this.createSampleCountryIndex();
-        const data = [];
-        
-        // Generate dates for the last 90 days
-        const dates = [];
-        const endDate = new Date();
-        for (let i = 90; i >= 0; i--) {
-            const date = new Date();
-            date.setDate(endDate.getDate() - i);
-            const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
-            dates.push(dateStr);
-        }
-        
-        // Generate sample data for each country and date
-        for (const country of countries) {
-            let hospitalBeds = Math.floor(Math.random() * 200000) + 50000;
-            let icuBeds = Math.floor(hospitalBeds * (Math.random() * 0.1 + 0.05));
-            
-            for (const date of dates) {
-                const hospitalized = Math.floor(Math.random() * hospitalBeds * 0.6);
-                const icuPatients = Math.floor(Math.random() * icuBeds * 0.7);
-                
-                // Add daily record
-                data.push({
-                    country_key: country.location_key,
-                    date: date,
-                    current_hospitalized: hospitalized,
-                    current_icu: icuPatients,
-                    current_ventilator: Math.floor(icuPatients * (Math.random() * 0.6 + 0.2)),
-                    new_hospital_admissions: Math.floor(Math.random() * 1000),
-                    new_icu_admissions: Math.floor(Math.random() * 100),
-                    total_hospital_beds: hospitalBeds,
-                    total_icu_beds: icuBeds,
-                    hospital_occupancy_rate: (hospitalized / hospitalBeds).toFixed(2),
-                    icu_occupancy_rate: (icuPatients / icuBeds).toFixed(2)
-                });
-            }
-        }
-        
-        return data;
-    }
-    
     // Build a lookup table for quick country code mapping
     buildCountryCodeMap() {
         this.countryCodeMap = {};
@@ -425,100 +337,6 @@ class DataService {
         for (const code of sampleCountries) {
             this.log(`${code} -> ${this.getCountryName(code)}`);
         }
-    }
-    
-    // Get country name from country key
-    getCountryName(countryKey) {
-        if (!countryKey) return 'Unknown';
-        
-        // Normalize the country key to lowercase
-        const normalizedKey = countryKey.toLowerCase();
-        
-        // Check for direct match in the mapping table
-        if (this.countryNameMap && this.countryNameMap[normalizedKey]) {
-            return this.countryNameMap[normalizedKey];
-        }
-        
-        // Check if it's already a country name
-        if (this.countryCodeMap && this.countryCodeMap[normalizedKey]) {
-            return normalizedKey.charAt(0).toUpperCase() + normalizedKey.slice(1);
-        }
-        
-        // Return the original code as fallback, but capitalized
-        return countryKey.toUpperCase();
-    }
-    
-    // Get country key from country name
-    getCountryKeyFromName(countryName) {
-        if (!countryName) return null;
-        if (!this.countryCodeMap) return null;
-        
-        const normalizedName = countryName.toLowerCase().trim();
-        return this.countryCodeMap[normalizedName] || null;
-    }
-    
-    // Get data for a specific country on the current date
-    getCountryData(countryKey) {
-        if (!countryKey) return null;
-        
-        const dataset = this.getCurrentDataset();
-        if (!dataset || dataset.length === 0) {
-            this.log(`No dataset available for ${this.currentDataset}`);
-            return null;
-        }
-        
-        // Normalize country key to lowercase
-        const normalizedKey = countryKey.toLowerCase();
-        
-        // Try to find exact match
-        let countryData = dataset.find(d => 
-            d.country_key && 
-            d.country_key.toLowerCase() === normalizedKey && 
-            d.date === this.currentDate
-        );
-        
-        if (countryData) {
-            return {
-                countryKey,
-                countryName: this.getCountryName(countryKey),
-                date: this.currentDate,
-                ...countryData
-            };
-        }
-        
-        // Try with next closest date if no data for current date
-        if (!countryData) {
-            // Get all entries for this country
-            const allCountryEntries = dataset.filter(d => 
-                d.country_key && d.country_key.toLowerCase() === normalizedKey
-            );
-            
-            if (allCountryEntries.length > 0) {
-                this.log(`Found ${allCountryEntries.length} entries for ${countryKey}, but none on ${this.currentDate}`);
-                
-                // Sort by date to find closest
-                allCountryEntries.sort((a, b) => {
-                    const dateA = new Date(a.date);
-                    const dateB = new Date(b.date);
-                    return Math.abs(dateA - new Date(this.currentDate)) - 
-                           Math.abs(dateB - new Date(this.currentDate));
-                });
-                
-                // Use closest date
-                countryData = allCountryEntries[0];
-                this.log(`Using closest date ${countryData.date} for ${countryKey}`);
-                
-                return {
-                    countryKey,
-                    countryName: this.getCountryName(countryKey),
-                    date: countryData.date,
-                    ...countryData
-                };
-            }
-        }
-        
-        this.log(`No data at all for country key: ${countryKey}`);
-        return null;
     }
     
     // Process the data to extract dates, columns, etc.
@@ -604,7 +422,7 @@ class DataService {
         if (!countryKey) return 'Unknown';
         if (!this.countryNameMap) return countryKey;
         
-        return this.countryNameMap[countryKey] || countryKey;
+        return this.countryNameMap[countryKey.toLowerCase()] || countryKey;
     }
     
     // Get country key from country name
@@ -621,32 +439,67 @@ class DataService {
         if (!countryKey) return null;
         
         const dataset = this.getCurrentDataset();
-        if (!dataset) return null;
-        
-        // Try to find exact match
-        let countryData = dataset.find(d => 
-            d.country_key === countryKey && 
-            d.date === this.currentDate
-        );
-        
-        // If we still don't have data, check if the date exists at all
-        if (!countryData) {
-            // Try another date
-            const anyDateData = dataset.find(d => d.country_key === countryKey);
-            if (anyDateData) {
-                this.log(`No data for ${countryKey} on ${this.currentDate}, but found on another date`);
-            } else {
-                this.log(`No data at all for country key: ${countryKey}`);
-            }
+        if (!dataset || dataset.length === 0) {
+            this.log(`No dataset available for ${this.currentDataset}`);
             return null;
         }
         
-        return {
-            countryKey,
-            countryName: this.getCountryName(countryKey),
-            date: this.currentDate,
-            ...countryData
-        };
+        console.log(`Looking for data for country ${countryKey} on ${this.currentDate}`);
+        
+        // Normalize country key to lowercase
+        const normalizedKey = countryKey.toLowerCase();
+        
+        // Try to find exact match
+        let countryData = dataset.find(d => 
+            d.country_key && 
+            d.country_key.toLowerCase() === normalizedKey && 
+            d.date === this.currentDate
+        );
+        
+        if (countryData) {
+            console.log(`Found data for ${countryKey} on ${this.currentDate}:`, countryData);
+            return {
+                countryKey,
+                countryName: this.getCountryName(countryKey),
+                date: this.currentDate,
+                ...countryData
+            };
+        }
+        
+        // Try with next closest date if no data for current date
+        if (!countryData) {
+            // Get all entries for this country
+            const allCountryEntries = dataset.filter(d => 
+                d.country_key && d.country_key.toLowerCase() === normalizedKey
+            );
+            
+            if (allCountryEntries.length > 0) {
+                this.log(`Found ${allCountryEntries.length} entries for ${countryKey}, but none on ${this.currentDate}`);
+                
+                // Sort by date to find closest
+                allCountryEntries.sort((a, b) => {
+                    const dateA = new Date(a.date);
+                    const dateB = new Date(b.date);
+                    return Math.abs(dateA - new Date(this.currentDate)) - 
+                           Math.abs(dateB - new Date(this.currentDate));
+                });
+                
+                // Use closest date
+                countryData = allCountryEntries[0];
+                this.log(`Using closest date ${countryData.date} for ${countryKey}`);
+                console.log(`Found data for ${countryKey} on closest date ${countryData.date}:`, countryData);
+                
+                return {
+                    countryKey,
+                    countryName: this.getCountryName(countryKey),
+                    date: countryData.date,
+                    ...countryData
+                };
+            }
+        }
+        
+        this.log(`No data at all for country key: ${countryKey}`);
+        return null;
     }
     
     // Get current dataset based on selection
@@ -666,10 +519,15 @@ class DataService {
     // Get value for current column for a country
     getDataValue(countryKey) {
         const countryData = this.getCountryData(countryKey);
-        if (!countryData || !this.currentColumn) return 0;
+        if (!countryData || !this.currentColumn) {
+            console.log(`No data or column for country ${countryKey}`);
+            return 0;
+        }
         
         const value = countryData[this.currentColumn];
-        return value ? parseFloat(value) : 0;
+        const parsedValue = value ? parseFloat(value) : 0;
+        console.log(`Data value for ${countryKey} (${this.currentColumn}): ${value} -> ${parsedValue}`);
+        return parsedValue;
     }
     
     // Change dataset
@@ -735,7 +593,12 @@ class DataService {
         const max = d3.max(values);
         const min = d3.min(values);
         
-        this.log(`Color scale range: ${min} to ${max}`);
+        console.log(`Color scale range for ${this.currentColumn}: ${min} to ${max}, ${values.length} values`);
+        if (values.length < 10) {
+            console.log("Sample values:", values);
+        } else {
+            console.log("Sample values (first 10):", values.slice(0, 10));
+        }
         
         // Choose color scheme based on current dataset
         const colorInterpolator = this.currentDataset === 'epidem' ? 

@@ -139,12 +139,6 @@ class GlobeVis {
             // Update country info panel initially
             this.updateCountryInfoPanel(null);
             
-            // Show sample data notice if using fallback
-            if (dataService.usingFallbackData) {
-                document.getElementById('dataStatus').innerHTML = 
-                    '<span class="warning-text">Using sample data - real data files not found</span>';
-            }
-            
             // Start auto-rotation after everything is loaded
             this.startAutoRotation();
         } catch (error) {
@@ -528,6 +522,9 @@ class GlobeVis {
         // Extract the countries from TopoJSON
         const countries = topojson.feature(this.worldData, this.worldData.objects.countries);
         
+        // Debug country count
+        console.log(`Found ${countries.features.length} countries in GeoJSON data`);
+        
         // Clear any existing paths
         this.globeGroup.selectAll('.country').remove();
         
@@ -559,9 +556,22 @@ class GlobeVis {
             
         this.log("Globe created with countries");
         
-        // Update status
-        document.getElementById('dataStatus').textContent = 
-            dataService.usingFallbackData ? "Using sample data (files not found)" : "Ready";
+        // Count how many countries have data
+        const countriesWithData = countries.features.filter(d => {
+            const countryCode = this.getCountryCode(d);
+            if (!countryCode) return false;
+            return dataService.getDataValue(countryCode) > 0;
+        }).length;
+        
+        console.log(`${countriesWithData} out of ${countries.features.length} countries have data values`);
+        
+        // Update status with data availability
+        if (countriesWithData === 0) {
+            document.getElementById('dataStatus').textContent = "Warning: No countries have data values";
+            document.getElementById('dataStatus').style.color = "#FFC107";
+        } else {
+            document.getElementById('dataStatus').textContent = `Ready - ${countriesWithData} countries have data`;
+        }
     }
     
     getCountryColor(d) {
@@ -582,9 +592,17 @@ class GlobeVis {
             }
             
             const colorScale = dataService.getColorScale();
-            return colorScale(value);
+            const color = colorScale(value);
+            
+            // Log sample of values for debugging (only for selected major countries)
+            const majorCountries = ['us', 'gb', 'cn', 'ru', 'in', 'br'];
+            if (majorCountries.includes(countryCode.toLowerCase())) {
+                console.log(`Color for ${countryCode} (${dataService.getCountryName(countryCode)}): ${value} -> ${color}`);
+            }
+            
+            return color;
         } catch (e) {
-            console.error('Error getting color for country:', e);
+            console.error(`Error getting color for country ${countryCode}:`, e);
             return '#5da85d'; // Default on error
         }
     }
@@ -800,9 +818,30 @@ class GlobeVis {
     updateGlobeColors() {
         this.log("Updating globe colors");
         
+        // Count countries with data before update
+        const countryElements = this.globeGroup.selectAll('.country');
+        let countriesWithData = 0;
+        
         // Update colors for all countries based on current data
-        this.globeGroup.selectAll('.country')
-            .attr('fill', d => this.getCountryColor(d));
+        countryElements
+            .attr('fill', d => this.getCountryColor(d))
+            .each(d => {
+                const countryCode = this.getCountryCode(d);
+                if (countryCode && dataService.getDataValue(countryCode) > 0) {
+                    countriesWithData++;
+                }
+            });
+            
+        console.log(`After color update: ${countriesWithData} countries have data values`);
+        
+        // Update status
+        if (countriesWithData === 0) {
+            document.getElementById('dataStatus').textContent = `Warning: No countries have data for ${dataService.currentColumn}`;
+            document.getElementById('dataStatus').style.color = "#FFC107";
+        } else {
+            document.getElementById('dataStatus').textContent = `Showing ${dataService.currentColumn} - ${countriesWithData} countries have data`;
+            document.getElementById('dataStatus').style.color = "#4CAF50";
+        }
             
         this.log("Globe colors updated");
     }
