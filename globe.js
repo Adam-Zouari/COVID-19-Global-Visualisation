@@ -584,20 +584,14 @@ class GlobeVis {
         }
         
         try {
-            const value = dataService.getDataValue(countryCode);
-            
-            // If no data value, use a different default color
-            if (!value || value === 0) {
-                return '#5da85d'; // Default green for no data
-            }
-            
-            const colorScale = dataService.getColorScale();
-            const color = colorScale(value);
+            // Use the pre-calculated color from the data service
+            const color = dataService.getCountryColor(countryCode);
             
             // Log sample of values for debugging (only for selected major countries)
             const majorCountries = ['us', 'gb', 'cn', 'ru', 'in', 'br'];
-            if (majorCountries.includes(countryCode.toLowerCase())) {
-                console.log(`Color for ${countryCode} (${dataService.getCountryName(countryCode)}): ${value} -> ${color}`);
+            if (majorCountries.includes(countryCode.toLowerCase()) && Math.random() < 0.05) {
+                // Only log occasionally to reduce console spam
+                console.log(`Color for ${countryCode}: ${color}`);
             }
             
             return color;
@@ -778,11 +772,13 @@ class GlobeVis {
             currentDateEl.textContent = dataService.formatDate(dataService.currentDate);
         }
         
-        // Handle slider change
+        // Handle slider change - now should be much faster since data is pre-calculated
         dateSlider.addEventListener('input', () => {
             const newDate = dataService.getDateFromIndex(parseInt(dateSlider.value));
             dataService.changeDate(newDate);
             currentDateEl.textContent = dataService.formatDate(newDate);
+            
+            // This should now be very fast due to caching
             this.updateGlobeColors();
             
             // If a country is selected, update its info
@@ -821,18 +817,23 @@ class GlobeVis {
         // Count countries with data before update
         const countryElements = this.globeGroup.selectAll('.country');
         let countriesWithData = 0;
+        let totalCountries = 0;
         
         // Update colors for all countries based on current data
         countryElements
-            .attr('fill', d => this.getCountryColor(d))
-            .each(d => {
+            .attr('fill', d => {
+                totalCountries++;
                 const countryCode = this.getCountryCode(d);
-                if (countryCode && dataService.getDataValue(countryCode) > 0) {
+                if (!countryCode) return '#5da85d';
+                
+                const color = dataService.getCountryColor(countryCode);
+                if (color !== '#5da85d') {
                     countriesWithData++;
                 }
+                return color;
             });
             
-        console.log(`After color update: ${countriesWithData} countries have data values`);
+        console.log(`After color update: ${countriesWithData} out of ${totalCountries} countries have data values`);
         
         // Update status
         if (countriesWithData === 0) {

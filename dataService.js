@@ -15,6 +15,18 @@ class DataService {
             hospitalizations: []
         };
         
+        // Indexed data for faster lookup
+        this.indexedData = {
+            epidem: {},
+            hospitalizations: {}
+        };
+        
+        // Cache for calculated colors
+        this.colorCache = {
+            epidem: {},
+            hospitalizations: {}
+        };
+        
         // Debug flag
         this.debug = true;
         
@@ -77,6 +89,16 @@ class DataService {
                     // Set defaults
                     this.setDefaultValues();
                     
+                    // Index the data for faster lookups
+                    document.getElementById('dataStatus').textContent = "Indexing data for performance...";
+                    await this.indexAllData();
+                    
+                    // Pre-calculate colors for better performance
+                    document.getElementById('dataStatus').textContent = "Pre-calculating colors...";
+                    await this.precalculateColors();
+                    
+                    document.getElementById('dataStatus').textContent = "Ready!";
+                    
                     // Success - return the data
                     return {
                         epidemData: this.epidemData,
@@ -100,6 +122,174 @@ class DataService {
             document.getElementById('dataStatus').textContent = "Error loading data";
             this.showDataFileError(error.message);
             throw error; // Make sure the error propagates
+        }
+    }
+    
+    // New method: Index all data for fast access
+    async indexAllData() {
+        this.log("Indexing data for faster access");
+        
+        // Clear any existing indexed data
+        this.indexedData = {
+            epidem: {},
+            hospitalizations: {}
+        };
+        
+        // Function to index a dataset
+        const indexDataset = (dataset, datasetName) => {
+            return new Promise(resolve => {
+                // Create an index for each country and date
+                dataset.forEach(record => {
+                    if (!record.country_key || !record.date) return;
+                    
+                    const countryKey = record.country_key.toLowerCase();
+                    
+                    // Create country entry if not exists
+                    if (!this.indexedData[datasetName][countryKey]) {
+                        this.indexedData[datasetName][countryKey] = {};
+                    }
+                    
+                    // Store the record indexed by date
+                    this.indexedData[datasetName][countryKey][record.date] = record;
+                });
+                
+                // Report indexing progress
+                const countries = Object.keys(this.indexedData[datasetName]).length;
+                this.log(`Indexed ${datasetName} data: ${countries} countries`);
+                
+                resolve();
+            });
+        };
+        
+        // Process both datasets using Promise.all for parallel processing
+        await Promise.all([
+            indexDataset(this.epidemData, 'epidem'),
+            indexDataset(this.hospitalizationsData, 'hospitalizations')
+        ]);
+        
+        this.log("Data indexing complete");
+    }
+    
+    // New method: Pre-calculate colors for all countries and dates
+    async precalculateColors() {
+        this.log("Pre-calculating colors for all metrics");
+        
+        // Clear any existing color cache
+        this.colorCache = {
+            epidem: {},
+            hospitalizations: {}
+        };
+        
+        // Function to calculate colors for a dataset, column, and date
+        const calculateColorsForDate = (datasetName, column, date) => {
+            return new Promise(resolve => {
+                // Get data for this date
+                const dataForDate = this.getDataForDate(datasetName, date);
+                
+                // Extract values for this column
+                const values = dataForDate
+                    .map(d => {
+                        const value = d[column];
+                        return value ? parseFloat(value) : 0;
+                    })
+                    .filter(v => !isNaN(v) && v >= 0);
+                
+                if (!values.length) {
+                    resolve();
+                    return;
+                }
+                
+                // Calculate color scale
+                const max = d3.max(values);
+                
+                // Choose color scheme based on dataset
+                const colorInterpolator = datasetName === 'epidem' ? 
+                    d3.interpolateRgb('#5da85d', '#FF4500') :
+                    d3.interpolateRgb('#5da85d', '#1E90FF');
+                    
+                const colorScale = d3.scaleSequential()
+                    .domain([0, max])
+                    .interpolator(d => colorInterpolator(Math.sqrt(d / max)));
+                
+                // Cache colors for each country
+                if (!this.colorCache[datasetName][column]) {
+                    this.colorCache[datasetName][column] = {};
+                }
+                
+                if (!this.colorCache[datasetName][column][date]) {
+                    this.colorCache[datasetName][column][date] = {};
+                }
+                
+                // Calculate and cache color for each country
+                Object.keys(this.indexedData[datasetName]).forEach(countryKey => {
+                    const countryData = this.indexedData[datasetName][countryKey][date];
+                    if (!countryData) return;
+                    
+                    const value = countryData[column];
+                    if (!value) return;
+                    
+                    const parsedValue = parseFloat(value);
+                    if (isNaN(parsedValue) || parsedValue <= 0) return;
+                    
+                    // Calculate and store the color
+                    this.colorCache[datasetName][column][date][countryKey] = colorScale(parsedValue);
+                });
+                
+                resolve();
+            });
+        };
+        
+        // Process all combinations of datasets, columns, and dates
+        for (const datasetName of ['epidem', 'hospitalizations']) {
+            for (const column of this.availableColumns[datasetName]) {
+                // Update status indicator to show progress
+                document.getElementById('dataStatus').textContent = 
+                    `Calculating colors: ${datasetName} - ${column}...`;
+                
+                // Process dates in smaller batches to avoid UI freezing
+                const batchSize = 10;
+                for (let i = 0; i < this.availableDates.length; i += batchSize) {
+                    const batch = this.availableDates.slice(i, i + batchSize);
+                    await Promise.all(batch.map(date => 
+                        calculateColorsForDate(datasetName, column, date)
+                    ));
+                }
+            }
+        }
+        
+        this.log("Color pre-calculation complete");
+    }
+    
+    // Get all data for a specific date from a dataset
+    getDataForDate(datasetName, date) {
+        const dataset = datasetName === 'epidem' ? 
+            this.epidemData : this.hospitalizationsData;
+        
+        return dataset.filter(d => d.date === date);
+    }
+    
+    // Get cached color for a country
+    getCachedColor(countryKey, date) {
+        if (!countryKey) return null;
+        
+        const normalizedKey = countryKey.toLowerCase();
+        
+        try {
+            // Check if we have a cached color
+            if (
+                this.colorCache[this.currentDataset] && 
+                this.colorCache[this.currentDataset][this.currentColumn] && 
+                this.colorCache[this.currentDataset][this.currentColumn][date] && 
+                this.colorCache[this.currentDataset][this.currentColumn][date][normalizedKey]
+            ) {
+                return this.colorCache[this.currentDataset][this.currentColumn][date][normalizedKey];
+            }
+            
+            // If no cached color, return null to use default
+            return null;
+        } catch (e) {
+            console.error('Error retrieving cached color:', e);
+            return null;
         }
     }
     
@@ -237,7 +427,7 @@ class DataService {
             this.log(`Loaded ${this.hospitalizationsData.length} hospitalization records from upload`);
             this.log(`Loaded ${this.countryIndex.length} country index records from upload`);
             
-            document.getElementById('dataStatus').textContent = "Using uploaded data files";
+            document.getElementById('dataStatus').textContent = "Processing uploaded data...";
             
             // Build a lookup table for country codes
             this.buildCountryCodeMap();
@@ -247,6 +437,16 @@ class DataService {
             
             // Set defaults
             this.setDefaultValues();
+            
+            // Index the data for faster lookups
+            document.getElementById('dataStatus').textContent = "Indexing uploaded data...";
+            await this.indexAllData();
+            
+            // Pre-calculate colors for better performance
+            document.getElementById('dataStatus').textContent = "Calculating colors...";
+            await this.precalculateColors();
+            
+            document.getElementById('dataStatus').textContent = "Ready (using uploaded data)";
             
             // Refresh the visualization
             const globe = window.globeInstance;
@@ -438,26 +638,16 @@ class DataService {
     getCountryData(countryKey) {
         if (!countryKey) return null;
         
-        const dataset = this.getCurrentDataset();
-        if (!dataset || dataset.length === 0) {
-            this.log(`No dataset available for ${this.currentDataset}`);
-            return null;
-        }
-        
-        console.log(`Looking for data for country ${countryKey} on ${this.currentDate}`);
-        
-        // Normalize country key to lowercase
+        // Check in the indexed data first for better performance
         const normalizedKey = countryKey.toLowerCase();
+        const datasetName = this.currentDataset;
         
-        // Try to find exact match
-        let countryData = dataset.find(d => 
-            d.country_key && 
-            d.country_key.toLowerCase() === normalizedKey && 
-            d.date === this.currentDate
-        );
-        
-        if (countryData) {
-            console.log(`Found data for ${countryKey} on ${this.currentDate}:`, countryData);
+        if (
+            this.indexedData[datasetName] && 
+            this.indexedData[datasetName][normalizedKey] && 
+            this.indexedData[datasetName][normalizedKey][this.currentDate]
+        ) {
+            const countryData = this.indexedData[datasetName][normalizedKey][this.currentDate];
             return {
                 countryKey,
                 countryName: this.getCountryName(countryKey),
@@ -466,39 +656,34 @@ class DataService {
             };
         }
         
-        // Try with next closest date if no data for current date
-        if (!countryData) {
-            // Get all entries for this country
-            const allCountryEntries = dataset.filter(d => 
-                d.country_key && d.country_key.toLowerCase() === normalizedKey
-            );
+        // If not found for current date, try to find closest date
+        if (this.indexedData[datasetName] && this.indexedData[datasetName][normalizedKey]) {
+            const availableDates = Object.keys(this.indexedData[datasetName][normalizedKey]).sort();
             
-            if (allCountryEntries.length > 0) {
-                this.log(`Found ${allCountryEntries.length} entries for ${countryKey}, but none on ${this.currentDate}`);
-                
-                // Sort by date to find closest
-                allCountryEntries.sort((a, b) => {
-                    const dateA = new Date(a.date);
-                    const dateB = new Date(b.date);
+            if (availableDates.length > 0) {
+                // Find closest date
+                availableDates.sort((a, b) => {
+                    const dateA = new Date(a);
+                    const dateB = new Date(b);
                     return Math.abs(dateA - new Date(this.currentDate)) - 
                            Math.abs(dateB - new Date(this.currentDate));
                 });
                 
-                // Use closest date
-                countryData = allCountryEntries[0];
-                this.log(`Using closest date ${countryData.date} for ${countryKey}`);
-                console.log(`Found data for ${countryKey} on closest date ${countryData.date}:`, countryData);
+                const closestDate = availableDates[0];
+                const countryData = this.indexedData[datasetName][normalizedKey][closestDate];
+                
+                this.log(`Using closest date ${closestDate} for ${countryKey}`);
                 
                 return {
                     countryKey,
                     countryName: this.getCountryName(countryKey),
-                    date: countryData.date,
+                    date: closestDate,
                     ...countryData
                 };
             }
         }
         
-        this.log(`No data at all for country key: ${countryKey}`);
+        // If still not found, return null
         return null;
     }
     
@@ -519,15 +704,37 @@ class DataService {
     // Get value for current column for a country
     getDataValue(countryKey) {
         const countryData = this.getCountryData(countryKey);
-        if (!countryData || !this.currentColumn) {
-            console.log(`No data or column for country ${countryKey}`);
-            return 0;
-        }
+        if (!countryData || !this.currentColumn) return 0;
         
         const value = countryData[this.currentColumn];
-        const parsedValue = value ? parseFloat(value) : 0;
-        console.log(`Data value for ${countryKey} (${this.currentColumn}): ${value} -> ${parsedValue}`);
-        return parsedValue;
+        return value ? parseFloat(value) : 0;
+    }
+    
+    // Get color for a country using pre-calculated cache
+    getCountryColor(countryKey) {
+        if (!countryKey) return '#5da85d'; // Default color
+        
+        const normalizedKey = countryKey.toLowerCase();
+        const cachedColor = this.getCachedColor(normalizedKey, this.currentDate);
+        
+        if (cachedColor) {
+            return cachedColor;
+        }
+        
+        // If no cached color, fall back to calculating it
+        try {
+            const value = this.getDataValue(countryKey);
+            
+            if (!value || value === 0) {
+                return '#5da85d'; // Default for no data
+            }
+            
+            const colorScale = this.getColorScale();
+            return colorScale(value);
+        } catch (e) {
+            console.error('Error calculating country color:', e);
+            return '#5da85d'; // Default on error
+        }
     }
     
     // Change dataset
@@ -591,14 +798,6 @@ class DataService {
         }
         
         const max = d3.max(values);
-        const min = d3.min(values);
-        
-        console.log(`Color scale range for ${this.currentColumn}: ${min} to ${max}, ${values.length} values`);
-        if (values.length < 10) {
-            console.log("Sample values:", values);
-        } else {
-            console.log("Sample values (first 10):", values.slice(0, 10));
-        }
         
         // Choose color scheme based on current dataset
         const colorInterpolator = this.currentDataset === 'epidem' ? 
