@@ -124,9 +124,9 @@ body::after {
 }
 
 .data-panel {
-    flex: 0.50; /* Increased from 0.3 to make data panel wider */
-    min-width: 200px;
-    max-width: 400px; /* Increased from 250px to 300px */
+    flex: 0.8; /* Increased from 0.50 to make data panel wider */
+    min-width: 250px;
+    max-width: 500px; /* Increased from 400px to 500px */
 }
 
 /* Make the globe container background transparent with proper isolation */
@@ -197,13 +197,27 @@ body::after {
 }
 
 #dataSelector {
-    padding: 6px 10px;
-    background-color: rgba(42, 42, 42, 0.4);
+    padding: 8px 12px;
+    background-color: rgba(20, 30, 50, 0.8);
     color: white;
-    border: 1px solid rgba(68, 68, 68, 0.5);
+    border: 1px solid rgba(100, 170, 255, 0.6);
     border-radius: 4px;
     width: 100%;
-    font-size: 12px;
+    font-size: 13px;
+    box-shadow: 0 0 10px rgba(0, 150, 255, 0.2);
+    transition: all 0.3s;
+}
+
+#dataSelector:hover, #dataSelector:focus {
+    background-color: rgba(25, 35, 60, 0.9);
+    border-color: rgba(100, 170, 255, 0.8);
+    box-shadow: 0 0 15px rgba(0, 150, 255, 0.4);
+}
+
+#dataSelector option {
+    background-color: #1a2035;
+    color: white;
+    padding: 10px;
 }
 
 .country-info {
