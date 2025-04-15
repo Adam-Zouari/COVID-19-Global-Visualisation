@@ -1100,6 +1100,10 @@ class GlobeVis {
             this.changeDataset('hospitalizations');
         });
         
+        document.getElementById('vaccinationsBtn').addEventListener('click', () => {
+            this.changeDataset('vaccinations');
+        });
+        
         // Handle wheel event for stopping rotation when zooming
         this.svg.on('wheel', () => {
             this.stopAutoRotation();
@@ -1116,7 +1120,22 @@ class GlobeVis {
         document.querySelectorAll('.dataset-btn').forEach(btn => {
             btn.classList.remove('active');
         });
-        document.getElementById(`${dataset}Btn`).classList.add('active');
+        
+        // Map dataset names to button IDs
+        const buttonIdMap = {
+            'epidem': 'epidemBtn',
+            'hospitalizations': 'hospitalBtn',
+            'vaccinations': 'vaccinationsBtn'
+        };
+        
+        // Get the correct button ID
+        const buttonId = buttonIdMap[dataset] || `${dataset}Btn`;
+        
+        // Safely add the active class if the button exists
+        const button = document.getElementById(buttonId);
+        if (button) {
+            button.classList.add('active');
+        }
         
         // Change dataset in data service
         const result = dataService.changeDataset(dataset);

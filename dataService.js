@@ -3,6 +3,7 @@ class DataService {
         // Data storage
         this.epidemData = null;
         this.hospitalizationsData = null;
+        this.vaccinationsData = null;  // Add vaccinations data storage
         this.countryIndex = null;
         
         // Current state
@@ -12,19 +13,22 @@ class DataService {
         this.currentColumn = null;
         this.availableColumns = {
             epidem: [],
-            hospitalizations: []
+            hospitalizations: [],
+            vaccinations: []  // Add vaccinations columns
         };
         
         // Indexed data for faster lookup
         this.indexedData = {
             epidem: {},
-            hospitalizations: {}
+            hospitalizations: {},
+            vaccinations: {}  // Add vaccinations index
         };
         
         // Cache for calculated colors
         this.colorCache = {
             epidem: {},
-            hospitalizations: {}
+            hospitalizations: {},
+            vaccinations: {}  // Add vaccinations cache
         };
         
         // Debug flag
@@ -34,6 +38,7 @@ class DataService {
         this.apiEndpoints = {
             epidem: 'http://localhost:3000/api/epidem',
             hospitalizations: 'http://localhost:3000/api/hospitalizations',
+            vaccinations: 'http://localhost:3000/api/vaccinations', // Add vaccinations endpoint
             countryIndex: 'http://localhost:3000/api/country-index'
         };
     }
@@ -51,19 +56,22 @@ class DataService {
                 console.log("API endpoints being accessed:", this.apiEndpoints);
                 
                 // Load all datasets in parallel
-                const [epidemData, hospitalizationsData, countryIndex] = await Promise.all([
+                const [epidemData, hospitalizationsData, vaccinationsData, countryIndex] = await Promise.all([
                     d3.csv(this.apiEndpoints.epidem),
                     d3.csv(this.apiEndpoints.hospitalizations),
+                    d3.csv(this.apiEndpoints.vaccinations),
                     d3.csv(this.apiEndpoints.countryIndex)
                 ]);
                 
                 // Log raw data for debugging
                 console.log("Epidem data sample (first 2 records):", epidemData.slice(0, 2));
                 console.log("Hospitalization data sample (first 2 records):", hospitalizationsData.slice(0, 2));
+                console.log("Vaccination data sample (first 2 records):", vaccinationsData.slice(0, 2));
                 console.log("Country index sample (first 5 records):", countryIndex.slice(0, 5));
                 
                 if (epidemData && epidemData.length && 
                     hospitalizationsData && hospitalizationsData.length && 
+                    vaccinationsData && vaccinationsData.length && 
                     countryIndex && countryIndex.length) {
                     
                     this.log("Successfully loaded data from API endpoints");
@@ -71,10 +79,12 @@ class DataService {
                     
                     this.epidemData = epidemData;
                     this.hospitalizationsData = hospitalizationsData;
+                    this.vaccinationsData = vaccinationsData;
                     this.countryIndex = countryIndex;
                     
                     this.log(`Loaded ${this.epidemData.length} epidem records`);
                     this.log(`Loaded ${this.hospitalizationsData.length} hospitalization records`);
+                    this.log(`Loaded ${this.vaccinationsData.length} vaccination records`);
                     this.log(`Loaded ${this.countryIndex.length} country index records`);
                     
                     // Check data structure to ensure required fields exist
@@ -103,6 +113,7 @@ class DataService {
                     return {
                         epidemData: this.epidemData,
                         hospitalizationsData: this.hospitalizationsData,
+                        vaccinationsData: this.vaccinationsData,
                         countryIndex: this.countryIndex,
                         availableDates: this.availableDates,
                         availableColumns: this.availableColumns
@@ -132,7 +143,8 @@ class DataService {
         // Clear any existing indexed data
         this.indexedData = {
             epidem: {},
-            hospitalizations: {}
+            hospitalizations: {},
+            vaccinations: {}  // Add vaccinations index
         };
         
         // Function to index a dataset
@@ -164,7 +176,8 @@ class DataService {
         // Process both datasets using Promise.all for parallel processing
         await Promise.all([
             indexDataset(this.epidemData, 'epidem'),
-            indexDataset(this.hospitalizationsData, 'hospitalizations')
+            indexDataset(this.hospitalizationsData, 'hospitalizations'),
+            indexDataset(this.vaccinationsData, 'vaccinations')
         ]);
         
         this.log("Data indexing complete");
@@ -177,7 +190,8 @@ class DataService {
         // Clear any existing color cache
         this.colorCache = {
             epidem: {},
-            hospitalizations: {}
+            hospitalizations: {},
+            vaccinations: {}  // Add vaccinations cache
         };
         
         // Function to calculate colors for a dataset, column, and date
@@ -225,9 +239,12 @@ class DataService {
                 if (datasetName === 'epidem') {
                     // Virus data: vibrant green to red gradient
                     colorInterpolator = d3.interpolateRgb('#2ECC40', '#FF4136');
-                } else {
+                } else if (datasetName === 'hospitalizations') {
                     // Hospital data: vibrant green to blue gradient
                     colorInterpolator = d3.interpolateRgb('#2ECC40', '#0074D9');
+                } else if (datasetName === 'vaccinations') {
+                    // Vaccination data: vibrant green to purple gradient
+                    colorInterpolator = d3.interpolateRgb('#2ECC40', '#9932CC');
                 }
                 
                 // Power scale exponent for better visual distribution
@@ -264,7 +281,7 @@ class DataService {
         };
         
         // Process all combinations of datasets, columns, and dates
-        for (const datasetName of ['epidem', 'hospitalizations']) {
+        for (const datasetName of ['epidem', 'hospitalizations', 'vaccinations']) {
             for (const column of this.availableColumns[datasetName]) {
                 // Update status indicator to show progress
                 document.getElementById('dataStatus').textContent = 
@@ -286,10 +303,14 @@ class DataService {
     
     // Get all data for a specific date from a dataset
     getDataForDate(datasetName, date) {
-        const dataset = datasetName === 'epidem' ? 
-            this.epidemData : this.hospitalizationsData;
-        
-        return dataset.filter(d => d.date === date);
+        if (datasetName === 'epidem') {
+            return this.epidemData.filter(d => d.date === date);
+        } else if (datasetName === 'hospitalizations') {
+            return this.hospitalizationsData.filter(d => d.date === date);
+        } else if (datasetName === 'vaccinations') {
+            return this.vaccinationsData.filter(d => d.date === date);
+        }
+        return [];
     }
     
     // Get cached color for a country
@@ -374,6 +395,34 @@ class DataService {
                 console.error("Could not find any country identifier field in hospitalization data!");
             }
         }
+        
+        if (this.vaccinationsData.length > 0) {
+            const firstRecord = this.vaccinationsData[0];
+            console.log("Vaccination data fields:", Object.keys(firstRecord));
+            
+            // Check for required fields
+            if (!('date' in firstRecord)) {
+                console.error("Vaccination data is missing 'date' field!");
+            }
+            
+            // Check what field is used for country identification
+            const possibleCountryFields = ['country_key', 'country_code', 'location_key', 'country', 'iso_code'];
+            const foundCountryField = possibleCountryFields.find(field => field in firstRecord);
+            
+            if (foundCountryField && foundCountryField !== 'country_key') {
+                console.log(`Found country identifier in field '${foundCountryField}' instead of 'country_key'`);
+                // If we found a different field name, map it to country_key
+                this.vaccinationsData = this.vaccinationsData.map(record => {
+                    return {
+                        ...record,
+                        country_key: record[foundCountryField]
+                    };
+                });
+                console.log("Mapped data to include 'country_key' field");
+            } else if (!foundCountryField) {
+                console.error("Could not find any country identifier field in vaccination data!");
+            }
+        }
     }
     
     showDataFileError(errorDetails = null) {
@@ -385,7 +434,7 @@ class DataService {
             <ol>
                 <li>Make sure the Express server is running: <code>cd server && node server.js</code></li>
                 <li>Ensure you have a folder named <code>Covid19_Datasets/Google_Datasets</code> with the CSV files.</li>
-                <li>Files needed: <code>country_level_epidem.csv</code>, <code>country_level_hopitalizations.csv</code>, and <code>small_index.csv</code></li>
+                <li>Files needed: <code>country_level_epidem.csv</code>, <code>country_level_hopitalizations.csv</code>, <code>country_level_vaccinations.csv</code>, and <code>small_index.csv</code></li>
             </ol>
             <p>You can also upload the files directly:</p>
             <div class="file-upload-controls">
@@ -394,6 +443,9 @@ class DataService {
                 </div>
                 <div class="file-upload">
                     <label>Hospital Data: <input type="file" id="hospitalUpload" accept=".csv"></label>
+                </div>
+                <div class="file-upload">
+                    <label>Vaccination Data: <input type="file" id="vaccinationUpload" accept=".csv"></label>
                 </div>
                 <div class="file-upload">
                     <label>Country Index: <input type="file" id="indexUpload" accept=".csv"></label>
@@ -418,37 +470,40 @@ class DataService {
             document.getElementById('processUploads').addEventListener('click', async () => {
                 const epidemFile = document.getElementById('epidemUpload').files[0];
                 const hospitalFile = document.getElementById('hospitalUpload').files[0];
+                const vaccinationFile = document.getElementById('vaccinationUpload').files[0];
                 const indexFile = document.getElementById('indexUpload').files[0];
                 
-                if (epidemFile && hospitalFile && indexFile) {
+                if (epidemFile && hospitalFile && vaccinationFile && indexFile) {
                     try {
-                        await this.processUploadedFiles(epidemFile, hospitalFile, indexFile);
+                        await this.processUploadedFiles(epidemFile, hospitalFile, vaccinationFile, indexFile);
                         errorDisplay.style.display = 'none';
                     } catch (error) {
                         alert(`Error processing files: ${error.message}`);
                     }
                 } else {
-                    alert('Please select all three required files');
+                    alert('Please select all four required files');
                 }
             });
         }, 100);
     }
     
-    async processUploadedFiles(epidemFile, hospitalFile, indexFile) {
+    async processUploadedFiles(epidemFile, hospitalFile, vaccinationFile, indexFile) {
         document.getElementById('dataStatus').textContent = "Processing uploaded files...";
         
         try {
             // Read and parse the CSV files
             this.epidemData = await this.readCSVFile(epidemFile);
             this.hospitalizationsData = await this.readCSVFile(hospitalFile);
+            this.vaccinationsData = await this.readCSVFile(vaccinationFile);
             this.countryIndex = await this.readCSVFile(indexFile);
             
-            if (!this.epidemData.length || !this.hospitalizationsData.length || !this.countryIndex.length) {
+            if (!this.epidemData.length || !this.hospitalizationsData.length || !this.vaccinationsData.length || !this.countryIndex.length) {
                 throw new Error('One or more files are empty or invalid');
             }
             
             this.log(`Loaded ${this.epidemData.length} epidem records from upload`);
             this.log(`Loaded ${this.hospitalizationsData.length} hospitalization records from upload`);
+            this.log(`Loaded ${this.vaccinationsData.length} vaccination records from upload`);
             this.log(`Loaded ${this.countryIndex.length} country index records from upload`);
             
             document.getElementById('dataStatus').textContent = "Processing uploaded data...";
@@ -484,6 +539,7 @@ class DataService {
             return {
                 epidemData: this.epidemData,
                 hospitalizationsData: this.hospitalizationsData,
+                vaccinationsData: this.vaccinationsData,
                 countryIndex: this.countryIndex,
                 availableDates: this.availableDates,
                 availableColumns: this.availableColumns
@@ -567,16 +623,17 @@ class DataService {
     processData() {
         this.log("Processing data");
         
-        // Extract unique dates from epidem data
+        // Extract unique dates from all datasets
         const epidemDates = [...new Set(this.epidemData.map(d => d.date))];
-        this.log(`Found ${epidemDates.length} unique dates in epidem data`);
-        
-        // Extract unique dates from hospitalizations data
         const hospDates = [...new Set(this.hospitalizationsData.map(d => d.date))];
+        const vaccinationDates = this.vaccinationsData ? [...new Set(this.vaccinationsData.map(d => d.date))] : [];
+        
+        this.log(`Found ${epidemDates.length} unique dates in epidem data`);
         this.log(`Found ${hospDates.length} unique dates in hospitalization data`);
+        this.log(`Found ${vaccinationDates.length} unique dates in vaccination data`);
         
         // Combine and sort dates
-        this.availableDates = [...new Set([...epidemDates, ...hospDates])].sort();
+        this.availableDates = [...new Set([...epidemDates, ...hospDates, ...vaccinationDates])].sort();
         this.log(`Combined to ${this.availableDates.length} unique dates overall`);
         
         if (this.availableDates.length > 0) {
@@ -587,10 +644,10 @@ class DataService {
             console.error("No dates found in the data!");
         }
         
-        // Extract available columns for each dataset (excluding date and country_key)
+        // Extract available columns for each dataset (excluding date, country_key, and location_key)
         if (this.epidemData && this.epidemData.length > 0) {
             this.availableColumns.epidem = Object.keys(this.epidemData[0])
-                .filter(col => col !== 'date' && col !== 'country_key');
+                .filter(col => col !== 'date' && col !== 'country_key' && col !== 'location_key');
             this.log(`Found ${this.availableColumns.epidem.length} columns in epidem data:`, this.availableColumns.epidem);
         } else {
             console.error("No epidem data records found!");
@@ -598,10 +655,18 @@ class DataService {
             
         if (this.hospitalizationsData && this.hospitalizationsData.length > 0) {
             this.availableColumns.hospitalizations = Object.keys(this.hospitalizationsData[0])
-                .filter(col => col !== 'date' && col !== 'country_key');
+                .filter(col => col !== 'date' && col !== 'country_key' && col !== 'location_key');
             this.log(`Found ${this.availableColumns.hospitalizations.length} columns in hospitalization data:`, this.availableColumns.hospitalizations);
         } else {
             console.error("No hospitalization data records found!");
+        }
+        
+        if (this.vaccinationsData && this.vaccinationsData.length > 0) {
+            this.availableColumns.vaccinations = Object.keys(this.vaccinationsData[0])
+                .filter(col => col !== 'date' && col !== 'country_key' && col !== 'location_key');
+            this.log(`Found ${this.availableColumns.vaccinations.length} columns in vaccination data:`, this.availableColumns.vaccinations);
+        } else {
+            console.error("No vaccination data records found!");
         }
         
         // Analyze some sample data for a few countries
@@ -617,7 +682,11 @@ class DataService {
                 d.country_key && d.country_key.toLowerCase() === countryKey.toLowerCase()
             ).length;
             
-            this.log(`${countryKey} (${this.getCountryName(countryKey)}): Epidem: ${epidemCount}, Hospital: ${hospCount}`);
+            const vaccinationCount = this.vaccinationsData.filter(d => 
+                d.country_key && d.country_key.toLowerCase() === countryKey.toLowerCase()
+            ).length;
+            
+            this.log(`${countryKey} (${this.getCountryName(countryKey)}): Epidem: ${epidemCount}, Hospital: ${hospCount}, Vaccination: ${vaccinationCount}`);
         }
         
         // List the first few country_key values from the data to help debugging
@@ -713,8 +782,14 @@ class DataService {
     
     // Get current dataset based on selection
     getCurrentDataset() {
-        return this.currentDataset === 'epidem' ? 
-            this.epidemData : this.hospitalizationsData;
+        if (this.currentDataset === 'epidem') {
+            return this.epidemData;
+        } else if (this.currentDataset === 'hospitalizations') {
+            return this.hospitalizationsData;
+        } else if (this.currentDataset === 'vaccinations') {
+            return this.vaccinationsData;
+        }
+        return null;
     }
     
     // Get data for all countries on current date
@@ -855,9 +930,12 @@ class DataService {
         if (this.currentDataset === 'epidem') {
             // Virus data: vibrant green to red gradient
             colorInterpolator = d3.interpolateRgb('#2ECC40', '#FF4136');
-        } else {
+        } else if (this.currentDataset === 'hospitalizations') {
             // Hospital data: vibrant green to blue gradient
             colorInterpolator = d3.interpolateRgb('#2ECC40', '#0074D9');
+        } else if (this.currentDataset === 'vaccinations') {
+            // Vaccination data: vibrant green to purple gradient
+            colorInterpolator = d3.interpolateRgb('#2ECC40', '#9932CC');
         }
         
         // Create a power scale with adjustable exponent for better visual scaling

@@ -125,6 +125,38 @@ app.get('/api/hospitalizations', (req, res) => {
     res.sendFile(filePath);
 });
 
+// API endpoint to get vaccination data
+app.get('/api/vaccinations', (req, res) => {
+    if (!validDataPath) {
+        return res.status(404).json({ error: 'Data directory not found' });
+    }
+    
+    const filePath = path.join(validDataPath, 'country_level_vaccinations.csv');
+    
+    if (!fs.existsSync(filePath)) {
+        console.error(`Vaccination data file not found at ${filePath}`);
+        return res.status(404).json({ 
+            error: 'Vaccination data file not found',
+            message: 'Please create a file named vaccinations.csv in your data directory'
+        });
+    }
+    
+    console.log(`Serving vaccination data file from: ${filePath}`);
+    
+    // Read the first few lines to validate structure (optional)
+    try {
+        const fileContent = fs.readFileSync(filePath, 'utf8').split('\n').slice(0, 3).join('\n');
+        console.log("Sample vaccination data structure:");
+        console.log(fileContent);
+    } catch (error) {
+        console.error("Error reading sample data:", error);
+    }
+    
+    // Send the CSV file
+    res.setHeader('Content-Type', 'text/csv');
+    res.sendFile(filePath);
+});
+
 // API endpoint to get country index data
 app.get('/api/country-index', (req, res) => {
     if (!validDataPath) {
@@ -182,6 +214,7 @@ app.listen(PORT, () => {
     console.log(`Data API is available at:`);
     console.log(`- http://localhost:${PORT}/api/epidem`);
     console.log(`- http://localhost:${PORT}/api/hospitalizations`);
+    console.log(`- http://localhost:${PORT}/api/vaccinations`);
     console.log(`- http://localhost:${PORT}/api/country-index`);
     console.log(`- http://localhost:${PORT}/api/list-files (for debugging)`);
 });
