@@ -67,13 +67,6 @@ class GlobeVis {
             
         this.path = d3.geoPath().projection(this.projection);
         
-        // Add subtle graticule lines for longitude/latitude
-        const graticule = d3.geoGraticule().step([20, 20]);
-        this.globeGroup.append('path')
-            .datum(graticule)
-            .attr('class', 'graticule')
-            .attr('d', this.path);
-        
         // Add tooltip
         this.tooltip = d3.select('body')
             .append('div')
@@ -527,15 +520,11 @@ class GlobeVis {
         
         // Clear any existing paths
         this.globeGroup.selectAll('.country').remove();
+        this.globeGroup.select('.ocean').remove();
+        this.globeGroup.select('.ocean-depth').remove();
         
-        // Add ocean circle with a more visible color
-        this.globeGroup.append('circle')
-            .attr('class', 'ocean')
-            .attr('cx', 0)
-            .attr('cy', 0)
-            .attr('r', this.radius)
-            .attr('fill', '#003347') // Slightly brighter ocean blue
-            .attr('fill-opacity', 0.9); // More opaque
+        // Create transparent ocean instead of solid color
+        this.createTransparentOcean();
         
         // Add countries to the globe
         this.globeGroup.selectAll('.country')
@@ -545,9 +534,9 @@ class GlobeVis {
             .attr('d', this.path)
             .attr('id', d => `country-${d.id}`)
             .attr('data-country-code', d => this.getCountryCode(d))
-            .attr('fill', '#5da85d') // Set initial color to default green
+            .attr('fill', d => this.getCountryColor(d))
             .attr('fill-opacity', 0.9)
-            .attr('stroke', 'rgba(255, 255, 255, 0.5)') // Add visible borders
+            .attr('stroke', 'rgba(255, 255, 255, 0.5)') // Keep visible borders
             .attr('stroke-width', '0.3px')
             .attr('shape-rendering', 'geometricPrecision')
             .on('mouseover', (event, d) => this.handleMouseOver(event, d))
@@ -1073,6 +1062,10 @@ class GlobeVis {
             .attr('d', this.path);
             
         this.globeGroup.select('.ocean')
+            .attr('r', adjustedRadius)
+            .attr('stroke-width', (0.5 / scale) + 'px');
+            
+        this.globeGroup.select('.ocean-depth')
             .attr('r', adjustedRadius);
             
         this.svg.select('.globe-backdrop')
@@ -1115,6 +1108,50 @@ class GlobeVis {
         this.svg.transition()
             .duration(750)
             .call(this.zoom.transform, d3.zoomIdentity);
+    }
+    
+    // Add method to create a transparent ocean
+    createTransparentOcean() {
+        // Remove existing ocean if any
+        this.globeGroup.select('.ocean').remove();
+        
+        // Remove graticule lines (stripes)
+        this.globeGroup.select('.graticule').remove();
+        
+        // Create a transparent ocean with just a subtle outline
+        this.globeGroup.append('circle')
+            .attr('class', 'ocean')
+            .attr('cx', 0)
+            .attr('cy', 0)
+            .attr('r', this.radius)
+            .attr('fill', 'none') // No fill
+            .attr('stroke', 'rgba(100, 200, 255, 0.15)') // Very subtle blue outline
+            .attr('stroke-width', '0.5px');
+            
+        // Add a subtle depth gradient to help with 3D appearance
+        const depthGradient = this.svg.select('defs').append('radialGradient')
+            .attr('id', 'ocean-depth')
+            .attr('cx', '50%')
+            .attr('cy', '50%')
+            .attr('r', '50%');
+            
+        depthGradient.append('stop')
+            .attr('offset', '70%')
+            .attr('stop-color', 'transparent')
+            .attr('stop-opacity', 0);
+            
+        depthGradient.append('stop')
+            .attr('offset', '100%')
+            .attr('stop-color', '#001a33')
+            .attr('stop-opacity', 0.12);
+            
+        // Add a very subtle depth overlay
+        this.globeGroup.append('circle')
+            .attr('class', 'ocean-depth')
+            .attr('cx', 0)
+            .attr('cy', 0)
+            .attr('r', this.radius)
+            .attr('fill', 'url(#ocean-depth)');
     }
     
     setupEventListeners() {
