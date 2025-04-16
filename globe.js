@@ -529,24 +529,8 @@ class GlobeVis {
         // Function to calculate point's distance from center of view
         // Used to set opacity based on position (front or back)
         const calculateOpacity = d => {
-            // Calculate the centroid of the feature
-            const centroid = d3.geoCentroid(d);
-            
-            // Apply current rotation
-            const rotatedPosition = this.projection(centroid);
-            
-            // If point is not visible (null), it might be on the edge
-            if (!rotatedPosition) return 0.3;
-            
-            // Get distance from center as percentage of radius
-            const distanceFromCenter = Math.sqrt(
-                Math.pow(rotatedPosition[0], 2) + 
-                Math.pow(rotatedPosition[1], 2)
-            ) / this.radius;
-            
-            // Map distance to opacity - further points get lower opacity
-            // Limited between 0.3 (back side) and 0.9 (front side)
-            return 0.9 - Math.min(0.6, distanceFromCenter * 0.5);
+            // Always return 1.0 for complete opacity regardless of position
+            return 1.0;
         };
         
         // Add countries to the globe
@@ -558,7 +542,7 @@ class GlobeVis {
             .attr('id', d => `country-${d.id}`)
             .attr('data-country-code', d => this.getCountryCode(d))
             .attr('fill', d => this.getCountryColor(d))
-            .attr('fill-opacity', calculateOpacity) // Vary opacity based on position
+            .attr('fill-opacity', 1.0) // Always full opacity
             .attr('stroke', 'rgba(255, 255, 255, 0.4)') 
             .attr('stroke-width', '0.3px')
             .attr('shape-rendering', 'geometricPrecision')
@@ -1034,25 +1018,9 @@ class GlobeVis {
             this.globeGroup.selectAll('path')
                 .attr('d', this.path);
                 
-            // Update opacities when transparent mode is active
-            if (this.projection.clipAngle() === 180) {
-                // Calculate opacity based on distance from center
-                const calculateOpacity = d => {
-                    const centroid = d3.geoCentroid(d);
-                    const rotatedPosition = this.projection(centroid);
-                    if (!rotatedPosition) return 0.3;
-                    
-                    const distanceFromCenter = Math.sqrt(
-                        Math.pow(rotatedPosition[0], 2) + 
-                        Math.pow(rotatedPosition[1], 2)
-                    ) / this.radius;
-                    
-                    return 0.9 - Math.min(0.6, distanceFromCenter * 0.5);
-                };
-                
-                this.globeGroup.selectAll('.country')
-                    .attr('fill-opacity', calculateOpacity);
-            }
+            // Always keep countries fully opaque
+            this.globeGroup.selectAll('.country')
+                .attr('fill-opacity', 1.0);
                 
             this.animationFrameId = requestAnimationFrame(animate);
         };
@@ -1089,25 +1057,9 @@ class GlobeVis {
             this.globeGroup.selectAll('path')
                 .attr('d', this.path);
                 
-            // Update opacities when transparent mode is active
-            if (this.projection.clipAngle() === 180) {
-                // Calculate distance from center for each country
-                const calculateOpacity = d => {
-                    const centroid = d3.geoCentroid(d);
-                    const rotatedPosition = this.projection(centroid);
-                    if (!rotatedPosition) return 0.3;
-                    
-                    const distanceFromCenter = Math.sqrt(
-                        Math.pow(rotatedPosition[0], 2) + 
-                        Math.pow(rotatedPosition[1], 2)
-                    ) / this.radius;
-                    
-                    return 0.9 - Math.min(0.6, distanceFromCenter * 0.5);
-                };
-                
-                this.globeGroup.selectAll('.country')
-                    .attr('fill-opacity', calculateOpacity);
-            }
+            // Always maintain full opacity regardless of position
+            this.globeGroup.selectAll('.country')
+                .attr('fill-opacity', 1.0);
         });
     }
     
@@ -1344,36 +1296,9 @@ class GlobeVis {
                 .attr('opacity', 0);
         }
         
-        // Update opacity based on new visibility
-        if (newClipAngle === 180) {
-            // Function to calculate point's distance from center of view
-            const calculateOpacity = d => {
-                // Calculate the centroid of the feature
-                const centroid = d3.geoCentroid(d);
-                
-                // Apply current rotation
-                const rotatedPosition = this.projection(centroid);
-                
-                // If point is not visible (null), it might be on the edge
-                if (!rotatedPosition) return 0.3;
-                
-                // Get distance from center as percentage of radius
-                const distanceFromCenter = Math.sqrt(
-                    Math.pow(rotatedPosition[0], 2) + 
-                    Math.pow(rotatedPosition[1], 2)
-                ) / this.radius;
-                
-                // Map distance to opacity - further points get lower opacity
-                return 0.9 - Math.min(0.6, distanceFromCenter * 0.5);
-            };
-            
-            this.globeGroup.selectAll('.country')
-                .attr('fill-opacity', calculateOpacity);
-        } else {
-            // Reset all to standard opacity for non-transparent mode
-            this.globeGroup.selectAll('.country')
-                .attr('fill-opacity', 0.9);
-        }
+        // Always set full opacity for countries regardless of view mode
+        this.globeGroup.selectAll('.country')
+            .attr('fill-opacity', 1.0);
     }
 }
 
