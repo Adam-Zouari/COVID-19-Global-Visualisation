@@ -34,6 +34,9 @@ class DataService {
         // Debug flag
         this.debug = true;
         
+        // Sample data flag
+        this.useSampleData = true;
+        
         // API endpoints (when running with Express server)
         this.apiEndpoints = {
             epidem: 'http://localhost:3000/api/epidem',
@@ -47,86 +50,142 @@ class DataService {
     async loadData() {
         try {
             this.log("Starting data loading process");
-            document.getElementById('dataStatus').textContent = "Connecting to server...";
+            document.getElementById('dataStatus').textContent = "Loading data...";
             
-            try {
-                // Load data from API endpoints
-                this.log("Loading data from API endpoints");
+            if (this.useSampleData) {
+                this.log("Using sample data for testing");
+                document.getElementById('dataStatus').textContent = "Generating sample data...";
                 
-                console.log("API endpoints being accessed:", this.apiEndpoints);
+                // Generate sample data
+                this.epidemData = this.generateSampleEpidemData();
+                this.hospitalizationsData = this.generateSampleHospitalizationsData();
+                this.vaccinationsData = this.generateSampleVaccinationsData();
+                this.countryIndex = this.generateSampleCountryIndex();
                 
-                // Load all datasets in parallel
-                const [epidemData, hospitalizationsData, vaccinationsData, countryIndex] = await Promise.all([
-                    d3.csv(this.apiEndpoints.epidem),
-                    d3.csv(this.apiEndpoints.hospitalizations),
-                    d3.csv(this.apiEndpoints.vaccinations),
-                    d3.csv(this.apiEndpoints.countryIndex)
-                ]);
+                // Log sample data for debugging
+                console.log("Epidem data sample (first 2 records):", this.epidemData.slice(0, 2));
+                console.log("Hospitalization data sample (first 2 records):", this.hospitalizationsData.slice(0, 2));
+                console.log("Vaccination data sample (first 2 records):", this.vaccinationsData.slice(0, 2));
+                console.log("Country index sample (first 5 records):", this.countryIndex.slice(0, 5));
                 
-                // Log raw data for debugging
-                console.log("Epidem data sample (first 2 records):", epidemData.slice(0, 2));
-                console.log("Hospitalization data sample (first 2 records):", hospitalizationsData.slice(0, 2));
-                console.log("Vaccination data sample (first 2 records):", vaccinationsData.slice(0, 2));
-                console.log("Country index sample (first 5 records):", countryIndex.slice(0, 5));
+                document.getElementById('dataStatus').textContent = "Sample data generated!";
                 
-                if (epidemData && epidemData.length && 
-                    hospitalizationsData && hospitalizationsData.length && 
-                    vaccinationsData && vaccinationsData.length && 
-                    countryIndex && countryIndex.length) {
+                this.log(`Generated ${this.epidemData.length} epidem records`);
+                this.log(`Generated ${this.hospitalizationsData.length} hospitalization records`);
+                this.log(`Generated ${this.vaccinationsData.length} vaccination records`);
+                this.log(`Generated ${this.countryIndex.length} country index records`);
+                
+                // Check data structure to ensure required fields exist
+                this.validateDataStructure();
+                
+                // Build a lookup table for country codes
+                this.buildCountryCodeMap();
+                
+                // Process the data
+                this.processData();
+                
+                // Set defaults
+                this.setDefaultValues();
+                
+                // Index the data for faster lookups
+                document.getElementById('dataStatus').textContent = "Indexing data for performance...";
+                await this.indexAllData();
+                
+                // Pre-calculate colors for better performance
+                document.getElementById('dataStatus').textContent = "Pre-calculating colors...";
+                await this.precalculateColors();
+                
+                document.getElementById('dataStatus').textContent = "Ready!";
+                
+                // Success - return the data
+                return {
+                    epidemData: this.epidemData,
+                    hospitalizationsData: this.hospitalizationsData,
+                    vaccinationsData: this.vaccinationsData,
+                    countryIndex: this.countryIndex,
+                    availableDates: this.availableDates,
+                    availableColumns: this.availableColumns
+                };
+            } else {
+                try {
+                    // Load data from API endpoints
+                    this.log("Loading data from API endpoints");
                     
-                    this.log("Successfully loaded data from API endpoints");
-                    document.getElementById('dataStatus').textContent = "Data loaded successfully!";
+                    console.log("API endpoints being accessed:", this.apiEndpoints);
                     
-                    this.epidemData = epidemData;
-                    this.hospitalizationsData = hospitalizationsData;
-                    this.vaccinationsData = vaccinationsData;
-                    this.countryIndex = countryIndex;
+                    // Load all datasets in parallel
+                    const [epidemData, hospitalizationsData, vaccinationsData, countryIndex] = await Promise.all([
+                        d3.csv(this.apiEndpoints.epidem),
+                        d3.csv(this.apiEndpoints.hospitalizations),
+                        d3.csv(this.apiEndpoints.vaccinations),
+                        d3.csv(this.apiEndpoints.countryIndex)
+                    ]);
                     
-                    this.log(`Loaded ${this.epidemData.length} epidem records`);
-                    this.log(`Loaded ${this.hospitalizationsData.length} hospitalization records`);
-                    this.log(`Loaded ${this.vaccinationsData.length} vaccination records`);
-                    this.log(`Loaded ${this.countryIndex.length} country index records`);
+                    // Log raw data for debugging
+                    console.log("Epidem data sample (first 2 records):", epidemData.slice(0, 2));
+                    console.log("Hospitalization data sample (first 2 records):", hospitalizationsData.slice(0, 2));
+                    console.log("Vaccination data sample (first 2 records):", vaccinationsData.slice(0, 2));
+                    console.log("Country index sample (first 5 records):", countryIndex.slice(0, 5));
                     
-                    // Check data structure to ensure required fields exist
-                    this.validateDataStructure();
-                    
-                    // Build a lookup table for country codes
-                    this.buildCountryCodeMap();
-                    
-                    // Process the data
-                    this.processData();
-                    
-                    // Set defaults
-                    this.setDefaultValues();
-                    
-                    // Index the data for faster lookups
-                    document.getElementById('dataStatus').textContent = "Indexing data for performance...";
-                    await this.indexAllData();
-                    
-                    // Pre-calculate colors for better performance
-                    document.getElementById('dataStatus').textContent = "Pre-calculating colors...";
-                    await this.precalculateColors();
-                    
-                    document.getElementById('dataStatus').textContent = "Ready!";
-                    
-                    // Success - return the data
-                    return {
-                        epidemData: this.epidemData,
-                        hospitalizationsData: this.hospitalizationsData,
-                        vaccinationsData: this.vaccinationsData,
-                        countryIndex: this.countryIndex,
-                        availableDates: this.availableDates,
-                        availableColumns: this.availableColumns
-                    };
-                } else {
-                    throw new Error("One or more datasets are empty or invalid");
+                    if (epidemData && epidemData.length && 
+                        hospitalizationsData && hospitalizationsData.length && 
+                        vaccinationsData && vaccinationsData.length && 
+                        countryIndex && countryIndex.length) {
+                        
+                        this.log("Successfully loaded data from API endpoints");
+                        document.getElementById('dataStatus').textContent = "Data loaded successfully!";
+                        
+                        this.epidemData = epidemData;
+                        this.hospitalizationsData = hospitalizationsData;
+                        this.vaccinationsData = vaccinationsData;
+                        this.countryIndex = countryIndex;
+                        
+                        this.log(`Loaded ${this.epidemData.length} epidem records`);
+                        this.log(`Loaded ${this.hospitalizationsData.length} hospitalization records`);
+                        this.log(`Loaded ${this.vaccinationsData.length} vaccination records`);
+                        this.log(`Loaded ${this.countryIndex.length} country index records`);
+                        
+                        // Check data structure to ensure required fields exist
+                        this.validateDataStructure();
+                        
+                        // Build a lookup table for country codes
+                        this.buildCountryCodeMap();
+                        
+                        // Process the data
+                        this.processData();
+                        
+                        // Set defaults
+                        this.setDefaultValues();
+                        
+                        // Index the data for faster lookups
+                        document.getElementById('dataStatus').textContent = "Indexing data for performance...";
+                        await this.indexAllData();
+                        
+                        // Pre-calculate colors for better performance
+                        document.getElementById('dataStatus').textContent = "Pre-calculating colors...";
+                        await this.precalculateColors();
+                        
+                        document.getElementById('dataStatus').textContent = "Ready!";
+                        
+                        // Success - return the data
+                        return {
+                            epidemData: this.epidemData,
+                            hospitalizationsData: this.hospitalizationsData,
+                            vaccinationsData: this.vaccinationsData,
+                            countryIndex: this.countryIndex,
+                            availableDates: this.availableDates,
+                            availableColumns: this.availableColumns
+                        };
+                    } else {
+                        throw new Error("One or more datasets are empty or invalid");
+                    }
+                } catch (error) {
+                    this.log(`API endpoints failed: ${error.message}`);
+                    document.getElementById('dataStatus').textContent = "Server connection failed";
+                    // Show error message and file upload option
+                    this.showDataFileError(`Server error: ${error.message}<br><br>Is the Express server running? Try running <code>node server.js</code> in the command line.`);
+                    throw error; // Propagate the error
                 }
-            } catch (error) {
-                this.log(`API endpoints failed: ${error.message}`);
-                document.getElementById('dataStatus').textContent = "Server connection failed";
-                // Show error message and file upload option
-                this.showDataFileError(`Server error: ${error.message}<br><br>Is the Express server running? Try running <code>node server.js</code> in the command line.`);
-                throw error; // Propagate the error
             }
         } catch (error) {
             console.error('Error loading data:', error);
@@ -194,56 +253,99 @@ class DataService {
             vaccinations: {}  // Add vaccinations cache
         };
         
+        // First calculate global min/max values for each dataset and column
+        // This ensures color consistency across all dates
+        this.globalDataRanges = {
+            epidem: {},
+            hospitalizations: {},
+            vaccinations: {}
+        };
+        
+        // Calculate global data ranges first
+        for (const datasetName of ['epidem', 'hospitalizations', 'vaccinations']) {
+            document.getElementById('dataStatus').textContent = 
+                `Analyzing ${datasetName} data ranges...`;
+            
+            // For each column in this dataset
+            for (const column of this.availableColumns[datasetName]) {
+                // Get all non-zero values across all dates for this column
+                let allValues = [];
+                
+                for (const date of this.availableDates) {
+                    const dataForDate = this.getDataForDate(datasetName, date);
+                    
+                    const values = dataForDate
+                        .map(d => {
+                            const value = d[column];
+                            return value ? parseFloat(value) : 0;
+                        })
+                        .filter(v => !isNaN(v) && v > 0);
+                    
+                    allValues = allValues.concat(values);
+                }
+                
+                if (allValues.length === 0) {
+                    this.globalDataRanges[datasetName][column] = { min: 0, max: 1 };
+                    continue;
+                }
+                
+                // Calculate statistics for better scaling
+                const max = d3.max(allValues);
+                const min = d3.min(allValues);
+                const q1 = d3.quantile(allValues.sort(d3.ascending), 0.25);
+                const q3 = d3.quantile(allValues.sort(d3.ascending), 0.75);
+                
+                // Check if we have extreme outliers
+                const iqr = q3 - q1;
+                const upperOutlierThreshold = q3 + 1.5 * iqr;
+                
+                // Determine domain max (with outlier handling)
+                let domainMax;
+                if (max > upperOutlierThreshold && upperOutlierThreshold > 0) {
+                    domainMax = upperOutlierThreshold;
+                    this.log(`Using outlier-adjusted domain max for ${datasetName}.${column}: ${domainMax} (original max: ${max})`);
+                } else {
+                    domainMax = max;
+                }
+                
+                // Store the global range
+                this.globalDataRanges[datasetName][column] = {
+                    min: 0,
+                    max: domainMax,
+                    originalMax: max,
+                    q1: q1,
+                    q3: q3
+                };
+                
+                this.log(`Global range for ${datasetName}.${column}: [0, ${domainMax}]`);
+            }
+        }
+        
         // Function to calculate colors for a dataset, column, and date
         const calculateColorsForDate = (datasetName, column, date) => {
             return new Promise(resolve => {
                 // Get data for this date
                 const dataForDate = this.getDataForDate(datasetName, date);
                 
-                // Extract values for this column
-                const values = dataForDate
-                    .map(d => {
-                        const value = d[column];
-                        return value ? parseFloat(value) : 0;
-                    })
-                    .filter(v => !isNaN(v) && v > 0); // Filter out zero values
-                
-                if (!values.length) {
+                if (dataForDate.length === 0) {
                     resolve();
                     return;
                 }
                 
-                // Calculate statistics for better scaling
-                const max = d3.max(values);
-                const min = d3.min(values);
-                const median = d3.median(values);
-                const q1 = d3.quantile(values.sort(d3.ascending), 0.25);
-                const q3 = d3.quantile(values.sort(d3.ascending), 0.75);
-                
-                // Choose domain based on data distribution
-                let domainMax;
-                
-                // Check if we have extreme outliers
-                const iqr = q3 - q1;
-                const upperOutlierThreshold = q3 + 1.5 * iqr;
-                
-                if (max > upperOutlierThreshold && upperOutlierThreshold > 0) {
-                    // If we have outliers, cap at the upper outlier threshold for better visualization
-                    domainMax = upperOutlierThreshold;
-                } else {
-                    domainMax = max;
+                // Get the global range for this dataset and column
+                const range = this.globalDataRanges[datasetName][column];
+                if (!range) {
+                    resolve();
+                    return;
                 }
                 
-                // Choose color scheme based on dataset with more vibrant colors
+                // Choose color scheme based on dataset
                 let colorInterpolator;
                 if (datasetName === 'epidem') {
-                    // Virus data: vibrant green to red gradient
                     colorInterpolator = d3.interpolateRgb('#2ECC40', '#FF4136');
                 } else if (datasetName === 'hospitalizations') {
-                    // Hospital data: vibrant green to blue gradient
                     colorInterpolator = d3.interpolateRgb('#2ECC40', '#0074D9');
                 } else if (datasetName === 'vaccinations') {
-                    // Vaccination data: vibrant green to purple gradient
                     colorInterpolator = d3.interpolateRgb('#2ECC40', '#9932CC');
                 }
                 
@@ -259,7 +361,7 @@ class DataService {
                     this.colorCache[datasetName][column][date] = {};
                 }
                 
-                // Calculate and cache color for each country
+                // Calculate and cache color for each country using the GLOBAL range
                 Object.keys(this.indexedData[datasetName]).forEach(countryKey => {
                     const countryData = this.indexedData[datasetName][countryKey][date];
                     if (!countryData) return;
@@ -270,8 +372,8 @@ class DataService {
                     const parsedValue = parseFloat(value);
                     if (isNaN(parsedValue) || parsedValue <= 0) return;
                     
-                    // Calculate and store the color using our improved scaling
-                    const normalizedValue = Math.min(1, parsedValue / domainMax);
+                    // Calculate using the global range - this ensures consistent colors across dates
+                    const normalizedValue = Math.min(1, parsedValue / range.max);
                     const scaledValue = Math.pow(normalizedValue, exponent);
                     this.colorCache[datasetName][column][date][countryKey] = colorInterpolator(scaledValue);
                 });
@@ -280,7 +382,7 @@ class DataService {
             });
         };
         
-        // Process all combinations of datasets, columns, and dates
+        // Now process all combinations with our global ranges
         for (const datasetName of ['epidem', 'hospitalizations', 'vaccinations']) {
             for (const column of this.availableColumns[datasetName]) {
                 // Update status indicator to show progress
@@ -623,26 +725,82 @@ class DataService {
     processData() {
         this.log("Processing data");
         
-        // Extract unique dates from all datasets
-        const epidemDates = [...new Set(this.epidemData.map(d => d.date))];
-        const hospDates = [...new Set(this.hospitalizationsData.map(d => d.date))];
-        const vaccinationDates = this.vaccinationsData ? [...new Set(this.vaccinationsData.map(d => d.date))] : [];
+        // Extract dates with actual data (not just all dates)
+        const extractDatesWithData = (dataset) => {
+            if (!dataset || !dataset.length) return [];
+            
+            // Count records with actual data for each date
+            const dateDataCounts = {};
+            
+            dataset.forEach(d => {
+                if (!d.date) return;
+                
+                // Check if this record has actual data
+                let hasData = false;
+                let dataCount = 0;
+                
+                for (const key in d) {
+                    if (key !== 'date' && key !== 'country_key' && key !== 'location_key' && d[key]) {
+                        const value = parseFloat(d[key]);
+                        if (!isNaN(value) && value > 0) {
+                            hasData = true;
+                            dataCount++;
+                        }
+                    }
+                }
+                
+                if (hasData) {
+                    if (!dateDataCounts[d.date]) {
+                        dateDataCounts[d.date] = 0;
+                    }
+                    dateDataCounts[d.date] += dataCount;
+                }
+            });
+            
+            // Get dates where we have enough data points (at least 10 countries with data)
+            return Object.entries(dateDataCounts)
+                .filter(([date, count]) => count >= 10)
+                .map(([date]) => date);
+        };
         
-        this.log(`Found ${epidemDates.length} unique dates in epidem data`);
-        this.log(`Found ${hospDates.length} unique dates in hospitalization data`);
-        this.log(`Found ${vaccinationDates.length} unique dates in vaccination data`);
+        // Get dates with actual data from each dataset
+        const epidemDates = extractDatesWithData(this.epidemData);
+        const hospDates = extractDatesWithData(this.hospitalizationsData);
+        const vaccinationDates = extractDatesWithData(this.vaccinationsData);
+        
+        this.log(`Found ${epidemDates.length} dates with data in epidem dataset`);
+        this.log(`Found ${hospDates.length} dates with data in hospitalization dataset`);
+        this.log(`Found ${vaccinationDates.length} dates with data in vaccination dataset`);
         
         // Combine and sort dates
-        this.availableDates = [...new Set([...epidemDates, ...hospDates, ...vaccinationDates])].sort();
-        this.log(`Combined to ${this.availableDates.length} unique dates overall`);
+        let combinedDates = [...new Set([...epidemDates, ...hospDates, ...vaccinationDates])].sort();
         
-        if (this.availableDates.length > 0) {
-            // Set the current date to the latest date
-            this.currentDate = this.availableDates[this.availableDates.length - 1];
-            this.log(`Set current date to latest: ${this.currentDate}`);
-        } else {
-            console.error("No dates found in the data!");
+        // Remove any outlier dates (first/last dates if they're too far from others)
+        if (combinedDates.length > 3) {
+            // Check if the first date is too isolated
+            const firstDate = new Date(combinedDates[0]);
+            const secondDate = new Date(combinedDates[1]);
+            const daysBetweenFirst = Math.abs((secondDate - firstDate) / (1000 * 60 * 60 * 24));
+            
+            // Check if the last date is too isolated
+            const lastDate = new Date(combinedDates[combinedDates.length - 1]);
+            const secondLastDate = new Date(combinedDates[combinedDates.length - 2]);
+            const daysBetweenLast = Math.abs((lastDate - secondLastDate) / (1000 * 60 * 60 * 24));
+            
+            // If more than 30 days gap, consider it an outlier
+            if (daysBetweenFirst > 30) {
+                this.log(`First date ${combinedDates[0]} seems isolated, removing it`);
+                combinedDates = combinedDates.slice(1);
+            }
+            
+            if (daysBetweenLast > 30) {
+                this.log(`Last date ${combinedDates[combinedDates.length-1]} seems isolated, removing it`);
+                combinedDates = combinedDates.slice(0, -1);
+            }
         }
+        
+        this.availableDates = combinedDates;
+        this.log(`Combined to ${this.availableDates.length} unique dates with actual data`);
         
         // Extract available columns for each dataset (excluding date, country_key, and location_key)
         if (this.epidemData && this.epidemData.length > 0) {
@@ -882,6 +1040,37 @@ class DataService {
     
     // Get color scale for current data column
     getColorScale() {
+        // Use the pre-calculated global range if available
+        if (this.globalDataRanges && 
+            this.globalDataRanges[this.currentDataset] && 
+            this.globalDataRanges[this.currentDataset][this.currentColumn]) {
+            
+            const range = this.globalDataRanges[this.currentDataset][this.currentColumn];
+            
+            // Choose color scheme based on current dataset
+            let colorInterpolator;
+            if (this.currentDataset === 'epidem') {
+                colorInterpolator = d3.interpolateRgb('#2ECC40', '#FF4136');
+            } else if (this.currentDataset === 'hospitalizations') {
+                colorInterpolator = d3.interpolateRgb('#2ECC40', '#0074D9');
+            } else if (this.currentDataset === 'vaccinations') {
+                colorInterpolator = d3.interpolateRgb('#2ECC40', '#9932CC');
+            }
+            
+            // Create a power scale with adjustable exponent for better visual scaling
+            const exponent = 0.5;
+            
+            return d3.scaleSequential()
+                .domain([0, range.max])
+                .interpolator(value => {
+                    // Apply power scale for better visual distribution
+                    const normalizedValue = Math.min(1, value / range.max);
+                    const scaledValue = Math.pow(normalizedValue, exponent);
+                    return colorInterpolator(scaledValue);
+                });
+        }
+        
+        // Fall back to original method if global ranges aren't available
         const dataset = this.getAllCountriesDataForCurrentDate();
         
         if (!dataset.length || !this.currentColumn) {
@@ -991,6 +1180,118 @@ class DataService {
                 console.log(`[DataService] ${message}`);
             }
         }
+    }
+    
+    // Generate sample country index data
+    generateSampleCountryIndex() {
+        const countries = [
+            { location_key: 'us', country_name: 'United States' },
+            { location_key: 'gb', country_name: 'United Kingdom' },
+            { location_key: 'fr', country_name: 'France' },
+            { location_key: 'de', country_name: 'Germany' },
+            { location_key: 'it', country_name: 'Italy' },
+            { location_key: 'es', country_name: 'Spain' },
+            { location_key: 'jp', country_name: 'Japan' },
+            { location_key: 'cn', country_name: 'China' },
+            { location_key: 'in', country_name: 'India' },
+            { location_key: 'br', country_name: 'Brazil' },
+            { location_key: 'ca', country_name: 'Canada' },
+            { location_key: 'au', country_name: 'Australia' },
+            { location_key: 'ru', country_name: 'Russia' },
+            { location_key: 'kr', country_name: 'South Korea' },
+            { location_key: 'za', country_name: 'South Africa' },
+            { location_key: 'mx', country_name: 'Mexico' },
+            { location_key: 'se', country_name: 'Sweden' },
+            { location_key: 'no', country_name: 'Norway' },
+            { location_key: 'fi', country_name: 'Finland' },
+            { location_key: 'dk', country_name: 'Denmark' },
+            { location_key: 'pl', country_name: 'Poland' },
+            { location_key: 'nl', country_name: 'Netherlands' },
+            { location_key: 'be', country_name: 'Belgium' },
+            { location_key: 'ch', country_name: 'Switzerland' },
+            { location_key: 'at', country_name: 'Austria' },
+            { location_key: 'pt', country_name: 'Portugal' },
+            { location_key: 'gr', country_name: 'Greece' },
+            { location_key: 'ie', country_name: 'Ireland' },
+            { location_key: 'nz', country_name: 'New Zealand' },
+            { location_key: 'sg', country_name: 'Singapore' }
+        ];
+        
+        return countries;
+    }
+    
+    // Generate sample epidemiological data
+    generateSampleEpidemData() {
+        return this.generateSampleDataset('epidem');
+    }
+    
+    // Generate sample hospitalizations data
+    generateSampleHospitalizationsData() {
+        return this.generateSampleDataset('hospitalizations');
+    }
+    
+    // Generate sample vaccinations data
+    generateSampleVaccinationsData() {
+        return this.generateSampleDataset('vaccinations');
+    }
+    
+    // Generic sample data generator
+    generateSampleDataset(datasetType) {
+        const data = [];
+        const countries = this.generateSampleCountryIndex();
+        
+        // Generate data for the last 30 days
+        const today = new Date();
+        const dates = [];
+        for (let i = 30; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(today.getDate() - i);
+            const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+            dates.push(dateString);
+        }
+        
+        // Define columns based on dataset type
+        let columns = {};
+        if (datasetType === 'epidem') {
+            columns = {
+                new_confirmed: (country, date, index) => Math.floor(Math.random() * 10000 * (1 + Math.sin(index/3))),
+                new_deceased: (country, date, index) => Math.floor(Math.random() * 500 * (1 + Math.sin(index/3))),
+                cumulative_confirmed: (country, date, index) => Math.floor(100000 + Math.random() * 1000000 * (index/30)),
+                cumulative_deceased: (country, date, index) => Math.floor(1000 + Math.random() * 50000 * (index/30))
+            };
+        } else if (datasetType === 'hospitalizations') {
+            columns = {
+                new_hospitalized: (country, date, index) => Math.floor(Math.random() * 1000 * (1 + Math.sin(index/3))),
+                current_hospitalized: (country, date, index) => Math.floor(Math.random() * 10000 * (1 + Math.sin(index/5))),
+                current_intensive_care: (country, date, index) => Math.floor(Math.random() * 1000 * (1 + Math.sin(index/4)))
+            };
+        } else if (datasetType === 'vaccinations') {
+            columns = {
+                new_persons_vaccinated: (country, date, index) => Math.floor(Math.random() * 100000 * (1 + Math.sin(index/3))),
+                cumulative_persons_vaccinated: (country, date, index) => Math.floor(1000000 * index/30 * (1 + Math.random()*0.5)),
+                cumulative_persons_fully_vaccinated: (country, date, index) => Math.floor(800000 * index/30 * (1 + Math.random()*0.5)),
+                cumulative_vaccine_doses_administered: (country, date, index) => Math.floor(2000000 * index/30 * (1 + Math.random()*0.5))
+            };
+        }
+        
+        // Generate data for each country and date
+        countries.forEach(country => {
+            dates.forEach((date, dateIndex) => {
+                const record = {
+                    country_key: country.location_key,
+                    date: date
+                };
+                
+                // Add values for each column
+                Object.keys(columns).forEach(column => {
+                    record[column] = columns[column](country.location_key, date, dateIndex);
+                });
+                
+                data.push(record);
+            });
+        });
+        
+        return data;
     }
 }
 
