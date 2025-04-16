@@ -63,7 +63,7 @@ class GlobeVis {
         this.projection = d3.geoOrthographic()
             .scale(this.radius)
             .translate([0, 0])
-            .clipAngle(90);
+            .clipAngle(180); // Allow viewing the whole sphere including back side
             
         this.path = d3.geoPath().projection(this.projection);
         
@@ -526,6 +526,29 @@ class GlobeVis {
         // Create transparent ocean instead of solid color
         this.createTransparentOcean();
         
+        // Function to calculate point's distance from center of view
+        // Used to set opacity based on position (front or back)
+        const calculateOpacity = d => {
+            // Calculate the centroid of the feature
+            const centroid = d3.geoCentroid(d);
+            
+            // Apply current rotation
+            const rotatedPosition = this.projection(centroid);
+            
+            // If point is not visible (null), it might be on the edge
+            if (!rotatedPosition) return 0.3;
+            
+            // Get distance from center as percentage of radius
+            const distanceFromCenter = Math.sqrt(
+                Math.pow(rotatedPosition[0], 2) + 
+                Math.pow(rotatedPosition[1], 2)
+            ) / this.radius;
+            
+            // Map distance to opacity - further points get lower opacity
+            // Limited between 0.3 (back side) and 0.9 (front side)
+            return 0.9 - Math.min(0.6, distanceFromCenter * 0.5);
+        };
+        
         // Add countries to the globe
         this.globeGroup.selectAll('.country')
             .data(countries.features)
@@ -535,14 +558,14 @@ class GlobeVis {
             .attr('id', d => `country-${d.id}`)
             .attr('data-country-code', d => this.getCountryCode(d))
             .attr('fill', d => this.getCountryColor(d))
-            .attr('fill-opacity', 0.9)
-            .attr('stroke', 'rgba(255, 255, 255, 0.5)') // Keep visible borders
+            .attr('fill-opacity', calculateOpacity) // Vary opacity based on position
+            .attr('stroke', 'rgba(255, 255, 255, 0.4)') 
             .attr('stroke-width', '0.3px')
             .attr('shape-rendering', 'geometricPrecision')
             .on('mouseover', (event, d) => this.handleMouseOver(event, d))
             .on('mouseout', (event, d) => this.handleMouseOut(event, d))
             .on('click', (event, d) => this.handleCountryClick(event, d));
-            
+        
         this.log("Globe created with countries");
         
         // Create color legend
@@ -564,6 +587,9 @@ class GlobeVis {
         } else {
             document.getElementById('dataStatus').textContent = `Ready - ${countriesWithData} countries have data`;
         }
+        
+        // Add a toggle button for transparent globe to the controls
+        this.addTransparencyToggle();
     }
     
     // Create a color legend for the current data
@@ -1008,6 +1034,26 @@ class GlobeVis {
             this.globeGroup.selectAll('path')
                 .attr('d', this.path);
                 
+            // Update opacities when transparent mode is active
+            if (this.projection.clipAngle() === 180) {
+                // Calculate opacity based on distance from center
+                const calculateOpacity = d => {
+                    const centroid = d3.geoCentroid(d);
+                    const rotatedPosition = this.projection(centroid);
+                    if (!rotatedPosition) return 0.3;
+                    
+                    const distanceFromCenter = Math.sqrt(
+                        Math.pow(rotatedPosition[0], 2) + 
+                        Math.pow(rotatedPosition[1], 2)
+                    ) / this.radius;
+                    
+                    return 0.9 - Math.min(0.6, distanceFromCenter * 0.5);
+                };
+                
+                this.globeGroup.selectAll('.country')
+                    .attr('fill-opacity', calculateOpacity);
+            }
+                
             this.animationFrameId = requestAnimationFrame(animate);
         };
         
@@ -1042,6 +1088,26 @@ class GlobeVis {
         requestAnimationFrame(() => {
             this.globeGroup.selectAll('path')
                 .attr('d', this.path);
+                
+            // Update opacities when transparent mode is active
+            if (this.projection.clipAngle() === 180) {
+                // Calculate distance from center for each country
+                const calculateOpacity = d => {
+                    const centroid = d3.geoCentroid(d);
+                    const rotatedPosition = this.projection(centroid);
+                    if (!rotatedPosition) return 0.3;
+                    
+                    const distanceFromCenter = Math.sqrt(
+                        Math.pow(rotatedPosition[0], 2) + 
+                        Math.pow(rotatedPosition[1], 2)
+                    ) / this.radius;
+                    
+                    return 0.9 - Math.min(0.6, distanceFromCenter * 0.5);
+                };
+                
+                this.globeGroup.selectAll('.country')
+                    .attr('fill-opacity', calculateOpacity);
+            }
         });
     }
     
@@ -1118,40 +1184,21 @@ class GlobeVis {
         // Remove graticule lines (stripes)
         this.globeGroup.select('.graticule').remove();
         
-        // Create a transparent ocean with just a subtle outline
+        // Create a transparent outline to represent the globe's edge
         this.globeGroup.append('circle')
             .attr('class', 'ocean')
             .attr('cx', 0)
             .attr('cy', 0)
             .attr('r', this.radius)
-            .attr('fill', 'none') // No fill
-            .attr('stroke', 'rgba(100, 200, 255, 0.15)') // Very subtle blue outline
+            .attr('fill', 'none') // No fill - completely transparent
+            .attr('stroke', 'rgba(100, 200, 255, 0.25)') // Slightly more visible outline
             .attr('stroke-width', '0.5px');
-            
-        // Add a subtle depth gradient to help with 3D appearance
-        const depthGradient = this.svg.select('defs').append('radialGradient')
-            .attr('id', 'ocean-depth')
-            .attr('cx', '50%')
-            .attr('cy', '50%')
-            .attr('r', '50%');
-            
-        depthGradient.append('stop')
-            .attr('offset', '70%')
-            .attr('stop-color', 'transparent')
-            .attr('stop-opacity', 0);
-            
-        depthGradient.append('stop')
-            .attr('offset', '100%')
-            .attr('stop-color', '#001a33')
-            .attr('stop-opacity', 0.12);
-            
-        // Add a very subtle depth overlay
-        this.globeGroup.append('circle')
-            .attr('class', 'ocean-depth')
-            .attr('cx', 0)
-            .attr('cy', 0)
-            .attr('r', this.radius)
-            .attr('fill', 'url(#ocean-depth)');
+        
+        // Remove the depth gradient since we want to see through the globe
+        this.svg.select('#ocean-depth').remove();
+        
+        // Remove the ocean-depth circle if it exists
+        this.globeGroup.select('.ocean-depth').remove();
     }
     
     setupEventListeners() {
@@ -1242,6 +1289,91 @@ class GlobeVis {
             .attr('viewBox', `0 0 ${this.width} ${this.height}`);
             
         this.globeGroup.attr('transform', `translate(${this.width / 2 + 30}, ${this.height / 2 - 50})`);
+    }
+    
+    // Add a toggle button for the transparent globe
+    addTransparencyToggle() {
+        // Check if button already exists
+        if (document.getElementById('transparentGlobeBtn')) return;
+        
+        // Find the control panel
+        const controlPanel = document.querySelector('.control-panel');
+        if (!controlPanel) return;
+        
+        // Create a new button
+        const toggleBtn = document.createElement('button');
+        toggleBtn.id = 'transparentGlobeBtn';
+        toggleBtn.className = 'control-btn active';
+        toggleBtn.textContent = 'Transparent Globe';
+        toggleBtn.title = 'Toggle between standard and transparent globe views';
+        
+        // Add to control panel
+        controlPanel.appendChild(toggleBtn);
+        
+        // Add event listener
+        toggleBtn.addEventListener('click', () => {
+            this.toggleTransparency();
+            toggleBtn.classList.toggle('active');
+        });
+    }
+    
+    // Toggle between standard and transparent globe modes
+    toggleTransparency() {
+        // Get current clip angle
+        const currentClipAngle = this.projection.clipAngle();
+        
+        // Toggle between 90 (standard) and 180 (transparent)
+        const newClipAngle = currentClipAngle === 90 ? 180 : 90;
+        
+        // Update projection
+        this.projection.clipAngle(newClipAngle);
+        
+        // Update all country paths
+        this.globeGroup.selectAll('.country')
+            .attr('d', this.path);
+            
+        // If switching to standard view, make sure the backdrop is visible
+        if (newClipAngle === 90) {
+            this.svg.select('.globe-backdrop')
+                .attr('fill', '#000000')
+                .attr('opacity', 0.7);
+        } else {
+            // For transparent view, hide the backdrop
+            this.svg.select('.globe-backdrop')
+                .attr('fill', 'none')
+                .attr('opacity', 0);
+        }
+        
+        // Update opacity based on new visibility
+        if (newClipAngle === 180) {
+            // Function to calculate point's distance from center of view
+            const calculateOpacity = d => {
+                // Calculate the centroid of the feature
+                const centroid = d3.geoCentroid(d);
+                
+                // Apply current rotation
+                const rotatedPosition = this.projection(centroid);
+                
+                // If point is not visible (null), it might be on the edge
+                if (!rotatedPosition) return 0.3;
+                
+                // Get distance from center as percentage of radius
+                const distanceFromCenter = Math.sqrt(
+                    Math.pow(rotatedPosition[0], 2) + 
+                    Math.pow(rotatedPosition[1], 2)
+                ) / this.radius;
+                
+                // Map distance to opacity - further points get lower opacity
+                return 0.9 - Math.min(0.6, distanceFromCenter * 0.5);
+            };
+            
+            this.globeGroup.selectAll('.country')
+                .attr('fill-opacity', calculateOpacity);
+        } else {
+            // Reset all to standard opacity for non-transparent mode
+            this.globeGroup.selectAll('.country')
+                .attr('fill-opacity', 0.9);
+        }
     }
 }
 
