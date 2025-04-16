@@ -682,6 +682,15 @@ class GlobeVis {
             .attr('fill', 'white')
             .attr('font-size', '8px')
             .text('(power scale: 0.5)');
+            
+        // Add note about consistent color scaling
+        legend.append('text')
+            .attr('x', 50)
+            .attr('y', 70)
+            .attr('text-anchor', 'middle')
+            .attr('fill', 'white')
+            .attr('font-size', '8px')
+            .text('(consistent across dates)');
     }
 
     getCountryColor(d) {
@@ -872,33 +881,62 @@ class GlobeVis {
         const prevDateBtn = document.getElementById('prevDateBtn');
         const nextDateBtn = document.getElementById('nextDateBtn');
         
-        // Set slider range based on available dates
-        if (dataService.availableDates.length > 0) {
+        // Set slider range based on available dates with data
+        if (dataService.availableDates && dataService.availableDates.length > 0) {
             dateSlider.min = 0;
             dateSlider.max = dataService.availableDates.length - 1;
-            dateSlider.value = dataService.availableDates.length - 1; // Start at latest date
+            
+            // If we have few dates, use them all
+            const availableDatesCount = dataService.availableDates.length;
+            this.log(`Setting up date slider with ${availableDatesCount} dates`);
+            
+            // Start at latest useful date
+            const latestDateIndex = availableDatesCount > 0 ? availableDatesCount - 1 : 0;
+            dateSlider.value = latestDateIndex;
+            
+            // Set current date to the selected index
+            dataService.currentDate = dataService.availableDates[latestDateIndex];
             
             // Update current date display
             currentDateEl.textContent = dataService.formatDate(dataService.currentDate);
+        } else {
+            // No dates with data
+            this.log("No dates with data available");
+            currentDateEl.textContent = "No dates with data";
+            dateSlider.disabled = true;
+            prevDateBtn.disabled = true;
+            nextDateBtn.disabled = true;
         }
         
-        // Handle slider change - now should be much faster since data is pre-calculated
+        // Handle slider input - use direct mapping to available dates array
+        // Use debouncing to prevent excessive updates when sliding quickly
+        let updateTimeout = null;
+        
         dateSlider.addEventListener('input', () => {
-            const newDate = dataService.getDateFromIndex(parseInt(dateSlider.value));
-            dataService.changeDate(newDate);
-            currentDateEl.textContent = dataService.formatDate(newDate);
-            
-            // This should now be very fast due to caching
-            this.updateGlobeColors();
-            
-            // If a country is selected, update its info
-            if (this.selectedCountry) {
-                const countryEl = document.getElementById(`country-${this.selectedCountry}`);
-                if (countryEl) {
-                    const countryCode = countryEl.getAttribute('data-country-code');
-                    const countryData = dataService.getCountryData(countryCode);
-                    this.updateCountryInfoPanel(countryData);
-                }
+            const index = parseInt(dateSlider.value);
+            // Ensure the index is valid
+            if (index >= 0 && index < dataService.availableDates.length) {
+                const newDate = dataService.availableDates[index];
+                
+                // Update date display immediately for responsive feel
+                currentDateEl.textContent = dataService.formatDate(newDate);
+                
+                // Debounce the actual data update
+                if (updateTimeout) clearTimeout(updateTimeout);
+                updateTimeout = setTimeout(() => {
+                    dataService.changeDate(newDate);
+                    this.updateGlobeColors();
+                    
+                    // Update country info if needed
+                    if (this.selectedCountry) {
+                        const countryEl = document.getElementById(`country-${this.selectedCountry}`);
+                        if (countryEl) {
+                            const countryCode = countryEl.getAttribute('data-country-code');
+                            const countryData = dataService.getCountryData(countryCode);
+                            this.updateCountryInfoPanel(countryData);
+                        }
+                    }
+                }, 50); // Small delay to improve performance during sliding
             }
         });
         
