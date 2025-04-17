@@ -23,12 +23,22 @@
 
     <div id="header">
         <div id="search">
-            <img src="assets/search.svg" onclick="openSearch()">
+            <img src="assets/icons/search.svg" onclick="openSearch()">
         </div>
-        <label class="switch">
-            <input type="checkbox" id="datasetToggle" onclick="toggleDataset()">
-            <span class="slider round"><img src="assets/vaccine.svg"></span>
-        </label>
+        
+        <!-- Replace SVG use elements with direct image references -->
+        <div class="dataset-buttons">
+            <button id="epidemBtn" class="dataset-btn active" onclick="changeDataset('epidem')" title="Epidemiology">
+                <img src="assets/icons/virus.svg" class="dataset-icon" alt="Epidemiology">
+            </button>
+            <button id="hospBtn" class="dataset-btn" onclick="changeDataset('hospitalizations')" title="Hospitalizations">
+                <img src="assets/icons/hospital.svg" class="dataset-icon" alt="Hospitalizations">
+            </button>
+            <button id="vaccBtn" class="dataset-btn" onclick="changeDataset('vaccinations')" title="Vaccinations">
+                <img src="assets/icons/syringe.svg" class="dataset-icon" alt="Vaccinations">
+            </button>
+        </div>
+        
         <h1>COVID-19</h1>
     </div>
     
@@ -185,37 +195,41 @@
             });
         });
         
-        // Toggle between datasets using the switch
-        function toggleDataset() {
-            const toggle = document.getElementById('datasetToggle');
-            const currentDatasetText = document.getElementById('currentDataset');
-            const datasets = ['epidem', 'hospitalizations', 'vaccinations'];
+        // Replace toggleDataset function with direct dataset change function
+        function changeDataset(datasetKey) {
+            if (!window.globeInstance) return;
             
-            // Get current dataset index
-            let currentIndex = datasets.indexOf(window.globeInstance.dataService.currentDataset);
-            
-            // Move to next dataset (cycling through the options)
-            currentIndex = (currentIndex + 1) % datasets.length;
-            
-            // Update dataset name display
+            // Update the dataset name display
             const datasetDisplayNames = {
                 'epidem': 'Epidemiology',
                 'hospitalizations': 'Hospitalizations',
                 'vaccinations': 'Vaccinations'
             };
             
-            currentDatasetText.textContent = datasetDisplayNames[datasets[currentIndex]];
+            // Update the current dataset display text
+            const currentDatasetEl = document.getElementById('currentDataset');
+            if (currentDatasetEl) {
+                currentDatasetEl.textContent = datasetDisplayNames[datasetKey] || datasetKey;
+            }
             
             // Change dataset in the globe visualization
-            window.globeInstance.changeDataset(datasets[currentIndex]);
+            window.globeInstance.changeDataset(datasetKey);
             
-            // Adjust toggle button appearance based on dataset
-            if (datasets[currentIndex] === 'vaccinations') {
-                document.querySelector('.slider').style.backgroundColor = '#9ed8f3';
-            } else if (datasets[currentIndex] === 'hospitalizations') {
-                document.querySelector('.slider').style.backgroundColor = '#7a92d8';
-            } else {
-                document.querySelector('.slider').style.backgroundColor = '#c93535';
+            // Update button active states
+            document.querySelectorAll('.dataset-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Activate the selected button
+            const buttonMap = {
+                'epidem': 'epidemBtn',
+                'hospitalizations': 'hospBtn',
+                'vaccinations': 'vaccBtn'
+            };
+            
+            const activeBtn = document.getElementById(buttonMap[datasetKey]);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
             }
         }
     </script>

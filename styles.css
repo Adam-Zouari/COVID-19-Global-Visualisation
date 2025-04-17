@@ -47,17 +47,9 @@
     opacity: 1
 }
 
+/* Remove the previous switch styling */
 .switch {
-    right: 70px;
-    display: inline-block;
-    width: 60px;
-    height: 34px
-}
-
-.switch input {
-    opacity: 0;
-    width: 0;
-    height: 0
+    display: none; /* Hide the old switch */
 }
 
 .slider {
@@ -430,4 +422,76 @@ h1 {
 
 #processUploads:hover {
     background: #a00000;
+}
+
+/* Update styling for dataset buttons with icons */
+.dataset-buttons {
+    position: absolute;
+    top: 20px;
+    right: 70px;
+    display: flex;
+    gap: 8px;
+    z-index: 15;
+}
+
+.dataset-btn {
+    background: rgba(50, 50, 50, 0.8);
+    border: none;
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%; /* Make buttons circular */
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.1s, box-shadow 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+}
+
+.dataset-icon {
+    width: 24px;
+    height: 24px;
+    fill: white;
+}
+
+.dataset-btn:hover {
+    background: rgba(80, 80, 80, 0.8);
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+.dataset-btn.active {
+    transform: scale(1.1);
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.7);
+}
+
+/* Color coding for different dataset buttons */
+#epidemBtn.active {
+    background-color: #c93535; /* Red for epidemiology */
+}
+
+#hospBtn.active {
+    background-color: #7a92d8; /* Blue for hospitalizations */
+}
+
+#vaccBtn.active {
+    background-color: #9ed8f3; /* Light blue for vaccinations */
+}
+
+@media(max-width: 550px) {
+    .dataset-buttons {
+        right: 60px;
+        gap: 5px;
+    }
+    
+    .dataset-btn {
+        width: 32px;
+        height: 32px;
+        padding: 5px;
+    }
+    
+    .dataset-icon {
+        width: 20px;
+        height: 20px;
+    }
 }
