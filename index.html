@@ -108,6 +108,9 @@
                     // Force a redraw of the globe
                     globeInstance.globeGroup.selectAll('path')
                         .attr('d', globeInstance.path);
+                    
+                    // Initialize with the default dataset background without animation
+                    document.body.style.background = 'radial-gradient(#4a0000, #000)';
                 }
             });
             

@@ -1151,6 +1151,9 @@ class GlobeVis {
         // Update globe colors
         this.updateGlobeColors();
         
+        // Update the background color based on the dataset
+        this.updateBackgroundColor(dataset);
+        
         // If a country is selected, update its info
         if (this.selectedCountry) {
             const countryEl = document.getElementById(`country-${this.selectedCountry}`);
@@ -1160,6 +1163,24 @@ class GlobeVis {
                 this.updateCountryInfoPanel(countryData);
             }
         }
+    }
+    
+    // Add a new method to update the background color based on dataset
+    updateBackgroundColor(dataset) {
+        // Define color gradients for each dataset
+        const backgroundGradients = {
+            'epidem': 'radial-gradient(#4a0000, #000)',         // Red theme for epidemiology
+            'hospitalizations': 'radial-gradient(#1a315a, #000)', // Blue theme for hospitalizations
+            'vaccinations': 'radial-gradient(#004d40, #000)'      // Green theme for vaccinations
+        };
+        
+        // Get the background gradient for the selected dataset
+        const backgroundGradient = backgroundGradients[dataset] || backgroundGradients['epidem'];
+        
+        // Apply the background gradient to the body
+        document.body.style.background = backgroundGradient;
+        
+        this.log(`Background updated for dataset: ${dataset}`);
     }
     
     resize() {
