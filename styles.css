@@ -318,12 +318,18 @@ h1 {
 .country {
     cursor: pointer;
     transition: stroke 0.2s, stroke-width 0.2s;
-    stroke: #ffffff;
+    stroke: transparent; /* Changed from #ffffff to transparent */
     stroke-width: 0.5px;
 }
 
 .country:hover {
+    stroke: #ffffff; /* Add this to make stroke white only on hover */
     stroke-width: 1px;
+}
+
+.selected-country {
+    stroke: #ffffff !important; /* Add this to ensure selected countries have white stroke */
+    stroke-width: 1.5px !important;
 }
 
 /* Styling for country info panel */

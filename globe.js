@@ -533,7 +533,7 @@ class GlobeVis {
             .attr('data-country-code', d => this.getCountryCode(d))
             .attr('fill', d => this.getCountryColor(d))
             .attr('fill-opacity', 1.0) // Always full opacity
-            .attr('stroke', '#ffffff') // White stroke for all countries by default
+            .attr('stroke', 'rgba(255,255,255,0.0)') // Transparent stroke by default
             .attr('stroke-width', '0.5px')
             .attr('shape-rendering', 'geometricPrecision')
             .on('mouseover', (event, d) => this.handleMouseOver(event, d))
@@ -559,8 +559,25 @@ class GlobeVis {
             document.getElementById('dataStatus').textContent = `Ready - ${countriesWithData} countries have data`;
         }
         
-        // Add a toggle button for transparent globe to the controls
-        this.addTransparencyToggle();
+        // Always enable transparent mode
+        this.enableTransparentMode();
+    }
+
+    enableTransparentMode() {
+        // Set clip angle to 180 for full transparency
+        this.projection.clipAngle(180);
+        
+        // Update all country paths
+        this.globeGroup.selectAll('.country')
+            .attr('d', this.path);
+            
+        // Hide the backdrop
+        this.svg.select('.globe-backdrop')
+            .attr('fill', 'none')
+            .attr('opacity', 0);
+        
+        // Apply depth-based opacity and interactivity
+        this.renderCountriesByDepth();
     }
 
     getCountryColor(d) {
@@ -607,8 +624,9 @@ class GlobeVis {
     }
     
     handleMouseOver(event, d) {
-        // Highlight the country with thicker stroke instead of changing color
+        // Highlight the country with visible white stroke
         d3.select(event.currentTarget)
+            .attr('stroke', '#ffffff')
             .attr('stroke-width', '1px');
             
         // Get country data
@@ -650,9 +668,10 @@ class GlobeVis {
     }
     
     handleMouseOut(event, d) {
-        // Reset to default highlight if not the selected country
+        // Remove highlight unless it's the selected country
         if (!this.selectedCountry || this.selectedCountry !== d.id) {
             d3.select(event.currentTarget)
+                .attr('stroke', 'rgba(255,255,255,0.0)')
                 .attr('stroke-width', '0.5px');
         }
         
@@ -668,13 +687,15 @@ class GlobeVis {
         // Reset previous selection
         if (this.selectedCountry) {
             d3.select(`#country-${this.selectedCountry}`)
+                .attr('stroke', 'rgba(255,255,255,0.0)')
                 .attr('stroke-width', '0.5px')
                 .classed('selected-country', false);
         }
         
-        // Set new selection with thicker stroke
+        // Set new selection with visible stroke
         this.selectedCountry = d.id;
         d3.select(event.currentTarget)
+            .attr('stroke', '#ffffff')
             .attr('stroke-width', '1.5px')
             .classed('selected-country', true);
             
@@ -882,13 +903,15 @@ class GlobeVis {
             this.globeGroup.selectAll('path')
                 .attr('d', this.path);
                 
-            // Always keep countries fully opaque
-            this.globeGroup.selectAll('.country')
-                .attr('fill-opacity', 1.0);
+            // Ensure full opacity in standard mode
+            if (this.projection.clipAngle() <= 90) {
+                this.globeGroup.selectAll('.country')
+                    .attr('fill-opacity', 1.0);
+            }
                 
-            // If we're in transparent mode, update the country rendering order
+            // If we're in transparent mode, update the depth-based rendering
             if (this.projection.clipAngle() > 90) {
-                this.renderCountriesByDepth();
+                this.renderCountriesByDepth(); // This will now also update interactivity
             }
                 
             this.animationFrameId = requestAnimationFrame(animate);
@@ -926,13 +949,14 @@ class GlobeVis {
             this.globeGroup.selectAll('path')
                 .attr('d', this.path);
                 
-            // Always maintain full opacity regardless of position
-            this.globeGroup.selectAll('.country')
-                .attr('fill-opacity', 1.0);
-                
-            // If we're in transparent mode, update the country rendering order
+            // If we're in transparent mode, update the depth-based rendering
             if (this.projection.clipAngle() > 90) {
-                this.renderCountriesByDepth();
+                this.renderCountriesByDepth(); // This will now also update interactivity
+            } else {
+                // In standard mode, maintain full opacity and interactivity
+                this.globeGroup.selectAll('.country')
+                    .attr('fill-opacity', 1.0)
+                    .style('pointer-events', 'auto');
             }
         });
     }
@@ -966,9 +990,10 @@ class GlobeVis {
         this.globeGroup.selectAll('.country')
             .attr('stroke-width', (0.5 / scale) + 'px');
             
-        // If there's a selected country, make sure its stroke is thicker
+        // If there's a selected country, make sure its stroke is thicker and visible
         if (this.selectedCountry) {
             d3.select(`#country-${this.selectedCountry}`)
+                .attr('stroke', '#ffffff')
                 .attr('stroke-width', (1.5 / scale) + 'px');
         }
         
@@ -1016,14 +1041,15 @@ class GlobeVis {
         // Remove graticule lines (stripes)
         this.globeGroup.select('.graticule').remove();
         
-        // Create a transparent outline to represent the globe's edge
+        // Create the ocean circle with a semi-opaque fill
         this.globeGroup.append('circle')
             .attr('class', 'ocean')
             .attr('cx', 0)
             .attr('cy', 0)
             .attr('r', this.radius)
-            .attr('fill', 'none') // No fill - completely transparent
-            .attr('stroke', 'rgba(100, 200, 255, 0.25)') // Slightly more visible outline
+            .attr('fill', '#000000') // Black fill for the ocean
+            .attr('fill-opacity', 0.7) // 70% opacity - increase this value to make more opaque
+            .attr('stroke', 'rgba(100, 200, 255, 0.25)') 
             .attr('stroke-width', '0.5px');
         
         // Remove the depth gradient since we want to see through the globe
@@ -1098,67 +1124,6 @@ class GlobeVis {
         this.globeGroup.attr('transform', `translate(${this.width / 2 + 30}, ${this.height / 2 - 50})`); // Subtract 50px to move up
     }
     
-    // Add a toggle button for the transparent globe
-    addTransparencyToggle() {
-        // Check if button already exists
-        if (document.getElementById('transparentGlobeBtn')) return;
-        
-        // Find the control panel
-        const controlPanel = document.querySelector('.control-panel');
-        if (!controlPanel) return;
-        
-        // Create a new button
-        const toggleBtn = document.createElement('button');
-        toggleBtn.id = 'transparentGlobeBtn';
-        toggleBtn.className = 'control-btn active';
-        toggleBtn.textContent = 'Transparent Globe';
-        toggleBtn.title = 'Toggle between standard and transparent globe views';
-        
-        // Add to control panel
-        controlPanel.appendChild(toggleBtn);
-        
-        // Add event listener
-        toggleBtn.addEventListener('click', () => {
-            this.toggleTransparency();
-            toggleBtn.classList.toggle('active');
-        });
-    }
-    
-    // Toggle between standard and transparent globe modes
-    toggleTransparency() {
-        // Get current clip angle
-        const currentClipAngle = this.projection.clipAngle();
-        
-        // Toggle between 90 (standard) and 180 (transparent)
-        const newClipAngle = currentClipAngle === 90 ? 180 : 90;
-        
-        // Update projection
-        this.projection.clipAngle(newClipAngle);
-        
-        // Update all country paths
-        this.globeGroup.selectAll('.country')
-            .attr('d', this.path);
-            
-        // If switching to standard view, make sure the backdrop is visible
-        if (newClipAngle === 90) {
-            this.svg.select('.globe-backdrop')
-                .attr('fill', '#000000')
-                .attr('opacity', 0.7);
-        } else {
-            // For transparent view, hide the backdrop
-            this.svg.select('.globe-backdrop')
-                .attr('fill', 'none')
-                .attr('opacity', 0);
-            
-            // In transparent mode, ensure countries have solid fill with no transparency
-            this.renderCountriesByDepth();
-        }
-        
-        // Always set full opacity for countries regardless of view mode
-        this.globeGroup.selectAll('.country')
-            .attr('fill-opacity', 1.0);
-    }
-    
     // Add new method to render countries based on their depth in transparent mode
     renderCountriesByDepth() {
         // Calculate each country's center point and distance from view center
@@ -1192,7 +1157,7 @@ class GlobeVis {
         // Sort countries by depth (furthest to closest)
         countryData.sort((a, b) => a.depth - b.depth);
         
-        // Adjust the rendering order
+        // Adjust the rendering order and opacity based on depth
         countryData.forEach((item, i) => {
             // Move the element to the end of its parent, which will render it on top
             const node = item.element.node();
@@ -1200,8 +1165,17 @@ class GlobeVis {
             parent.removeChild(node);
             parent.appendChild(node);
             
-            // Make sure all countries are completely opaque
-            item.element.attr('fill-opacity', 1.0);
+            const isOnBack = item.depth < 0;
+            
+            // Calculate opacity based on depth
+            const opacity = isOnBack 
+                ? Math.max(0.05, 0.1 + item.depth) // For back countries: very low opacity between 0.05 and 0.1
+                : 1.0; // For front countries: fully opaque
+            
+            // Set the calculated opacity
+            item.element
+                .attr('fill-opacity', opacity)
+                .style('pointer-events', isOnBack ? 'none' : 'auto'); // Disable mouse events for back countries
         });
     }
 }
