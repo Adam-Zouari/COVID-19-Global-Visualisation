@@ -885,6 +885,9 @@ class GlobeVis {
     startAutoRotation() {
         if (!this.autoRotate) return;
         
+        // Track rotation speed and apply easing for smoother animation
+        let currentSpeed = this.autoRotateSpeed;
+        
         const animate = (timestamp) => {
             if (!this.autoRotate) return;
             
@@ -895,25 +898,28 @@ class GlobeVis {
             const elapsed = timestamp - this.lastFrameTime;
             this.lastFrameTime = timestamp;
             
-            const cappedElapsed = Math.min(elapsed, 100);
+            // Don't process extremely short frames for smoother animation
+            if (elapsed < 5) {
+                this.animationFrameId = requestAnimationFrame(animate);
+                return;
+            }
             
-            this.currentRotation[0] += this.autoRotateSpeed * cappedElapsed / 16;
+            // Cap elapsed time for consistent animation
+            const cappedElapsed = Math.min(elapsed, 33); // Cap at 30fps equivalent
+            
+            // Rotate the globe
+            this.currentRotation[0] += currentSpeed * cappedElapsed / 16;
             this.projection.rotate(this.currentRotation);
             
+            // Update path geometry
             this.globeGroup.selectAll('path')
                 .attr('d', this.path);
                 
-            // Ensure full opacity in standard mode
-            if (this.projection.clipAngle() <= 90) {
-                this.globeGroup.selectAll('.country')
-                    .attr('fill-opacity', 1.0);
-            }
-                
-            // If we're in transparent mode, update the depth-based rendering
+            // Apply depth-based rendering for transparent mode
             if (this.projection.clipAngle() > 90) {
-                this.renderCountriesByDepth(); // This will now also update interactivity
+                this.renderCountriesByDepth();
             }
-                
+            
             this.animationFrameId = requestAnimationFrame(animate);
         };
         
@@ -951,7 +957,7 @@ class GlobeVis {
                 
             // If we're in transparent mode, update the depth-based rendering
             if (this.projection.clipAngle() > 90) {
-                this.renderCountriesByDepth(); // This will now also update interactivity
+                this.renderCountriesByDepth();
             } else {
                 // In standard mode, maintain full opacity and interactivity
                 this.globeGroup.selectAll('.country')
@@ -1007,33 +1013,74 @@ class GlobeVis {
         const targetRotation = [0, 0, 0];
         this.lastFrameTime = 0;
         
-        d3.transition()
-            .duration(1000)
-            .tween('rotate', () => {
-                const r = d3.interpolate(this.projection.rotate(), targetRotation);
-                return t => {
-                    const rotation = r(t);
-                    this.projection.rotate(rotation);
-                    this.currentRotation = [...rotation];
-                    this.globeGroup.selectAll('path').attr('d', this.path);
-                };
-            })
-            .on('end', () => {
-                this.projection.rotate([0,0,0]);
-                this.currentRotation = [0,0,0];
+        // Pre-load computation for rendering efficiency
+        const startRotation = this.projection.rotate();
+        
+        // Use a custom easing function for smoother rotation
+        const customEasing = t => {
+            // Ease in-out cubic for smoother feel
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        };
+        
+        let startTime = null;
+        const duration = 1000;
+        
+        // Use requestAnimationFrame for smoother animation than D3 transitions
+        const animateReset = (timestamp) => {
+            if (startTime === null) startTime = timestamp;
+            const elapsed = timestamp - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const easedProgress = customEasing(progress);
+            
+            // Interpolate rotation
+            const newRotation = startRotation.map((start, i) => {
+                // Find the shortest path for rotation (handle 360 degree wrapping)
+                let end = targetRotation[i];
+                let diff = end - start;
+                
+                // Handle wrapping around 360 degrees
+                if (diff > 180) diff -= 360;
+                if (diff < -180) diff += 360;
+                
+                return start + diff * easedProgress;
+            });
+            
+            // Apply rotation
+            this.projection.rotate(newRotation);
+            this.currentRotation = [...newRotation];
+            
+            // Update paths
+            this.globeGroup.selectAll('path').attr('d', this.path);
+            
+            // Update depth-based rendering
+            if (this.projection.clipAngle() > 90) {
+                this.renderCountriesByDepth();
+            }
+            
+            // Continue animation or end
+            if (progress < 1) {
+                requestAnimationFrame(animateReset);
+            } else {
+                // Reset complete, start auto rotation
+                this.projection.rotate([0, 0, 0]);
+                this.currentRotation = [0, 0, 0];
                 
                 setTimeout(() => {
                     this.autoRotate = true;
                     this.startAutoRotation();
                 }, 20);
-            });
+            }
+        };
         
+        requestAnimationFrame(animateReset);
+        
+        // Reset zoom level
         this.svg.transition()
             .duration(750)
             .call(this.zoom.transform, d3.zoomIdentity);
     }
     
-    // Add method to create a transparent ocean
+    // Add new method to create a transparent ocean
     createTransparentOcean() {
         // Remove existing ocean if any
         this.globeGroup.select('.ocean').remove();
@@ -1124,59 +1171,116 @@ class GlobeVis {
         this.globeGroup.attr('transform', `translate(${this.width / 2 + 30}, ${this.height / 2 - 50})`); // Subtract 50px to move up
     }
     
-    // Add new method to render countries based on their depth in transparent mode
+    // Add method to render countries based on their depth in transparent mode - optimized version
     renderCountriesByDepth() {
-        // Calculate each country's center point and distance from view center
+        // Cache these calculations to avoid recomputing them in the loop
         const viewVector = this.projection.rotate().map(d => -d * Math.PI / 180); // Convert to radians and invert
+        const cosViewX = Math.cos(viewVector[0]);
+        const sinViewX = Math.sin(viewVector[0]);
+        const cosViewY = Math.cos(viewVector[1]);
+        const sinViewY = Math.sin(viewVector[1]);
         
         // Get all country elements and calculate their depth
         const countryElements = this.globeGroup.selectAll('.country').nodes();
-        const countryData = countryElements.map(node => {
-            const element = d3.select(node);
-            const d = element.datum();
-            
-            // Calculate centroid for the country
-            const centroid = d3.geoCentroid(d);
-            
-            // Convert to cartesian coordinates (rough approximation)
-            const x = Math.cos(centroid[1] * Math.PI / 180) * Math.cos(centroid[0] * Math.PI / 180);
-            const y = Math.cos(centroid[1] * Math.PI / 180) * Math.sin(centroid[0] * Math.PI / 180);
-            const z = Math.sin(centroid[1] * Math.PI / 180);
-            
-            // Calculate dot product with view vector (larger values = more in front)
-            const dotProduct = x * Math.cos(viewVector[0]) * Math.cos(viewVector[1]) +
-                              y * Math.sin(viewVector[0]) * Math.cos(viewVector[1]) +
-                              z * Math.sin(viewVector[1]);
-            
-            return {
-                element,
-                depth: dotProduct
-            };
-        });
         
-        // Sort countries by depth (furthest to closest)
-        countryData.sort((a, b) => a.depth - b.depth);
+        // Process in batches for better performance
+        const batchSize = 20; // Process countries in smaller batches
+        const totalBatches = Math.ceil(countryElements.length / batchSize);
         
-        // Adjust the rendering order and opacity based on depth
-        countryData.forEach((item, i) => {
-            // Move the element to the end of its parent, which will render it on top
-            const node = item.element.node();
-            const parent = node.parentNode;
-            parent.removeChild(node);
-            parent.appendChild(node);
+        // Use requestAnimationFrame to stagger the processing
+        const processBatch = (batchIndex) => {
+            if (batchIndex >= totalBatches) return;
             
-            const isOnBack = item.depth < 0;
+            const start = batchIndex * batchSize;
+            const end = Math.min(start + batchSize, countryElements.length);
             
-            // Calculate opacity based on depth
-            const opacity = isOnBack 
-                ? Math.max(0.05, 0.1 + item.depth) // For back countries: very low opacity between 0.05 and 0.1
-                : 1.0; // For front countries: fully opaque
+            // Process this batch
+            const batchData = [];
+            for (let i = start; i < end; i++) {
+                const element = d3.select(countryElements[i]);
+                const d = element.datum();
+                
+                // Calculate centroid for the country (only once per country)
+                const centroid = d3.geoCentroid(d);
+                
+                // Convert to cartesian coordinates (rough approximation)
+                const radLat = centroid[1] * Math.PI / 180;
+                const radLong = centroid[0] * Math.PI / 180;
+                const cosLat = Math.cos(radLat);
+                const x = cosLat * Math.cos(radLong);
+                const y = cosLat * Math.sin(radLong);
+                const z = Math.sin(radLat);
+                
+                // Calculate dot product (larger values = more in front)
+                // Optimized dot product calculation
+                const dotProduct = x * cosViewX * cosViewY +
+                                 y * sinViewX * cosViewY +
+                                 z * sinViewY;
+                
+                batchData.push({
+                    element,
+                    depth: dotProduct
+                });
+            }
             
-            // Set the calculated opacity
-            item.element
-                .attr('fill-opacity', opacity)
-                .style('pointer-events', isOnBack ? 'none' : 'auto'); // Disable mouse events for back countries
-        });
+            // Apply depth-based rendering to this batch
+            batchData.forEach(item => {
+                const isOnBack = item.depth < 0;
+                
+                // Calculate opacity based on depth - smoother transition
+                const opacity = isOnBack 
+                    ? Math.max(0.05, 0.15 + item.depth) // Slightly higher minimum opacity for smoother transition
+                    : 1.0; // Front countries fully opaque
+                
+                // Set the calculated opacity
+                item.element
+                    .attr('fill-opacity', opacity)
+                    .style('pointer-events', isOnBack ? 'none' : 'auto'); // Disable mouse events for back countries
+            });
+            
+            // Process next batch in next frame
+            if (batchIndex < totalBatches - 1) {
+                requestAnimationFrame(() => processBatch(batchIndex + 1));
+            }
+        };
+        
+        // Start batch processing
+        processBatch(0);
+        
+        // Reordering countries can be done less frequently for better performance
+        if (this._lastReorderTime === undefined || Date.now() - this._lastReorderTime > 500) {
+            // Sort all countries by depth (furthest to closest)
+            const allCountryData = countryElements.map(node => {
+                const element = d3.select(node);
+                const d = element.datum();
+                
+                // Calculate centroid and depth
+                const centroid = d3.geoCentroid(d);
+                const radLat = centroid[1] * Math.PI / 180;
+                const radLong = centroid[0] * Math.PI / 180;
+                const cosLat = Math.cos(radLat);
+                const x = cosLat * Math.cos(radLong);
+                const y = cosLat * Math.sin(radLong);
+                const z = Math.sin(radLat);
+                
+                const dotProduct = x * cosViewX * cosViewY +
+                                 y * sinViewX * cosViewY +
+                                 z * sinViewY;
+                                 
+                return {
+                    node: node,
+                    depth: dotProduct
+                };
+            }).sort((a, b) => a.depth - b.depth);
+            
+            // Update rendering order
+            const parent = countryElements[0].parentNode;
+            for (const item of allCountryData) {
+                parent.appendChild(item.node);
+            }
+            
+            this._lastReorderTime = Date.now();
+        }
     }
 }
 
