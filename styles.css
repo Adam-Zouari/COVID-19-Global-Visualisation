@@ -1,526 +1,427 @@
-* {
+@import url(https://fonts.googleapis.com/css?family=Rubik:400,500i&display=swap);body,html {
+    width: 100%;
+    height: 100vh;
     margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: Arial, sans-serif;
+    background: radial-gradient(#4a0000,#000);
+    overflow: hidden;
+    font-family: Rubik,sans-serif
 }
 
-/* Enhanced full-screen starry background */
-body {
-    background-color: #000000;
-    color: #ffffff;
-    position: relative;
-    min-height: 100vh;
-    overflow-x: hidden;
-    background: #000000;
-}
-
-/* Full screen starry background with improved stars */
-body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: -2; /* Changed from -1 to -2 to place it below globe */
-    background-image: 
-        radial-gradient(circle at 20% 30%, #0a0a25 0%, transparent 80%),
-        radial-gradient(circle at 80% 60%, #0e0e30 0%, transparent 70%),
-        radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 40px),
-        radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 30px),
-        radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 40px),
-        radial-gradient(rgba(255,255,255,.4), rgba(255,255,255,.1) 2px, transparent 30px);
-    background-size: 100% 100%, 100% 100%, 550px 550px, 350px 350px, 250px 250px, 150px 150px;
-    background-position: 0 0, 0 0, 40px 60px, 130px 270px, 70px 100px, 0 0;
-    pointer-events: none;
-}
-
-/* Additional larger stars using pseudo-element */
-body::after {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: -2; /* Changed from -1 to -2 to place it below globe */
-    background-image: 
-        radial-gradient(circle at 25% 25%, white 0%, transparent 1px),
-        radial-gradient(circle at 75% 15%, white 0%, transparent 1px),
-        radial-gradient(circle at 35% 60%, white 0%, transparent 1px),
-        radial-gradient(circle at 85% 85%, white 0%, transparent 1px),
-        radial-gradient(circle at 15% 85%, white 0%, transparent 1px);
-    background-size: 100% 100%;
-    filter: blur(1px);
-    pointer-events: none;
-}
-
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 20px;
-    position: relative;
-}
-
-.header {
+/* Show the header instead of hiding it */
+#header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: absolute;
     text-align: center;
-    padding: 15px 0;
-    margin-bottom: 20px;
-    background-color: transparent; /* Removed background for better blending */
-    position: relative;
-    z-index: 1;
-}
-
-.header h1 {
-    color: #ffffff;
-    font-size: 2.2rem;
-    font-weight: 300; /* Lighter font weight */
-    letter-spacing: 4px; /* Spaced out text */
-    text-shadow: 
-        0 0 5px rgba(255, 255, 255, 0.8),
-        0 0 10px rgba(100, 170, 255, 0.6),
-        0 0 20px rgba(100, 170, 255, 0.4),
-        0 0 30px rgba(100, 170, 255, 0.2); /* Multi-layered glow effect */
-    margin: 0;
-    opacity: 0.95;
-    animation: titleGlow 3s ease-in-out infinite; /* Subtle animation */
-}
-
-/* Animation for the title glow effect */
-@keyframes titleGlow {
-    0% {
-        text-shadow: 
-            0 0 5px rgba(255, 255, 255, 0.8),
-            0 0 10px rgba(100, 170, 255, 0.5),
-            0 0 20px rgba(100, 170, 255, 0.3);
-    }
-    50% {
-        text-shadow: 
-            0 0 7px rgba(255, 255, 255, 0.9),
-            0 0 15px rgba(100, 170, 255, 0.7),
-            0 0 25px rgba(100, 170, 255, 0.5);
-    }
-    100% {
-        text-shadow: 
-            0 0 5px rgba(255, 255, 255, 0.8),
-            0 0 10px rgba(100, 170, 255, 0.5),
-            0 0 20px rgba(100, 170, 255, 0.3);
-    }
-}
-
-/* Main content layout */
-.main-content {
-    display: flex;
-    flex-direction: row;
-    gap: 30px; /* Increased gap between panels */
-    align-items: flex-start;
-}
-
-@media (max-width: 900px) {
-    .main-content {
-        flex-direction: column-reverse;
-    }
-}
-
-.data-panel {
-    flex: 0.8; /* Increased from 0.50 to make data panel wider */
-    min-width: 250px;
-    max-width: 500px; /* Increased from 400px to 500px */
-}
-
-/* Make the globe container background transparent with proper isolation */
-.globe-container {
-    flex: 1.7;
-    position: relative;
-    height: 600px; /* Reduced from 780px to eliminate scrollbar */
-    display: flex;
-    justify-content: flex-end;
-    align-items: flex-start;
-    padding-top: 30px; /* Reduced from 50px */
-    min-width: 300px;
-    background-color: transparent;
-    margin-right: -70px;
-    z-index: 0;
-    isolation: isolate;
-    overflow: hidden; /* Added to prevent any overflow from causing scrollbars */
-}
-
-#globe {
+    color: #fff;
+    z-index: 10;
+    top: 0;
     width: 100%;
-    height: 100%;
-    cursor: move;
-    position: relative;
-    background-color: transparent;
-    overflow: visible; /* Changed from hidden to allow the stars to extend beyond */
-    z-index: 1; /* Position above background */
+    padding: 10px 0;
 }
 
-/* Ensure the SVG is also transparent */
-#globe svg {
-    background-color: transparent !important;
-    isolation: isolate;
+#search,.switch {
+    position: absolute;
+    top: 20px;
+    z-index: 15
 }
 
-.controls {
-    margin-top: 15px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+#search {
+    right: 20px;
+    display: block; /* Make search visible */
 }
 
-#resetBtn {
-    padding: 8px 14px;
-    background-color: rgba(66, 133, 244, 0.3);
-    color: white;
-    border: 1px solid rgba(66, 133, 244, 0.5);
-    border-radius: 4px;
+#search:hover {
+    cursor: pointer
+}
+
+#search img {
+    width: 36px;
+    opacity: .5;
+    transition: opacity .3s
+}
+
+#search img:hover {
     cursor: pointer;
-    font-size: 12px;
-    font-weight: bold;
-    transition: all 0.2s ease;
+    opacity: 1
 }
 
-#resetBtn:hover {
-    background-color: rgba(66, 133, 244, 0.5);
+.switch {
+    right: 70px;
+    display: inline-block;
+    width: 60px;
+    height: 34px
 }
 
-.data-toggle {
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #c93535;
+    -webkit-transition: .4s;
+    transition: .4s
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: #ccc;
+    -webkit-transition: .4s;
+    transition: .4s
+}
+
+.slider img {
+    height: calc(100% - 15px);
+    margin-top: 7px;
+    margin-right: -25px
+}
+
+input:checked+.slider {
+    background-color: #9ed8f3
+}
+
+input:focus+.slider {
+    box-shadow: 0 0 1px #2196f3
+}
+
+input:checked+.slider:before {
+    -webkit-transform: translateX(26px);
+    -ms-transform: translateX(26px);
+    transform: translateX(26px)
+}
+
+.slider.round {
+    border-radius: 34px
+}
+
+.slider.round:before {
+    border-radius: 50%
+}
+
+h1 {
+    opacity: .8
+}
+
+@media(max-width: 350px) {
+    #search img {
+        width:30px
+    }
+
+    h1 {
+        font-size: 1.9em
+    }
+
+    .switch {
+        right: 60px;
+        width: 50px;
+        height: 30px
+    }
+
+    .slider:before {
+        height: 22px;
+        width: 22px
+    }
+
+    input:checked+.slider:before {
+        -webkit-transform: translateX(22px);
+        -ms-transform: translateX(22px);
+        transform: translateX(22px)
+    }
+}
+
+#globe,#particles {
+    position: absolute;
+    height: 100%;
+    width: 100%
+}
+
+/* Ensure particles are behind everything else */
+#particles {
+    z-index: 0;
+    pointer-events: none; /* Make sure particles don't interfere with clicking */
+}
+
+#particles canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 0;
+}
+
+/* Center the globe properly - higher position */
+#globe {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    justify-content: center;
+    align-items: center;
+    z-index: 5; /* Make sure globe is above particles */
+    margin-top: 0; /* Remove the downward margin */
 }
 
-.data-toggle label {
-    font-size: 12px;
-    color: #8a8a8a;
+#globe svg {
+    position: absolute;
+    left: 50%;
+    top: 57%; /* Position higher at 45% instead of 55% */
+    transform: translate(-50%, -55%); /* Adjust transform to move it upward */
 }
 
-#dataSelector {
-    padding: 8px 12px;
-    background-color: rgba(20, 30, 50, 0.8);
-    color: white;
-    border: 1px solid rgba(100, 170, 255, 0.6);
-    border-radius: 4px;
-    width: 100%;
-    font-size: 13px;
-    box-shadow: 0 0 10px rgba(0, 150, 255, 0.2);
-    transition: all 0.3s;
-}
-
-#dataSelector:hover, #dataSelector:focus {
-    background-color: rgba(25, 35, 60, 0.9);
-    border-color: rgba(100, 170, 255, 0.8);
-    box-shadow: 0 0 15px rgba(0, 150, 255, 0.4);
-}
-
-#dataSelector option {
-    background-color: #1a2035;
-    color: white;
-    padding: 10px;
-}
-
-.country-info {
-    padding: 15px;
-    background-color: rgba(15, 15, 38, 0.3);
-    border-radius: 8px;
-    text-align: left;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(55, 55, 135, 0.15);
-}
-
-#countryName {
-    margin-bottom: 12px;
-    font-size: 18px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding-bottom: 10px;
-}
-
-.stats {
-    display: grid;
-    grid-template-columns: 1fr; /* Changed to single column for narrower panel */
-    gap: 10px;
-    margin-top: 12px;
-}
-
-.stat-item {
-    padding: 10px;
-    background-color: rgba(30, 30, 60, 0.25);
-    border-radius: 6px;
-    transition: all 0.3s ease;
-    border: 1px solid rgba(72, 72, 120, 0.15);
+/* Ensure proper centering on all screens */
+.centered-globe {
+    max-width: 100vw;
+    max-height: 100vh;
+    margin: 0 auto;
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
 }
 
-.stat-item:hover {
-    background-color: rgba(40, 40, 80, 0.4);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+/* Hide particles behind the globe */
+.globe-backdrop {
+    z-index: 4; /* Make sure it's between particles and globe */
+    background: rgba(0,0,0,1); /* Solid black backdrop */
 }
 
-.land {
-    fill: #1a5601;
-}
-
-.graticule {
-    fill: none;
-    stroke: rgba(255, 255, 255, 0.15);
-    stroke-width: 0.5px;
-}
-
-.country {
-    stroke: rgba(255, 255, 255, 0.3);
-    stroke-width: 0.3px;
-    transition: fill 0.3s;
-}
-
-.country:hover {
-    stroke-width: 1px;
-    stroke: rgba(255, 255, 255, 0.8);
-}
-
-.selected-country {
-    stroke: #fff;
-    stroke-width: 1px;
-}
-
-.tooltip {
+/* Make sure the control panel doesn't interfere with centering */
+.control-panel {
     position: absolute;
-    background-color: rgba(15, 15, 38, 0.85);
-    color: #fff;
-    padding: 8px;
-    border-radius: 4px;
-    pointer-events: none;
-    font-size: 12px;
+    left: 20px;
+    top: 80px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
     z-index: 100;
-    box-shadow: 0 0 15px rgba(0, 150, 255, 0.3);
-    border: 1px solid rgba(0, 100, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 250px;
 }
 
-/* Dataset Selection Buttons */
-.dataset-buttons {
-    position: absolute;
-    top: 15px;
-    right: 15px;
+.dataset-controls {
     display: flex;
-    gap: 10px;
+    gap: 5px;
 }
 
 .dataset-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    border: 2px solid rgba(100, 170, 255, 0.5);
-    background-color: rgba(15, 15, 38, 0.5);
+    padding: 6px 8px;
+    background: rgba(100, 100, 100, 0.5);
+    border: none;
     color: white;
-    font-size: 16px;
+    border-radius: 4px;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(5px);
-}
-
-.dataset-btn:hover {
-    background-color: rgba(40, 40, 80, 0.7);
-    transform: scale(1.1);
-    box-shadow: 0 0 15px rgba(100, 170, 255, 0.7);
+    font-size: 12px;
+    flex: 1;
 }
 
 .dataset-btn.active {
-    border-color: #4CAF50;
-    box-shadow: 0 0 15px rgba(76, 175, 80, 0.7);
+    background: #8b0000;
 }
 
-/* Date Control */
-.date-control {
-    margin-top: 15px;
+.data-selector-container {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 5px;
 }
 
-#dateSlider {
-    width: 100%;
-    cursor: pointer;
-    accent-color: rgba(66, 133, 244, 0.8);
+#dataSelector {
+    background: rgba(50, 50, 50, 0.8);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 5px;
 }
 
-.date-navigation {
+.date-controls {
     display: flex;
     justify-content: space-between;
-    margin-top: 5px;
+    align-items: center;
 }
 
-.date-navigation button {
-    background-color: rgba(66, 133, 244, 0.3);
-    border: 1px solid rgba(66, 133, 244, 0.5);
+#prevDateBtn, #nextDateBtn {
+    background: rgba(100, 100, 100, 0.5);
+    border: none;
     color: white;
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.date-navigation button:hover {
-    background-color: rgba(66, 133, 244, 0.5);
+    font-weight: bold;
 }
 
 #currentDate {
-    font-weight: bold;
-    color: #4CAF50;
-}
-
-/* Country Stats */
-#countryStats {
-    max-height: 200px;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(100, 170, 255, 0.5) rgba(15, 15, 38, 0.3);
-}
-
-#countryStats::-webkit-scrollbar {
-    width: 6px;
-}
-
-#countryStats::-webkit-scrollbar-track {
-    background: rgba(15, 15, 38, 0.3);
-    border-radius: 3px;
-}
-
-#countryStats::-webkit-scrollbar-thumb {
-    background-color: rgba(100, 170, 255, 0.5);
-    border-radius: 3px;
-}
-
-/* Error and loading indicators */
-.error-display {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.8);
-    z-index: 1000;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.error-content {
-    background: rgba(15, 15, 38, 0.9);
-    padding: 20px;
-    border-radius: 8px;
-    max-width: 500px;
+    flex-grow: 1;
     text-align: center;
-    border: 1px solid rgba(255,0,0,0.3);
-    box-shadow: 0 0 20px rgba(255,0,0,0.3);
+    font-size: 14px;
 }
 
-.error-content h3 {
-    color: #ff5555;
-    margin-top: 0;
+#dateSlider {
+    width: 100%;
+    margin: 5px 0;
 }
 
-.error-content button {
-    padding: 8px 16px;
-    background-color: rgba(255,0,0,0.3);
+.control-btn {
+    background: #8b0000;
     color: white;
-    border: 1px solid rgba(255,0,0,0.5);
+    border: none;
+    padding: 6px 12px;
     border-radius: 4px;
     cursor: pointer;
-    margin-top: 15px;
 }
 
-.error-content button:hover {
-    background-color: rgba(255,0,0,0.5);
+.control-btn:hover {
+    background: #a00000;
 }
 
-.loading-indicator {
+.control-btn.active {
+    background: #600000;
+    border: 1px solid #ff6666;
+}
+
+#loader {
     position: absolute;
+    z-index: 10;
+    border: 16px solid rgba(0,0,0,.6);
+    border-top: 16px solid #8b0000;
+    border-radius: 50%;
+    width: 120px;
+    height: 120px;
+    animation: spin 2s linear infinite;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(15, 15, 38, 0.7);
-    padding: 15px 20px;
-    border-radius: 8px;
-    color: #4CAF50;
-    box-shadow: 0 0 15px rgba(0, 150, 255, 0.3);
+    margin: -60px 0 0 -60px
 }
 
-.error-message {
+@keyframes spin {
+    0% {
+        transform: rotate(0)
+    }
+
+    100% {
+        transform: rotate(360deg)
+    }
+}
+
+/* Add styling for country hover and tooltip */
+.country {
+    cursor: pointer;
+    transition: stroke 0.2s, stroke-width 0.2s;
+    stroke: #ffffff;
+    stroke-width: 0.5px;
+}
+
+.country:hover {
+    stroke-width: 1px;
+}
+
+/* Styling for country info panel */
+#countryInfo {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(15, 15, 38, 0.7);
-    padding: 15px 20px;
+    right: 20px;
+    top: 80px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 15px;
     border-radius: 8px;
-    color: #ff5555;
-    box-shadow: 0 0 15px rgba(255, 0, 0, 0.3);
-    max-width: 80%;
-    text-align: center;
+    max-width: 300px;
+    display: none;
+    z-index: 10;
 }
 
-.status-indicator {
-    margin-top: 10px;
-    text-align: center;
-    font-size: 12px;
-    color: #4CAF50;
-    padding: 5px;
+#countryInfo h3 {
+    margin-top: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    padding-bottom: 8px;
+}
+
+#countryInfo .data-row {
+    display: flex;
+    justify-content: space-between;
+    margin: 5px 0;
+}
+
+#countryInfo .label {
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+/* Dataset indicator */
+.dataset-indicator {
+    background: rgba(0, 0, 0, 0.5);
+    padding: 8px;
     border-radius: 4px;
-    background-color: rgba(15, 15, 38, 0.3);
+    text-align: center;
+    font-weight: bold;
+    color: white;
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* File upload controls in error dialog */
+#currentDataset {
+    font-size: 16px;
+}
+
+/* Data status indicator styling */
+#dataStatus {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 5px;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 100;
+}
+
+/* File upload styling for error recovery */
 .file-upload-controls {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin: 15px 0;
+    margin: 20px 0;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    border-radius: 5px;
 }
 
 .file-upload {
-    text-align: left;
+    display: flex;
+    align-items: center;
 }
 
 .file-upload label {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.file-upload input {
+    margin-left: 10px;
 }
 
 #processUploads {
-    padding: 8px 16px;
-    background-color: rgba(66, 133, 244, 0.3);
+    background: #8b0000;
     color: white;
-    border: 1px solid rgba(66, 133, 244, 0.5);
+    border: none;
+    padding: 8px 16px;
     border-radius: 4px;
     cursor: pointer;
     margin-top: 10px;
-    align-self: center;
 }
 
 #processUploads:hover {
-    background-color: rgba(66, 133, 244, 0.5);
-}
-
-.warning-text {
-    color: #FFC107;
-    font-weight: bold;
-}
-
-.error-text {
-    color: #ff5555;
-    font-size: 12px;
-    text-align: center;
-    width: 100%;
+    background: #a00000;
 }

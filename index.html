@@ -1,94 +1,224 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COVID-19 Global Visualization</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>COVID-19 Global Visualization</h1>
-            
-            <!-- Dataset Selection Buttons -->
-            <div class="dataset-buttons">
-                <button id="epidemBtn" class="dataset-btn active" title="Epidemiology Data">
-                    <i class="fas fa-virus"></i>
-                </button>
-                <button id="hospitalBtn" class="dataset-btn" title="Hospitalization Data">
-                    <i class="fas fa-hospital"></i>
-                </button>
-                <button id="vaccinationsBtn" class="dataset-btn" title="Vaccination Data">
-                    <i class="fas fa-syringe"></i>
-                </button>
-            </div>
-        </div>
-        
-        <div class="main-content">
-            <div class="data-panel">
-                <div class="country-info" id="countryInfo">
-                    <h2 id="countryName">Select a country</h2>
-                    <div id="countryStats" class="stats">
-                        <!-- Stats will be dynamically populated -->
-                        <div class="stat-item">
-                            <div class="stat-label">Select a country</div>
-                            <div class="stat-value">to see stats</div>
-                        </div>
-                    </div>
-                    
-                    <div class="controls">
-                        <button id="resetBtn">Reset View</button>
-                        <div class="data-toggle">
-                            <label>Data to Display:</label>
-                            <select id="dataSelector">
-                                <!-- Options will be populated dynamically -->
-                            </select>
-                        </div>
-                        
-                        <!-- Date Control -->
-                        <div class="date-control">
-                            <label>Date: <span id="currentDate">Loading...</span></label>
-                            <input type="range" id="dateSlider" min="0" max="100" value="100">
-                            <div class="date-navigation">
-                                <button id="prevDateBtn"><i class="fas fa-chevron-left"></i></button>
-                                <button id="nextDateBtn"><i class="fas fa-chevron-right"></i></button>
-                            </div>
-                        </div>
-                        
-                        <!-- Status indicator -->
-                        <div class="status-indicator">
-                            <span id="dataStatus">Loading data...</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="globe-container">
-                <div id="globe">
-                    <!-- Loading indicator -->
-                    <div class="loading-indicator">Loading globe data...</div>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Load D3.js and other dependencies -->
+<head>
+    <title>COVID-19 Visualizer</title>
+    <!-- Meta -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- CSS / Favicon -->
+    <link href="styles.css" rel="stylesheet" />
+    
+    <!-- JavaScript -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://d3js.org/topojson.v3.min.js"></script>
-    
-    <!-- Load our custom scripts -->
-    <script src="dataService.js"></script>
-    <script src="globe.js"></script>
-    
-    <!-- Error display -->
-    <div id="errorDisplay" style="display:none" class="error-display">
-        <div class="error-content">
-            <h3>Error Loading Data</h3>
-            <p id="errorMessage"></p>
-            <button id="errorClose">Close</button>
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script src="dataService.js" defer></script>
+    <script src="globe.js" defer></script>
+</head>
+
+<body>
+    <div id="particles"></div>
+    <div id="globe" class="centered-globe"></div>
+
+    <div id="header">
+        <div id="search">
+            <img src="assets/search.svg" onclick="openSearch()">
         </div>
+        <label class="switch">
+            <input type="checkbox" id="datasetToggle" onclick="toggleDataset()">
+            <span class="slider round"><img src="assets/vaccine.svg"></span>
+        </label>
+        <h1>COVID-19</h1>
     </div>
+    
+    <div id="loader"></div>
+    
+    <!-- Country Info Panel -->
+    <div id="countryInfo">
+        <h3 id="countryName">Select a country</h3>
+        <div id="countryStats"></div>
+    </div>
+    
+    <!-- Controls Panel -->
+    <div class="control-panel">
+        <!-- Removed the dataset buttons -->
+        <div class="dataset-indicator">
+            <span id="currentDataset">Epidemiology</span>
+        </div>
+        
+        <div class="data-selector-container">
+            <label for="dataSelector">Data Type: </label>
+            <select id="dataSelector"></select>
+        </div>
+        
+        <div class="date-controls">
+            <button id="prevDateBtn">&lt;</button>
+            <span id="currentDate">Loading...</span>
+            <button id="nextDateBtn">&gt;</button>
+        </div>
+        
+        <input type="range" id="dateSlider" min="0" max="100" value="0">
+        
+        <button id="resetBtn" class="control-btn">Reset View</button>
+    </div>
+    
+    <div id="dataStatus">Loading data...</div>
+    
+    <!-- Error display for data loading issues -->
+    <div id="errorDisplay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; color: white; padding: 20px; flex-direction: column; align-items: center; justify-content: center;">
+        <h2>Data Loading Error</h2>
+        <div id="errorMessage"></div>
+        <button id="errorClose" style="margin-top: 20px; padding: 8px 16px;">Close</button>
+    </div>
+
+    <script>
+        // Hide loader when the globe is initialized
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                const loader = document.getElementById('loader');
+                if (loader) {
+                    loader.style.display = 'none';
+                }
+            }, 2000); // Give some time for data to load
+            
+            // Center the globe visualization properly
+            document.addEventListener('GlobeVisualizationInitialized', function() {
+                const globeInstance = window.globeInstance;
+                if (globeInstance) {
+                    // Adjust the globe position to be centered and higher
+                    globeInstance.globeGroup.attr('transform', 
+                        `translate(${window.innerWidth / 2}, ${window.innerHeight / 2 - 50})`); // Move up by 50px
+                    
+                    // Update the backdrop position
+                    d3.select('.globe-backdrop')
+                        .attr('cx', window.innerWidth / 2)
+                        .attr('cy', window.innerHeight / 2 - 50); // Move up by 50px
+                        
+                    // Force a redraw of the globe
+                    globeInstance.globeGroup.selectAll('path')
+                        .attr('d', globeInstance.path);
+                }
+            });
+            
+            // Initialize particles.js with configuration - fewer particles and no stars behind globe
+            particlesJS('particles', {
+                "particles": {
+                    "number": {
+                        "value": 70,
+                        "density": {
+                            "enable": true,
+                            "value_area": 800
+                        }
+                    },
+                    "color": {
+                        "value": "#ffffff"
+                    },
+                    "shape": {
+                        "type": "circle",
+                        "stroke": {
+                            "width": 0,
+                            "color": "#000000"
+                        }
+                    },
+                    "opacity": {
+                        "value": 0.3,
+                        "random": true,
+                        "anim": {
+                            "enable": true,
+                            "speed": 0.5,
+                            "opacity_min": 0.1,
+                            "sync": false
+                        }
+                    },
+                    "size": {
+                        "value": 2,
+                        "random": true,
+                        "anim": {
+                            "enable": true,
+                            "speed": 2,
+                            "size_min": 0.1,
+                            "sync": false
+                        }
+                    },
+                    "line_linked": {
+                        "enable": false
+                    },
+                    "move": {
+                        "enable": true,
+                        "speed": 1.2,
+                        "direction": "none",
+                        "random": true,
+                        "straight": false,
+                        "out_mode": "out",
+                        "bounce": false,
+                        "attract": {
+                            "enable": true,
+                            "rotateX": 600,
+                            "rotateY": 1200
+                        }
+                    }
+                },
+                "interactivity": {
+                    "detect_on": "canvas",
+                    "events": {
+                        "onhover": {
+                            "enable": true,
+                            "mode": "bubble"
+                        },
+                        "onclick": {
+                            "enable": false
+                        },
+                        "resize": true
+                    },
+                    "modes": {
+                        "bubble": {
+                            "distance": 150,
+                            "size": 3,
+                            "duration": 2,
+                            "opacity": 0.5,
+                            "speed": 3
+                        }
+                    }
+                },
+                "retina_detect": true
+            });
+        });
+        
+        // Toggle between datasets using the switch
+        function toggleDataset() {
+            const toggle = document.getElementById('datasetToggle');
+            const currentDatasetText = document.getElementById('currentDataset');
+            const datasets = ['epidem', 'hospitalizations', 'vaccinations'];
+            
+            // Get current dataset index
+            let currentIndex = datasets.indexOf(window.globeInstance.dataService.currentDataset);
+            
+            // Move to next dataset (cycling through the options)
+            currentIndex = (currentIndex + 1) % datasets.length;
+            
+            // Update dataset name display
+            const datasetDisplayNames = {
+                'epidem': 'Epidemiology',
+                'hospitalizations': 'Hospitalizations',
+                'vaccinations': 'Vaccinations'
+            };
+            
+            currentDatasetText.textContent = datasetDisplayNames[datasets[currentIndex]];
+            
+            // Change dataset in the globe visualization
+            window.globeInstance.changeDataset(datasets[currentIndex]);
+            
+            // Adjust toggle button appearance based on dataset
+            if (datasets[currentIndex] === 'vaccinations') {
+                document.querySelector('.slider').style.backgroundColor = '#9ed8f3';
+            } else if (datasets[currentIndex] === 'hospitalizations') {
+                document.querySelector('.slider').style.backgroundColor = '#7a92d8';
+            } else {
+                document.querySelector('.slider').style.backgroundColor = '#c93535';
+            }
+        }
+    </script>
 </body>
+
 </html>

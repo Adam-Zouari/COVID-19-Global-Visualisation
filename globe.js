@@ -20,6 +20,9 @@ class GlobeVis {
         // Debug flag
         this.debug = true;
         
+        // Make data service accessible for toggle function
+        this.dataService = dataService;
+        
         // Initialize the visualization
         this.initVis();
         
@@ -52,12 +55,11 @@ class GlobeVis {
             .attr('preserveAspectRatio', 'xMidYMid meet')
             .style('background-color', 'transparent');
             
-        // Add a starfield background to the SVG
-        this.addStarfield();
+        // Don't add starfield background to prevent stars behind globe
             
         // Create a group for the globe
         this.globeGroup = this.svg.append('g')
-            .attr('transform', `translate(${this.width / 2 + 30}, ${this.height / 2 - 50})`);
+            .attr('transform', `translate(${this.width / 2 + 30}, ${this.height / 2})`); // Removed the -50px offset
         
         // Set up the projection with fixed radius
         this.projection = d3.geoOrthographic()
@@ -427,22 +429,32 @@ class GlobeVis {
     }
     
     addStarfield() {
-        // Create a black backdrop for the globe
+        // Create a black backdrop for the globe - completely opaque
         this.svg.append('circle')
             .attr('cx', this.width / 2 + 30)
-            .attr('cy', this.height / 2 - 50)
+            .attr('cy', this.height / 2)
             .attr('r', this.radius + 5)
             .attr('fill', '#000000')
-            .attr('opacity', 0.7)
+            .attr('opacity', 1)  // Fully opaque
             .attr('class', 'globe-backdrop');
             
-        // Add accent stars
-        const numAccentStars = 50;
+        // Add accent stars only at the edges - don't place stars near the globe center
+        const numAccentStars = 30;  // Reduced number
         const accentStars = [];
+        const centerX = this.width / 2 + 30;
+        const centerY = this.height / 2;
+        const excludeRadius = this.radius + 10;  // Don't place stars within this radius
         
         for (let i = 0; i < numAccentStars; i++) {
-            const x = Math.random() * this.width;
-            const y = Math.random() * this.height;
+            let x, y, distance;
+            
+            // Keep generating positions until we find one outside the exclude radius
+            do {
+                x = Math.random() * this.width;
+                y = Math.random() * this.height;
+                distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+            } while (distance < excludeRadius);
+            
             const radius = Math.random() * 2 + 0.5;
             const opacity = Math.random() * 0.8 + 0.5;
             
@@ -460,28 +472,6 @@ class GlobeVis {
             .attr('r', d => d.radius)
             .attr('fill', '#FFFFFF')
             .attr('opacity', d => d.opacity);
-            
-        // Add a few larger, glowing stars
-        const largeStars = [];
-        for (let i = 0; i < 5; i++) {
-            largeStars.push({
-                x: Math.random() * this.width,
-                y: Math.random() * this.height,
-                radius: Math.random() * 3 + 2,
-                blur: Math.random() * 2 + 1
-            });
-        }
-        
-        starsGroup.selectAll('.large-star')
-            .data(largeStars)
-            .enter()
-            .append('circle')
-            .attr('cx', d => d.x)
-            .attr('cy', d => d.y)
-            .attr('r', d => d.radius)
-            .attr('fill', '#FFFFFF')
-            .attr('opacity', 0.9)
-            .attr('filter', d => `blur(${d.blur}px)`);
     }
     
     addLightEffect() {
@@ -543,17 +533,14 @@ class GlobeVis {
             .attr('data-country-code', d => this.getCountryCode(d))
             .attr('fill', d => this.getCountryColor(d))
             .attr('fill-opacity', 1.0) // Always full opacity
-            .attr('stroke', 'rgba(255, 255, 255, 0.4)') 
-            .attr('stroke-width', '0.3px')
+            .attr('stroke', '#ffffff') // White stroke for all countries by default
+            .attr('stroke-width', '0.5px')
             .attr('shape-rendering', 'geometricPrecision')
             .on('mouseover', (event, d) => this.handleMouseOver(event, d))
             .on('mouseout', (event, d) => this.handleMouseOut(event, d))
             .on('click', (event, d) => this.handleCountryClick(event, d));
         
         this.log("Globe created with countries");
-        
-        // Create color legend
-        this.createColorLegend();
         
         // Count how many countries have data
         const countriesWithData = countries.features.filter(d => {
@@ -574,122 +561,6 @@ class GlobeVis {
         
         // Add a toggle button for transparent globe to the controls
         this.addTransparencyToggle();
-    }
-    
-    // Create a color legend for the current data
-    createColorLegend() {
-        // Remove any existing legend
-        d3.select('.color-legend').remove();
-        
-        // Create legend container
-        const legend = this.svg.append('g')
-            .attr('class', 'color-legend')
-            .attr('transform', `translate(${this.width - 120}, ${this.height - 100})`);
-        
-        // Add background for better readability
-        legend.append('rect')
-            .attr('width', 100)
-            .attr('height', 80)
-            .attr('fill', 'rgba(0, 0, 0, 0.7)')
-            .attr('rx', 5);
-            
-        // Title
-        legend.append('text')
-            .attr('x', 50)
-            .attr('y', 15)
-            .attr('text-anchor', 'middle')
-            .attr('fill', 'white')
-            .attr('font-size', '10px')
-            .text(dataService.currentColumn || 'Data');
-        
-        // Get the color scale
-        const colorScale = dataService.getColorScale();
-        const domain = colorScale.domain();
-        const min = domain[0];
-        const max = domain[1];
-        
-        // Create a gradient definition
-        const defs = this.svg.append('defs');
-        const gradient = defs.append('linearGradient')
-            .attr('id', 'legend-gradient')
-            .attr('x1', '0%')
-            .attr('y1', '0%')
-            .attr('x2', '100%')
-            .attr('y2', '0%');
-            
-        // Add color stops
-        const numSteps = 10;
-        for (let i = 0; i <= numSteps; i++) {
-            const t = i / numSteps;
-            const exponent = 0.5; // Match the exponent used in the color scale
-            const scaledT = Math.pow(t, exponent);
-            
-            // Get color from the same interpolator used in the data service
-            let color;
-            if (dataService.currentDataset === 'epidem') {
-                color = d3.interpolateRgb('#2ECC40', '#FF4136')(scaledT);
-            } else {
-                color = d3.interpolateRgb('#2ECC40', '#0074D9')(scaledT);
-            }
-            
-            gradient.append('stop')
-                .attr('offset', `${t * 100}%`)
-                .attr('stop-color', color);
-        }
-        
-        // Add gradient rectangle
-        legend.append('rect')
-            .attr('x', 10)
-            .attr('y', 25)
-            .attr('width', 80)
-            .attr('height', 15)
-            .attr('fill', 'url(#legend-gradient)');
-            
-        // Add min label
-        legend.append('text')
-            .attr('x', 10)
-            .attr('y', 55)
-            .attr('text-anchor', 'start')
-            .attr('fill', 'white')
-            .attr('font-size', '9px')
-            .text(dataService.formatNumber(min));
-            
-        // Add max label
-        legend.append('text')
-            .attr('x', 90)
-            .attr('y', 55)
-            .attr('text-anchor', 'end')
-            .attr('fill', 'white')
-            .attr('font-size', '9px')
-            .text(dataService.formatNumber(max));
-            
-        // Add mid label for context
-        const mid = (max - min) / 2 + min;
-        legend.append('text')
-            .attr('x', 50)
-            .attr('y', 55)
-            .attr('text-anchor', 'middle')
-            .attr('fill', 'white')
-            .attr('font-size', '9px')
-            .text(dataService.formatNumber(mid));
-            
-        // Add indicator that this is using a power scale for better distribution
-        legend.append('text')
-            .attr('x', 50)
-            .attr('y', 70)
-            .attr('text-anchor', 'middle')
-            .attr('fill', 'white')
-            .attr('font-size', '8px')
-            .text('(power scale: 0.5)');
-            
-        // Add note about consistent color scaling
-        legend.append('text')
-            .attr('x', 50)
-            .attr('y', 70)
-            .attr('text-anchor', 'middle')
-            .attr('fill', 'white')
-            .attr('font-size', '8px')
-            .text('(consistent across dates)');
     }
 
     getCountryColor(d) {
@@ -736,10 +607,9 @@ class GlobeVis {
     }
     
     handleMouseOver(event, d) {
-        // Highlight the country
+        // Highlight the country with thicker stroke instead of changing color
         d3.select(event.currentTarget)
-            .attr('stroke-width', '1px')
-            .attr('stroke', '#fff');
+            .attr('stroke-width', '1px');
             
         // Get country data
         const countryCode = this.getCountryCode(d);
@@ -780,11 +650,10 @@ class GlobeVis {
     }
     
     handleMouseOut(event, d) {
-        // Reset highlight if not the selected country
+        // Reset to default highlight if not the selected country
         if (!this.selectedCountry || this.selectedCountry !== d.id) {
             d3.select(event.currentTarget)
-                .attr('stroke-width', '0.3px')
-                .attr('stroke', '#000');
+                .attr('stroke-width', '0.5px');
         }
         
         // Hide tooltip
@@ -799,16 +668,14 @@ class GlobeVis {
         // Reset previous selection
         if (this.selectedCountry) {
             d3.select(`#country-${this.selectedCountry}`)
-                .attr('stroke-width', '0.3px')
-                .attr('stroke', '#000')
+                .attr('stroke-width', '0.5px')
                 .classed('selected-country', false);
         }
         
-        // Set new selection
+        // Set new selection with thicker stroke
         this.selectedCountry = d.id;
         d3.select(event.currentTarget)
             .attr('stroke-width', '1.5px')
-            .attr('stroke', '#fff')
             .classed('selected-country', true);
             
         // Update the country info panel
@@ -982,9 +849,6 @@ class GlobeVis {
             
         console.log(`After color update: ${countriesWithData} out of ${totalCountries} countries have data values`);
         
-        // Update color legend with new data
-        this.createColorLegend();
-        
         // Update status
         if (countriesWithData === 0) {
             document.getElementById('dataStatus').textContent = `Warning: No countries have data for ${dataService.currentColumn}`;
@@ -1021,6 +885,11 @@ class GlobeVis {
             // Always keep countries fully opaque
             this.globeGroup.selectAll('.country')
                 .attr('fill-opacity', 1.0);
+                
+            // If we're in transparent mode, update the country rendering order
+            if (this.projection.clipAngle() > 90) {
+                this.renderCountriesByDepth();
+            }
                 
             this.animationFrameId = requestAnimationFrame(animate);
         };
@@ -1060,6 +929,11 @@ class GlobeVis {
             // Always maintain full opacity regardless of position
             this.globeGroup.selectAll('.country')
                 .attr('fill-opacity', 1.0);
+                
+            // If we're in transparent mode, update the country rendering order
+            if (this.projection.clipAngle() > 90) {
+                this.renderCountriesByDepth();
+            }
         });
     }
     
@@ -1090,8 +964,14 @@ class GlobeVis {
             .attr('r', adjustedRadius + 5);
             
         this.globeGroup.selectAll('.country')
-            .attr('stroke-width', (0.3 / scale) + 'px');
+            .attr('stroke-width', (0.5 / scale) + 'px');
             
+        // If there's a selected country, make sure its stroke is thicker
+        if (this.selectedCountry) {
+            d3.select(`#country-${this.selectedCountry}`)
+                .attr('stroke-width', (1.5 / scale) + 'px');
+        }
+        
         this.globeGroup.select('.graticule')
             .attr('stroke-width', (0.5 / scale) + 'px');
     }
@@ -1165,19 +1045,6 @@ class GlobeVis {
             this.resetView();
         });
         
-        // Handle dataset button clicks
-        document.getElementById('epidemBtn').addEventListener('click', () => {
-            this.changeDataset('epidem');
-        });
-        
-        document.getElementById('hospitalBtn').addEventListener('click', () => {
-            this.changeDataset('hospitalizations');
-        });
-        
-        document.getElementById('vaccinationsBtn').addEventListener('click', () => {
-            this.changeDataset('vaccinations');
-        });
-        
         // Handle wheel event for stopping rotation when zooming
         this.svg.on('wheel', () => {
             this.stopAutoRotation();
@@ -1190,25 +1057,16 @@ class GlobeVis {
     }
     
     changeDataset(dataset) {
-        // Update active button styling
-        document.querySelectorAll('.dataset-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        
-        // Map dataset names to button IDs
-        const buttonIdMap = {
-            'epidem': 'epidemBtn',
-            'hospitalizations': 'hospitalBtn',
-            'vaccinations': 'vaccinationsBtn'
+        // Update the dataset indicator in the UI
+        const datasetDisplayNames = {
+            'epidem': 'Epidemiology',
+            'hospitalizations': 'Hospitalizations',
+            'vaccinations': 'Vaccinations'
         };
         
-        // Get the correct button ID
-        const buttonId = buttonIdMap[dataset] || `${dataset}Btn`;
-        
-        // Safely add the active class if the button exists
-        const button = document.getElementById(buttonId);
-        if (button) {
-            button.classList.add('active');
+        const currentDatasetEl = document.getElementById('currentDataset');
+        if (currentDatasetEl) {
+            currentDatasetEl.textContent = datasetDisplayNames[dataset] || dataset;
         }
         
         // Change dataset in data service
@@ -1219,9 +1077,6 @@ class GlobeVis {
         
         // Update globe colors
         this.updateGlobeColors();
-        
-        // Update color legend
-        this.createColorLegend();
         
         // If a country is selected, update its info
         if (this.selectedCountry) {
@@ -1240,7 +1095,7 @@ class GlobeVis {
         this.svg.attr('width', this.width)
             .attr('viewBox', `0 0 ${this.width} ${this.height}`);
             
-        this.globeGroup.attr('transform', `translate(${this.width / 2 + 30}, ${this.height / 2 - 50})`);
+        this.globeGroup.attr('transform', `translate(${this.width / 2 + 30}, ${this.height / 2 - 50})`); // Subtract 50px to move up
     }
     
     // Add a toggle button for the transparent globe
@@ -1294,11 +1149,60 @@ class GlobeVis {
             this.svg.select('.globe-backdrop')
                 .attr('fill', 'none')
                 .attr('opacity', 0);
+            
+            // In transparent mode, ensure countries have solid fill with no transparency
+            this.renderCountriesByDepth();
         }
         
         // Always set full opacity for countries regardless of view mode
         this.globeGroup.selectAll('.country')
             .attr('fill-opacity', 1.0);
+    }
+    
+    // Add new method to render countries based on their depth in transparent mode
+    renderCountriesByDepth() {
+        // Calculate each country's center point and distance from view center
+        const viewVector = this.projection.rotate().map(d => -d * Math.PI / 180); // Convert to radians and invert
+        
+        // Get all country elements and calculate their depth
+        const countryElements = this.globeGroup.selectAll('.country').nodes();
+        const countryData = countryElements.map(node => {
+            const element = d3.select(node);
+            const d = element.datum();
+            
+            // Calculate centroid for the country
+            const centroid = d3.geoCentroid(d);
+            
+            // Convert to cartesian coordinates (rough approximation)
+            const x = Math.cos(centroid[1] * Math.PI / 180) * Math.cos(centroid[0] * Math.PI / 180);
+            const y = Math.cos(centroid[1] * Math.PI / 180) * Math.sin(centroid[0] * Math.PI / 180);
+            const z = Math.sin(centroid[1] * Math.PI / 180);
+            
+            // Calculate dot product with view vector (larger values = more in front)
+            const dotProduct = x * Math.cos(viewVector[0]) * Math.cos(viewVector[1]) +
+                              y * Math.sin(viewVector[0]) * Math.cos(viewVector[1]) +
+                              z * Math.sin(viewVector[1]);
+            
+            return {
+                element,
+                depth: dotProduct
+            };
+        });
+        
+        // Sort countries by depth (furthest to closest)
+        countryData.sort((a, b) => a.depth - b.depth);
+        
+        // Adjust the rendering order
+        countryData.forEach((item, i) => {
+            // Move the element to the end of its parent, which will render it on top
+            const node = item.element.node();
+            const parent = node.parentNode;
+            parent.removeChild(node);
+            parent.appendChild(node);
+            
+            // Make sure all countries are completely opaque
+            item.element.attr('fill-opacity', 1.0);
+        });
     }
 }
 
