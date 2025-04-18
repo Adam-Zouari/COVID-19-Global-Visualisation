@@ -383,6 +383,11 @@ h1 {
     z-index: 100;
 }
 
+/* Make the ocean interactive with pointer cursor on hover */
+.ocean {
+    cursor: pointer;
+}
+
 /* File upload styling for error recovery */
 .file-upload-controls {
     display: flex;
