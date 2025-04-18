@@ -100,7 +100,7 @@ input:checked+.slider:before {
     border-radius: 34px
 }
 
-.slider.round:before {
+slider.round:before {
     border-radius: 50%
 }
 
@@ -329,30 +329,66 @@ h1 {
     position: absolute;
     right: 20px;
     top: 80px;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.8);
     color: white;
     padding: 15px;
     border-radius: 8px;
     max-width: 300px;
-    display: none;
+    display: none; /* Initially hidden, will be shown when a country is selected */
     z-index: 10;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 #countryInfo h3 {
     margin-top: 0;
+    margin-bottom: 10px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.3);
     padding-bottom: 8px;
+    color: white;
+    font-size: 18px;
 }
 
-#countryInfo .data-row {
+/* Country info panel flag and header styling */
+.country-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+#countryInfo .country-flag {
+    width: 30px;
+    height: 20px;
+    margin-right: 10px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    vertical-align: middle;
+}
+
+.stat-item {
     display: flex;
     justify-content: space-between;
-    margin: 5px 0;
+    margin: 8px 0;
+    border-bottom: 1px dotted rgba(255, 255, 255, 0.1);
+    padding-bottom: 5px;
 }
 
-#countryInfo .label {
+.stat-label {
     font-weight: 500;
-    opacity: 0.8;
+    opacity: 0.9;
+}
+
+.stat-value {
+    font-weight: bold;
+}
+
+/* Make sure all country names are white */
+#countryName, 
+.country-item span,
+.tooltip-header strong,
+.stat-label,
+.stat-value {
+    color: white;
 }
 
 /* Dataset indicator */
@@ -586,4 +622,149 @@ h1 {
 
 .data-value {
     font-weight: bold;
+}
+
+/* Search modal styling */
+.search-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 10vh;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s;
+}
+
+.search-modal.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.search-container {
+    background: rgba(30, 30, 30, 0.95);
+    width: 90%;
+    max-width: 500px;
+    border-radius: 8px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.search-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.search-header h3 {
+    margin: 0;
+    color: white;
+    font-weight: 400;
+}
+
+.close-search {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.close-search:hover {
+    color: white;
+}
+
+#countrySearchInput {
+    width: 100%;
+    padding: 12px 15px;
+    background: rgba(50, 50, 50, 0.8);
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+#countrySearchInput:focus {
+    outline: none;
+    background: rgba(60, 60, 60, 0.8);
+}
+
+.country-list {
+    overflow-y: auto;
+    max-height: 50vh;
+    padding: 8px 0;
+}
+
+/* Add styling for the empty state message */
+.no-countries {
+    padding: 20px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.7);
+    font-style: italic;
+}
+
+.country-list:empty {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100px;
+}
+
+.country-list:empty::before {
+    content: "Loading countries...";
+    color: rgba(255, 255, 255, 0.5);
+    font-style: italic;
+}
+
+/* Ensure proper scrollbar styling for country list */
+.country-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.country-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.country-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.country-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Styling for country items in the search modal */
+.country-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    cursor: pointer;
+    color: white;
+    transition: background-color 0.2s;
+}
+
+.country-item:hover {
+    background-color: rgba(100, 100, 100, 0.5);
+}
+
+/* Make sure the cursor is a pointer for both the item and its child span */
+.country-item,
+.country-item span,
+.country-item * {
+    cursor: pointer !important;
 }

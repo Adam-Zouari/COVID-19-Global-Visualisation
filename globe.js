@@ -730,9 +730,20 @@ class GlobeVis {
     updateCountryInfoPanel(countryData) {
         const countryNameEl = document.getElementById('countryName');
         const countryStatsEl = document.getElementById('countryStats');
+        const countryInfoPanel = document.getElementById('countryInfo');
         
         if (countryData) {
-            countryNameEl.textContent = countryData.countryName;
+            // Create header with flag and country name
+            const countryCode = countryData.countryKey ? countryData.countryKey.toLowerCase() : '';
+            
+            // Update header with flag + name
+            countryNameEl.innerHTML = `
+                <div class="country-header">
+                    <img class="country-flag" src="https://flagcdn.com/${countryCode}.svg" 
+                         onerror="this.src='https://via.placeholder.com/30x20/ddd/aaa?text=?'">
+                    <span>${countryData.countryName}</span>
+                </div>
+            `;
             
             // Clear existing stats
             countryStatsEl.innerHTML = '';
@@ -756,14 +767,20 @@ class GlobeVis {
                     countryStatsEl.appendChild(statItem);
                 }
             }
+            
+            // Show the country info panel
+            countryInfoPanel.style.display = 'block';
         } else {
-            countryNameEl.textContent = 'Select a country';
+            countryNameEl.innerHTML = 'Select a country';
             countryStatsEl.innerHTML = `
                 <div class="stat-item">
                     <div class="stat-label">Select a country</div>
                     <div class="stat-value">to see stats</div>
                 </div>
             `;
+            
+            // Hide the panel when no country is selected
+            countryInfoPanel.style.display = 'none';
         }
     }
     
@@ -1121,13 +1138,31 @@ class GlobeVis {
             .attr('fill', '#000000') // Black fill for the ocean
             .attr('fill-opacity', 0.7) // 70% opacity - increase this value to make more opaque
             .attr('stroke', 'rgba(100, 200, 255, 0.25)') 
-            .attr('stroke-width', '0.5px');
+            .attr('stroke-width', '0.5px')
+            .on('click', () => this.clearCountrySelection()); // Add click handler to clear selection
         
         // Remove the depth gradient since we want to see through the globe
         this.svg.select('#ocean-depth').remove();
         
         // Remove the ocean-depth circle if it exists
         this.globeGroup.select('.ocean-depth').remove();
+    }
+    
+    // Add a new method to clear country selection
+    clearCountrySelection() {
+        // Only proceed if there is a selected country
+        if (this.selectedCountry) {
+            // Reset previous selected country styling
+            d3.select(`#country-${this.selectedCountry}`)
+                .attr('stroke', 'rgba(255,255,255,0.0)')
+                .attr('stroke-width', '0.5px')
+                .classed('selected-country', false);
+            
+            this.selectedCountry = null;
+            
+            // Update the country info panel to hide it
+            this.updateCountryInfoPanel(null);
+        }
     }
     
     setupEventListeners() {
@@ -1175,8 +1210,56 @@ class GlobeVis {
         // Update globe colors
         this.updateGlobeColors();
         
-        // Update the background color based on the dataset
-        this.updateBackgroundColor(dataset);
+        // Direct implementation of background and button color updates
+        // Define color gradients for each dataset
+        const backgroundGradients = {
+            'epidem': 'radial-gradient(#4a0000, #000)',         // Red theme for epidemiology
+            'hospitalizations': 'radial-gradient(#1a315a, #000)', // Blue theme for hospitalizations
+            'vaccinations': 'radial-gradient(#004d40, #000)'      // Green theme for vaccinations
+        };
+        
+        // Apply the background gradient to the body
+        document.body.style.background = backgroundGradients[dataset] || backgroundGradients['epidem'];
+        
+        // Update the reset button color
+        const resetBtn = document.getElementById('resetBtn');
+        if (resetBtn) {
+            const buttonColors = {
+                'epidem': '#8b0000',         // Dark red for epidemiology
+                'hospitalizations': '#1a315a', // Dark blue for hospitalizations
+                'vaccinations': '#004d40'      // Dark green for vaccinations
+            };
+            resetBtn.style.backgroundColor = buttonColors[dataset] || buttonColors['epidem'];
+            
+            // Update hover styles
+            const hoverColors = {
+                'epidem': '#a00000',         // Lighter red for hover
+                'hospitalizations': '#2a4570', // Lighter blue for hover
+                'vaccinations': '#00695c'      // Lighter green for hover
+            };
+            
+            const styleId = 'reset-button-style';
+            let styleEl = document.getElementById(styleId);
+            
+            // Remove existing style element if it exists
+            if (styleEl) {
+                styleEl.remove();
+            }
+            
+            // Create new style element with updated hover color
+            styleEl = document.createElement('style');
+            styleEl.id = styleId;
+            styleEl.textContent = `
+                #resetBtn:hover {
+                    background-color: ${hoverColors[dataset] || hoverColors['epidem']} !important;
+                }
+            `;
+            
+            // Add the style element to the document head
+            document.head.appendChild(styleEl);
+        }
+        
+        this.log(`Updated colors for dataset: ${dataset}`);
         
         // If a country is selected, update its info
         if (this.selectedCountry) {
@@ -1187,79 +1270,6 @@ class GlobeVis {
                 this.updateCountryInfoPanel(countryData);
             }
         }
-    }
-    
-    // Add a new method to update the background color based on dataset
-    updateBackgroundColor(dataset) {
-        // Define color gradients for each dataset
-        const backgroundGradients = {
-            'epidem': 'radial-gradient(#4a0000, #000)',         // Red theme for epidemiology
-            'hospitalizations': 'radial-gradient(#1a315a, #000)', // Blue theme for hospitalizations
-            'vaccinations': 'radial-gradient(#004d40, #000)'      // Green theme for vaccinations
-        };
-        
-        // Get the background gradient for the selected dataset
-        const backgroundGradient = backgroundGradients[dataset] || backgroundGradients['epidem'];
-        
-        // Apply the background gradient to the body
-        document.body.style.background = backgroundGradient;
-        
-        // Update the reset button color to match the dataset theme
-        this.updateResetButtonColor(dataset);
-        
-        this.log(`Background updated for dataset: ${dataset}`);
-    }
-    
-    // New method to update the reset button color based on dataset
-    updateResetButtonColor(dataset) {
-        const resetBtn = document.getElementById('resetBtn');
-        if (!resetBtn) return;
-        
-        // Define colors for each dataset
-        const buttonColors = {
-            'epidem': '#8b0000',         // Dark red for epidemiology
-            'hospitalizations': '#1a315a', // Dark blue for hospitalizations
-            'vaccinations': '#004d40'      // Dark green for vaccinations
-        };
-        
-        // Get the button color for the selected dataset
-        const buttonColor = buttonColors[dataset] || buttonColors['epidem'];
-        
-        // Apply the color to the reset button
-        resetBtn.style.backgroundColor = buttonColor;
-        
-        // Define hover colors (slightly lighter versions)
-        const hoverColors = {
-            'epidem': '#a00000',         // Lighter red for hover
-            'hospitalizations': '#2a4570', // Lighter blue for hover
-            'vaccinations': '#00695c'      // Lighter green for hover
-        };
-        
-        // Get the hover color for the selected dataset
-        const hoverColor = hoverColors[dataset] || hoverColors['epidem'];
-        
-        // Apply the hover effect using CSS
-        const styleId = 'reset-button-style';
-        let styleEl = document.getElementById(styleId);
-        
-        // Remove existing style element if it exists
-        if (styleEl) {
-            styleEl.remove();
-        }
-        
-        // Create new style element with updated hover color
-        styleEl = document.createElement('style');
-        styleEl.id = styleId;
-        styleEl.textContent = `
-            #resetBtn:hover {
-                background-color: ${hoverColor} !important;
-            }
-        `;
-        
-        // Add the style element to the document head
-        document.head.appendChild(styleEl);
-        
-        this.log(`Reset button color updated for dataset: ${dataset}`);
     }
     
     resize() {
@@ -1382,9 +1392,213 @@ class GlobeVis {
             this._lastReorderTime = Date.now();
         }
     }
+
+    // Add a method to get a country's feature by code
+    getCountryFeatureByCode(countryCode) {
+        if (!this.worldData) return null;
+        
+        const countryFeatures = topojson.feature(this.worldData, this.worldData.objects.countries).features;
+        
+        // Find the country feature with matching code
+        for (const feature of countryFeatures) {
+            const featureCode = this.getCountryCode(feature);
+            if (featureCode && featureCode.toLowerCase() === countryCode.toLowerCase()) {
+                return feature;
+            }
+        }
+        
+        return null;
+    }
+    
+    // Add a method to go to a specific country
+    goToCountry(countryCode) {
+        this.log(`Going to country: ${countryCode}`);
+        
+        // Stop auto-rotation
+        this.stopAutoRotation();
+        
+        // Get the country feature
+        const countryFeature = this.getCountryFeatureByCode(countryCode);
+        
+        if (countryFeature) {
+            // Calculate the centroid of the country
+            const centroid = d3.geoCentroid(countryFeature);
+            
+            // Set target rotation to center on the country
+            // Note that we invert longitude (x) for proper rotation
+            const targetRotation = [-centroid[0], -centroid[1], 0];
+            
+            // Animate the rotation to the country
+            this.animateToRotation(targetRotation, () => {
+                // After reaching the country, select it and show its data
+                const countryCode = this.getCountryCode(countryFeature);
+                const countryData = dataService.getCountryData(countryCode);
+                
+                // Reset previous selection if any
+                if (this.selectedCountry) {
+                    d3.select(`#country-${this.selectedCountry}`)
+                        .attr('stroke', 'rgba(255,255,255,0.0)')
+                        .attr('stroke-width', '0.5px')
+                        .classed('selected-country', false);
+                }
+                
+                // Select the new country
+                this.selectedCountry = countryFeature.id;
+                
+                // Find the country element and apply selection styling
+                const countryElement = d3.select(`#country-${countryFeature.id}`);
+                countryElement
+                    .attr('stroke', '#ffffff')
+                    .attr('stroke-width', '1.5px')
+                    .classed('selected-country', true);
+                
+                // Update the country info panel with the data
+                this.updateCountryInfoPanel(countryData);
+            });
+        } else {
+            this.log(`Country not found: ${countryCode}`);
+        }
+    }
+    
+    // Add a method to smoothly animate to a rotation
+    animateToRotation(targetRotation, callback) {
+        const startRotation = this.projection.rotate();
+        let startTime = null;
+        const duration = 1000; // 1 second duration
+        
+        // Custom easing function for smooth animation
+        const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+        
+        const animateRotation = (timestamp) => {
+            if (startTime === null) startTime = timestamp;
+            const elapsed = timestamp - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const easedProgress = easeOutCubic(progress);
+            
+            // Interpolate rotation
+            const newRotation = startRotation.map((start, i) => {
+                let end = targetRotation[i];
+                let diff = end - start;
+                
+                // Handle wrapping around 360 degrees (for longitude)
+                if (diff > 180) diff -= 360;
+                if (diff < -180) diff += 360;
+                
+                return start + diff * easedProgress;
+            });
+            
+            // Apply new rotation
+            this.projection.rotate(newRotation);
+            this.currentRotation = [...newRotation];
+            
+            // Update paths
+            this.globeGroup.selectAll('path')
+                .attr('d', this.path);
+                
+            // Update depth-based rendering if needed
+            if (this.projection.clipAngle() > 90) {
+                this.renderCountriesByDepth();
+            }
+            
+            // Continue animation or end
+            if (progress < 1) {
+                requestAnimationFrame(animateRotation);
+            } else {
+                // Animation complete
+                if (callback) callback();
+            }
+        };
+        
+        requestAnimationFrame(animateRotation);
+    }
 }
 
 // Initialize the globe visualization when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     const globe = new GlobeVis();
 });
+
+// Add a method to dataService to get all countries
+if (typeof dataService !== 'undefined') {
+    dataService.getAllCountries = function() {
+        const countries = [];
+        const countrySet = new Set(); // To track unique countries
+        
+        try {
+            // First attempt: Get countries from current dataset
+            if (this.currentData) {
+                Object.values(this.currentData).forEach(entry => {
+                    if (entry && entry.countryKey && entry.countryName) {
+                        const code = entry.countryKey.toLowerCase();
+                        if (!countrySet.has(code)) {
+                            countrySet.add(code);
+                            countries.push({
+                                countryCode: code,
+                                countryName: entry.countryName
+                            });
+                        }
+                    }
+                });
+            }
+            
+            // Second attempt: Use country mapping objects
+            if (this.countryMapping) {
+                Object.entries(this.countryMapping).forEach(([code, name]) => {
+                    if (code && name && !countrySet.has(code.toLowerCase())) {
+                        countrySet.add(code.toLowerCase());
+                        countries.push({
+                            countryCode: code,
+                            countryName: typeof name === 'string' ? name : this.getCountryName(code)
+                        });
+                    }
+                });
+            }
+            
+            // Third attempt: Use all known country keys from the data
+            if (this.allData) {
+                // Loop through datasets
+                for (const datasetKey in this.allData) {
+                    const dataset = this.allData[datasetKey];
+                    if (!dataset) continue;
+                    
+                    // Loop through dates
+                    for (const date in dataset) {
+                        const dateData = dataset[date];
+                        if (!dateData) continue;
+                        
+                        // Loop through country data
+                        for (const countryKey in dateData) {
+                            if (countrySet.has(countryKey.toLowerCase())) continue;
+                            
+                            const countryName = this.getCountryName(countryKey);
+                            if (countryName) {
+                                countrySet.add(countryKey.toLowerCase());
+                                countries.push({
+                                    countryCode: countryKey,
+                                    countryName: countryName
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // If still no countries, use globe's country feature map as fallback
+            if (countries.length === 0 && window.globeInstance && window.globeInstance.countryFeatureMap) {
+                window.globeInstance.countryFeatureMap.forEach(value => {
+                    if (value.countryKey && value.name && !countrySet.has(value.countryKey.toLowerCase())) {
+                        countrySet.add(value.countryKey.toLowerCase());
+                        countries.push({
+                            countryCode: value.countryKey,
+                            countryName: value.name
+                        });
+                    }
+                });
+            }
+        } catch (err) {
+            console.error("Error fetching country list:", err);
+        }
+        
+        return countries;
+    };
+}
