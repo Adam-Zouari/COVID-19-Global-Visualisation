@@ -1180,7 +1180,62 @@ class GlobeVis {
         // Apply the background gradient to the body
         document.body.style.background = backgroundGradient;
         
+        // Update the reset button color to match the dataset theme
+        this.updateResetButtonColor(dataset);
+        
         this.log(`Background updated for dataset: ${dataset}`);
+    }
+    
+    // New method to update the reset button color based on dataset
+    updateResetButtonColor(dataset) {
+        const resetBtn = document.getElementById('resetBtn');
+        if (!resetBtn) return;
+        
+        // Define colors for each dataset
+        const buttonColors = {
+            'epidem': '#8b0000',         // Dark red for epidemiology
+            'hospitalizations': '#1a315a', // Dark blue for hospitalizations
+            'vaccinations': '#004d40'      // Dark green for vaccinations
+        };
+        
+        // Get the button color for the selected dataset
+        const buttonColor = buttonColors[dataset] || buttonColors['epidem'];
+        
+        // Apply the color to the reset button
+        resetBtn.style.backgroundColor = buttonColor;
+        
+        // Define hover colors (slightly lighter versions)
+        const hoverColors = {
+            'epidem': '#a00000',         // Lighter red for hover
+            'hospitalizations': '#2a4570', // Lighter blue for hover
+            'vaccinations': '#00695c'      // Lighter green for hover
+        };
+        
+        // Get the hover color for the selected dataset
+        const hoverColor = hoverColors[dataset] || hoverColors['epidem'];
+        
+        // Apply the hover effect using CSS
+        const styleId = 'reset-button-style';
+        let styleEl = document.getElementById(styleId);
+        
+        // Remove existing style element if it exists
+        if (styleEl) {
+            styleEl.remove();
+        }
+        
+        // Create new style element with updated hover color
+        styleEl = document.createElement('style');
+        styleEl.id = styleId;
+        styleEl.textContent = `
+            #resetBtn:hover {
+                background-color: ${hoverColor} !important;
+            }
+        `;
+        
+        // Add the style element to the document head
+        document.head.appendChild(styleEl);
+        
+        this.log(`Reset button color updated for dataset: ${dataset}`);
     }
     
     resize() {
