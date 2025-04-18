@@ -23,6 +23,9 @@ class GlobeVis {
         // Make data service accessible for toggle function
         this.dataService = dataService;
         
+        // Add support for minimized globe
+        this.minimized = false;
+        
         // Initialize the visualization
         this.initVis();
         
@@ -731,6 +734,7 @@ class GlobeVis {
         const countryNameEl = document.getElementById('countryName');
         const countryStatsEl = document.getElementById('countryStats');
         const countryInfoPanel = document.getElementById('countryInfo');
+        const seeMoreBtn = document.getElementById('seeMoreBtn');
         
         if (countryData) {
             // Create header with flag and country name
@@ -768,8 +772,9 @@ class GlobeVis {
                 }
             }
             
-            // Show the country info panel
+            // Show the country info panel and See More button
             countryInfoPanel.style.display = 'block';
+            seeMoreBtn.style.display = 'block';
         } else {
             countryNameEl.innerHTML = 'Select a country';
             countryStatsEl.innerHTML = `
@@ -779,8 +784,9 @@ class GlobeVis {
                 </div>
             `;
             
-            // Hide the panel when no country is selected
+            // Hide the panel and See More button when no country is selected
             countryInfoPanel.style.display = 'none';
+            seeMoreBtn.style.display = 'none';
         }
     }
     
@@ -1510,6 +1516,132 @@ class GlobeVis {
         };
         
         requestAnimationFrame(animateRotation);
+    }
+    
+    // Add method to create minimized version of the globe
+    createMinimizedGlobe() {
+        this.minimized = true;
+        const minimizedContainer = document.getElementById('minimizedGlobe');
+        
+        // Create a small version of the globe inside the minimized container
+        const miniSvg = d3.select('#minimizedGlobe')
+            .append('svg')
+            .attr('width', '100%')
+            .attr('height', '100%')
+            .attr('viewBox', '0 0 150 150')
+            .style('background-color', 'transparent');
+            
+        const miniGlobeGroup = miniSvg.append('g')
+            .attr('transform', 'translate(75, 75)');
+            
+        // Create a small projection for the minimized globe
+        const miniProjection = d3.geoOrthographic()
+            .scale(65)  // Larger scale for a bigger globe appearance
+            .translate([0, 0])
+            .clipAngle(180);
+            
+        const miniPath = d3.geoPath().projection(miniProjection);
+        
+        // Add ocean background
+        miniGlobeGroup.append('circle')
+            .attr('class', 'mini-ocean')
+            .attr('cx', 0)
+            .attr('cy', 0)
+            .attr('r', 65)
+            .attr('fill', '#000000')
+            .attr('fill-opacity', 0.7)
+            .attr('stroke', 'rgba(100, 200, 255, 0.25)')
+            .attr('stroke-width', '0.5px');
+            
+        // Extract countries and draw them on mini globe
+        if (this.worldData) {
+            const countries = topojson.feature(this.worldData, this.worldData.objects.countries);
+            
+            miniGlobeGroup.selectAll('.mini-country')
+                .data(countries.features)
+                .join('path')
+                .attr('class', 'mini-country')
+                .attr('d', miniPath)
+                .attr('fill', d => {
+                    const countryCode = this.getCountryCode(d);
+                    if (!countryCode) return '#5da85d';
+                    return this.dataService.getCountryColor(countryCode);
+                })
+                .attr('fill-opacity', 1.0)
+                .attr('stroke', 'rgba(255,255,255,0.0)')
+                .attr('stroke-width', '0.5px');
+                
+            // Highlight selected country if any
+            if (this.selectedCountry) {
+                const selectedFeature = countries.features.find(d => d.id === this.selectedCountry);
+                if (selectedFeature) {
+                    miniGlobeGroup.append('path')
+                        .datum(selectedFeature)
+                        .attr('d', miniPath)
+                        .attr('fill', 'none')
+                        .attr('stroke', '#ffffff')
+                        .attr('stroke-width', '1.5px');
+                }
+            }
+        }
+        
+        // Set the mini globe to the same rotation as the main globe
+        miniProjection.rotate(this.currentRotation);
+        
+        // Start a slow auto-rotation for the mini globe
+        this.startMiniGlobeRotation(miniProjection, miniPath, miniGlobeGroup);
+        
+        // Return the mini globe components for reference
+        return {
+            svg: miniSvg,
+            projection: miniProjection,
+            path: miniPath,
+            group: miniGlobeGroup
+        };
+    }
+
+    // Add a method to handle rotation of the mini globe
+    startMiniGlobeRotation(miniProjection, miniPath, miniGlobeGroup) {
+        let lastFrameTime = 0;
+        const rotationSpeed = 0.15; // Slower rotation for mini globe
+        let animationFrameId;
+        
+        const animate = (timestamp) => {
+            if (!this.minimized) {
+                cancelAnimationFrame(animationFrameId);
+                return;
+            }
+            
+            if (!lastFrameTime) {
+                lastFrameTime = timestamp;
+            }
+            
+            const elapsed = timestamp - lastFrameTime;
+            lastFrameTime = timestamp;
+            
+            const cappedElapsed = Math.min(elapsed, 33);
+            
+            // Get current rotation and update
+            const currentRotation = miniProjection.rotate();
+            currentRotation[0] += rotationSpeed * cappedElapsed / 16;
+            
+            // Apply rotation
+            miniProjection.rotate(currentRotation);
+            
+            // Update paths
+            miniGlobeGroup.selectAll('path')
+                .attr('d', miniPath);
+            
+            animationFrameId = requestAnimationFrame(animate);
+        };
+        
+        animationFrameId = requestAnimationFrame(animate);
+    }
+
+    // Add method to restore from minimized state
+    restoreFromMinimized() {
+        this.minimized = false;
+        // Any cleanup needed when restoring the globe
     }
 }
 

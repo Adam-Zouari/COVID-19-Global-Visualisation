@@ -768,3 +768,272 @@ h1 {
 .country-item * {
     cursor: pointer !important;
 }
+
+/* See More button styling */
+#seeMoreBtn {
+    background: #8b0000;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px;
+    width: 100%;
+    font-weight: bold;
+    transition: background-color 0.3s, transform 0.2s;
+}
+
+#seeMoreBtn:hover {
+    background: #a00000;
+    transform: scale(1.03);
+}
+
+/* Minimized globe styling */
+.globe-minimized {
+    position: absolute;
+    bottom: 150px;
+    left: 50px; /* Moved more to the right (was 20px) */
+    width: 150px; /* Increased size (was 100px) */
+    height: 150px; /* Increased size (was 100px) */
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+    z-index: 100;
+    transition: all 0.5s ease-in-out;
+    overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    opacity: 0;
+}
+
+.globe-minimized:hover {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+    transform: scale(1.05);
+}
+
+.globe-minimized.showing {
+    animation: fadeIn 0.4s ease-in-out forwards;
+}
+
+.globe-minimized.hiding {
+    animation: fadeOut 0.4s ease-in-out forwards;
+}
+
+/* Make sure the mini globe container properly displays its content */
+.globe-minimized svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* Visualization panel styling */
+#visualizationPanel {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    max-width: 900px;
+    height: 70vh;
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 25px rgba(0, 0, 0, 0.7);
+    z-index: 50;
+    padding: 20px;
+    display: none;
+    flex-direction: column;
+    color: white;
+    overflow: hidden;
+    transition: opacity 0.4s ease-in-out;
+}
+
+.viz-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 10px;
+}
+
+.viz-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.viz-title img {
+    width: 30px;
+    height: 20px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.viz-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.viz-selector {
+    background-color: rgba(50, 50, 50, 0.8);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 5px 10px;
+}
+
+.viz-content {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: auto;
+    position: relative;
+}
+
+.chart-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Animation for globe transition - simplified */
+@keyframes fadeOut {
+    0% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+@keyframes fadeIn {
+    0% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+.globe-animating {
+    animation: fadeOut 0.4s ease-in-out forwards;
+}
+
+.globe-restoring {
+    animation: fadeIn 0.4s ease-in-out forwards;
+}
+
+/* Animation for visualization panel appearance */
+@keyframes showPanel {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.9);
+    }
+    100% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+.panel-appearing {
+    animation: showPanel 0.5s forwards;
+}
+
+/* Chart loader styling */
+.chart-loader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: white;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    border-top-color: #8b0000;
+    animation: spin 1s ease-in-out infinite;
+    margin-bottom: 15px;
+}
+
+.loading-text {
+    font-size: 14px;
+    color: rgba(255,255,255,0.7);
+}
+
+/* Chart error styling */
+.chart-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 20px;
+    text-align: center;
+    color: white;
+}
+
+.error-icon {
+    font-size: 24px;
+    margin-bottom: 10px;
+}
+
+.error-message {
+    font-size: 16px;
+    margin-bottom: 10px;
+    color: #ff6b6b;
+}
+
+.error-suggestion {
+    font-size: 14px;
+    color: rgba(255,255,255,0.7);
+}
+
+/* Chart tooltip styling */
+.chart-tooltip {
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    z-index: 1000;
+    max-width: 250px;
+}
+
+/* Chart-specific styling */
+.chart-title {
+    font-size: 16px;
+    font-weight: 500;
+    fill: white;
+}
+
+.chart-legend text {
+    font-size: 12px;
+    fill: white;
+}
+
+/* Axes styling */
+.axis line,
+.axis path {
+    stroke: rgba(255, 255, 255, 0.3);
+}
+
+.axis text {
+    fill: white;
+    font-size: 11px;
+}
+
+.grid-lines line {
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-dasharray: 3,3;
+}
