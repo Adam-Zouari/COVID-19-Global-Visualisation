@@ -530,3 +530,60 @@ h1 {
 .animate-background {
     animation: expand-background 1s ease-out forwards;
 }
+
+/* Updated tooltip styling with support for country flags */
+.tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 14px;
+    pointer-events: none;
+    max-width: 250px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tooltip-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 5px;
+}
+
+.tooltip-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tooltip-date {
+    font-style: italic;
+    opacity: 0.8;
+    margin-bottom: 5px;
+}
+
+.country-flag {
+    width: 30px;
+    height: 20px;
+    margin-right: 8px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.data-row {
+    display: flex;
+    justify-content: space-between;
+}
+
+.data-label {
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+.data-value {
+    font-weight: bold;
+}

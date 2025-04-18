@@ -629,21 +629,33 @@ class GlobeVis {
             .attr('stroke', '#ffffff')
             .attr('stroke-width', '1px');
             
-        // Get country data
+        // Get country code and data
         const countryCode = this.getCountryCode(d);
         const countryData = dataService.getCountryData(countryCode);
         
-        // Show tooltip
+        // Show tooltip with flag and data
         if (countryData) {
-            let tooltipContent = `<strong>${countryData.countryName}</strong><br>`;
-            tooltipContent += `Date: ${dataService.formatDate(countryData.date)}<br>`;
+            // Create tooltip content with flag and data
+            let tooltipContent = `
+                <div class="tooltip-header">
+                    <img class="country-flag" src="https://flagcdn.com/${countryCode.toLowerCase()}.svg" 
+                         onerror="this.src='https://via.placeholder.com/30x20/ddd/aaa?text=?'">
+                    <strong>${countryData.countryName}</strong>
+                </div>
+                <div class="tooltip-body">
+                    <div class="tooltip-date">Date: ${dataService.formatDate(countryData.date)}</div>
+            `;
             
-            // Add the current displayed metric
-            if (dataService.currentColumn) {
-                const value = countryData[dataService.currentColumn];
-                const formattedValue = dataService.formatNumber(value);
-                tooltipContent += `${dataService.currentColumn}: ${formattedValue}<br>`;
+            // Add all available metrics for current dataset
+            for (const key of dataService.availableColumns[dataService.currentDataset]) {
+                if (key in countryData) {
+                    const value = countryData[key];
+                    const formattedValue = dataService.formatNumber(value);
+                    tooltipContent += `<div class="data-row"><span class="data-label">${key}:</span> <span class="data-value">${formattedValue}</span></div>`;
+                }
             }
+            
+            tooltipContent += '</div>';
             
             this.tooltip
                 .style('opacity', 1)
@@ -654,14 +666,26 @@ class GlobeVis {
             // If we have a country code but no data
             this.tooltip
                 .style('opacity', 1)
-                .html(`<strong>${dataService.getCountryName(countryCode)}</strong><br>No data available`)
+                .html(`
+                    <div class="tooltip-header">
+                        <img class="country-flag" src="https://flagcdn.com/${countryCode.toLowerCase()}.svg" 
+                             onerror="this.src='https://via.placeholder.com/30x20/ddd/aaa?text=?'">
+                        <strong>${dataService.getCountryName(countryCode)}</strong>
+                    </div>
+                    <div class="tooltip-body">No data available</div>
+                `)
                 .style('left', (event.pageX + 10) + 'px')
                 .style('top', (event.pageY - 20) + 'px');
         } else if (d.properties && d.properties.name) {
             // If we only have the country name
             this.tooltip
                 .style('opacity', 1)
-                .html(`<strong>${d.properties.name}</strong><br>No data available`)
+                .html(`
+                    <div class="tooltip-header">
+                        <strong>${d.properties.name}</strong>
+                    </div>
+                    <div class="tooltip-body">No data available</div>
+                `)
                 .style('left', (event.pageX + 10) + 'px')
                 .style('top', (event.pageY - 20) + 'px');
         }
