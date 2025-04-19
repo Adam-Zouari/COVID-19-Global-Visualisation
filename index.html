@@ -509,15 +509,7 @@
                     return null;
                 }
                 
-                // Get all available dates
-                const dates = dataService.availableDates;
-                
-                if (dates.length === 0) {
-                    console.warn("No dates available in data service");
-                    return null;
-                }
-                
-                // Get current dataset and its columns
+                // Get current dataset name
                 const currentDataset = dataService.currentDataset;
                 const columns = dataService.availableColumns[currentDataset] || [];
                 
@@ -541,12 +533,24 @@
                     result.series[col] = [];
                 });
                 
-                // Collect data for each date
-                dates.forEach(date => {
-                    const dateData = dataService.getDataForDate(date);
+                // FIXED: Access indexed data directly using the correct structure
+                const normalizedKey = countryCode.toLowerCase();
+                
+                // Log for debugging
+                console.log(`Trying to access data for country ${normalizedKey} in dataset ${currentDataset}`);
+                console.log(`Available indexed datasets:`, Object.keys(dataService.indexedData));
+                
+                // Check if we have data for this country in the current dataset
+                if (dataService.indexedData[currentDataset] && dataService.indexedData[currentDataset][normalizedKey]) {
+                    // Get all dates available for this country
+                    const countryDates = Object.keys(dataService.indexedData[currentDataset][normalizedKey]).sort();
+                    console.log(`Found ${countryDates.length} dates for country ${normalizedKey}`);
                     
-                    if (dateData && dateData[countryCode]) {
-                        const countryDateData = dateData[countryCode];
+                    // Use these dates to collect data
+                    countryDates.forEach(date => {
+                        const countryDateData = dataService.indexedData[currentDataset][normalizedKey][date];
+                        
+                        // Check if there's actual data for this date
                         const hasData = columns.some(col => 
                             col in countryDateData && 
                             countryDateData[col] !== null && 
@@ -563,8 +567,40 @@
                                 result.series[col].push(value);
                             });
                         }
+                    });
+                } else {
+                    // Try using sample data if available
+                    console.log(`No indexed data found for ${normalizedKey}. Trying to generate sample data...`);
+                    
+                    // For demo purposes, generate some sample data if there's nothing
+                    if (result.dates.length === 0 && dataService.useSampleData) {
+                        const today = new Date();
+                        for (let i = 30; i >= 0; i--) {
+                            const date = new Date();
+                            date.setDate(today.getDate() - i);
+                            const dateStr = date.toISOString().split('T')[0];
+                            
+                            result.dates.push(dateStr);
+                            result.displayDates.push(dataService.formatDate(dateStr));
+                            
+                            columns.forEach(col => {
+                                // Generate random sample data based on column name
+                                let value = Math.floor(Math.random() * 10000 * (1 + Math.sin(i/3)));
+                                
+                                // Adjust based on column name characteristics
+                                if (col.includes('cumulative')) {
+                                    value = 50000 + i * 5000 + Math.random() * 10000;
+                                }
+                                else if (col.includes('deceased') || col.includes('death')) {
+                                    value = Math.floor(value / 20); // Lower death counts
+                                }
+                                
+                                result.series[col].push(value);
+                            });
+                        }
+                        console.log("Generated sample visualization data");
                     }
-                });
+                }
                 
                 console.log(`Prepared data for ${countryCode}: ${result.dates.length} dates across ${columns.length} columns`);
                 return result;
@@ -781,6 +817,798 @@
                         .style('font-size', '12px')
                         .text(column);
                 });
+            },
+            
+            // Line Chart Implementation
+            lineChart(container, data) {
+                // Create SVG element
+                const margin = { top: 50, right: 150, bottom: 80, left: 80 };
+                const width = container.clientWidth - margin.left - margin.right;
+                const height = container.clientHeight - margin.top - margin.bottom;
+                
+                // Create SVG
+                const svg = d3.select(container)
+                    .append('svg')
+                    .attr('width', container.clientWidth)
+                    .attr('height', container.clientHeight)
+                    .append('g')
+                    .attr('transform', `translate(${margin.left},${margin.top})`);
+                    
+                // Add title
+                svg.append('text')
+                    .attr('class', 'chart-title')
+                    .attr('x', width / 2)
+                    .attr('y', -25)
+                    .attr('text-anchor', 'middle')
+                    .style('font-size', '16px')
+                    .style('fill', 'white')
+                    .text(`${data.countryName} - Trends Over Time`);
+                
+                // X scale - use all dates for line chart
+                const x = d3.scaleTime()
+                    .domain(d3.extent(data.dates.map(d => new Date(d))))
+                    .range([0, width])
+                    .nice();
+                    
+                // Add X axis
+                svg.append('g')
+                    .attr('transform', `translate(0,${height})`)
+                    .call(d3.axisBottom(x)
+                        .ticks(Math.min(data.dates.length / 2, 10))
+                        .tickFormat(d => d3.timeFormat('%b %d, %Y')(d)))
+                    .selectAll('text')
+                    .attr('transform', 'translate(-10,5)rotate(-45)')
+                    .style('text-anchor', 'end')
+                    .style('fill', 'white');
+                    
+                // Calculate max Y value across all series to use a consistent scale
+                const allValues = [];
+                Object.keys(data.series).forEach(column => {
+                    allValues.push(...data.series[column].filter(v => v !== null && v !== undefined));
+                });
+                
+                // Y scale with 10% padding at top
+                const maxVal = d3.max(allValues) || 1;
+                const y = d3.scaleLinear()
+                    .domain([0, maxVal * 1.1])
+                    .range([height, 0]);
+                    
+                // Add Y axis
+                svg.append('g')
+                    .call(d3.axisLeft(y)
+                        .ticks(5)
+                        .tickFormat(d => this.formatTickValue ? this.formatTickValue(d) : d3.format(',')(d)))
+                    .selectAll('text')
+                    .style('fill', 'white');
+                    
+                // Add Y axis label
+                svg.append('text')
+                    .attr('class', 'y-axis-label')
+                    .attr('transform', 'rotate(-90)')
+                    .attr('y', -60)
+                    .attr('x', -height/2)
+                    .attr('text-anchor', 'middle')
+                    .style('fill', 'white')
+                    .text('Value');
+                    
+                // Add grid lines
+                svg.append('g')
+                    .attr('class', 'grid-lines')
+                    .selectAll('line')
+                    .data(y.ticks(5))
+                    .enter()
+                    .append('line')
+                    .attr('x1', 0)
+                    .attr('x2', width)
+                    .attr('y1', d => y(d))
+                    .attr('y2', d => y(d))
+                    .attr('stroke', 'rgba(255,255,255,0.1)')
+                    .attr('stroke-dasharray', '3,3');
+                    
+                // Color scale for the series
+                const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+                
+                // Create line generator
+                const line = d3.line()
+                    .defined(d => d !== null && d !== undefined)
+                    .x((d, i) => x(new Date(data.dates[i])))
+                    .y(d => y(d))
+                    .curve(d3.curveMonotoneX); // Smoother curve
+                
+                // Draw lines for each series
+                const seriesNames = Object.keys(data.series);
+                seriesNames.forEach(column => {
+                    const seriesValues = data.series[column];
+                    
+                    // Skip if no valid data
+                    if (!seriesValues.some(v => v !== null && v !== undefined)) {
+                        return;
+                    }
+                    
+                    // Draw path
+                    svg.append('path')
+                        .datum(seriesValues)
+                        .attr('class', 'line-path')
+                        .attr('d', line)
+                        .attr('fill', 'none')
+                        .attr('stroke', colorScale(column))
+                        .attr('stroke-width', 2.5)
+                        .attr('opacity', 0.8)
+                        .attr('stroke-linejoin', 'round');
+                        
+                    // Add data points
+                    seriesValues.forEach((value, i) => {
+                        if (value === null || value === undefined) return;
+                        
+                        svg.append('circle')
+                            .attr('cx', x(new Date(data.dates[i])))
+                            .attr('cy', y(value))
+                            .attr('r', 4)
+                            .attr('fill', colorScale(column))
+                            .attr('opacity', 0.8)
+                            .on('mouseover', (event) => {
+                                // Show tooltip
+                                const tooltip = d3.select(container).append('div')
+                                    .attr('class', 'chart-tooltip')
+                                    .style('position', 'absolute')
+                                    .style('background-color', 'rgba(0,0,0,0.9)')
+                                    .style('color', 'white')
+                                    .style('padding', '8px')
+                                    .style('border-radius', '4px')
+                                    .style('font-size', '12px')
+                                    .style('z-index', 100)
+                                    .style('pointer-events', 'none');
+                                    
+                                tooltip.html(`
+                                    <div><strong>${column}</strong></div>
+                                    <div>Date: ${data.displayDates[i]}</div>
+                                    <div>Value: ${this.formatValue ? this.formatValue(value) : value}</div>
+                                `);
+                                
+                                // Position tooltip
+                                const tooltipNode = tooltip.node();
+                                const eventPos = d3.pointer(event, container);
+                                
+                                tooltip
+                                    .style('left', `${eventPos[0]}px`)
+                                    .style('top', `${eventPos[1] - tooltipNode.offsetHeight - 10}px`);
+                                    
+                                // Highlight point
+                                d3.select(event.currentTarget)
+                                    .attr('r', 6)
+                                    .attr('stroke', 'white')
+                                    .attr('stroke-width', 2);
+                            })
+                            .on('mouseout', (event) => {
+                                // Remove tooltip
+                                d3.select(container).selectAll('.chart-tooltip').remove();
+                                
+                                // Reset point size
+                                d3.select(event.currentTarget)
+                                    .attr('r', 4)
+                                    .attr('stroke', null);
+                            });
+                    });
+                });
+                
+                // Add legend
+                const legend = svg.append('g')
+                    .attr('class', 'chart-legend')
+                    .attr('transform', `translate(${width + 20}, 0)`);
+                    
+                seriesNames.forEach((column, i) => {
+                    const legendItem = legend.append('g')
+                        .attr('transform', `translate(0, ${i * 25})`);
+                        
+                    legendItem.append('rect')
+                        .attr('width', 15)
+                        .attr('height', 3)
+                        .attr('rx', 1)
+                        .attr('fill', colorScale(column))
+                        .attr('y', 6);
+                        
+                    legendItem.append('text')
+                        .attr('x', 25)
+                        .attr('y', 12)
+                        .style('fill', 'white')
+                        .style('font-size', '12px')
+                        .text(column);
+                });
+            },
+            
+            // Pie Chart Implementation
+            pieChart(container, data) {
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                const radius = Math.min(width, height) / 2 * 0.7;
+                
+                // Create SVG
+                const svg = d3.select(container)
+                    .append('svg')
+                    .attr('width', width)
+                    .attr('height', height)
+                    .append('g')
+                    .attr('transform', `translate(${width/2},${height/2})`);
+                    
+                // Add title
+                svg.append('text')
+                    .attr('class', 'chart-title')
+                    .attr('x', 0)
+                    .attr('y', -height/2 + 30)
+                    .attr('text-anchor', 'middle')
+                    .style('font-size', '16px')
+                    .style('fill', 'white')
+                    .text(`${data.countryName} - Latest Data Distribution`);
+                
+                // Use the most recent date's data for the pie chart
+                const latestIndex = data.dates.length - 1;
+                const pieData = [];
+                
+                // Collect data for pie chart from the latest date
+                Object.keys(data.series).forEach(column => {
+                    const value = data.series[column][latestIndex];
+                    if (value !== null && value !== undefined && value > 0) {
+                        pieData.push({
+                            name: column,
+                            value: value
+                        });
+                    }
+                });
+                
+                if (pieData.length === 0) {
+                    this.showError(container, "No data available for pie chart visualization");
+                    return;
+                }
+                
+                // Color scale
+                const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+                
+                // Create pie layout
+                const pie = d3.pie()
+                    .value(d => d.value)
+                    .sort(null); // Don't sort to maintain original order
+                    
+                const pieArcs = pie(pieData);
+                
+                // Create arc generator
+                const arc = d3.arc()
+                    .innerRadius(radius * 0.4) // Create a donut chart with inner radius
+                    .outerRadius(radius);
+                    
+                // Create smaller arc for labels
+                const labelArc = d3.arc()
+                    .innerRadius(radius * 0.7)
+                    .outerRadius(radius * 0.7);
+                
+                // Add pie slices
+                const slices = svg.selectAll('path')
+                    .data(pieArcs)
+                    .enter()
+                    .append('path')
+                    .attr('d', arc)
+                    .attr('fill', d => colorScale(d.data.name))
+                    .attr('stroke', '#1a1a1a')
+                    .style('stroke-width', '1px')
+                    .style('opacity', 0.8)
+                    .on('mouseover', (event, d) => {
+                        // Highlight slice
+                        d3.select(event.currentTarget)
+                            .style('opacity', 1)
+                            .style('stroke', '#ffffff')
+                            .style('stroke-width', '2px')
+                            .attr('transform', 'scale(1.03)');
+                            
+                        // Show tooltip
+                        const tooltip = d3.select(container).append('div')
+                            .attr('class', 'chart-tooltip')
+                            .style('position', 'absolute')
+                            .style('background-color', 'rgba(0,0,0,0.9)')
+                            .style('color', 'white')
+                            .style('padding', '8px')
+                            .style('border-radius', '4px')
+                            .style('font-size', '12px')
+                            .style('z-index', 100)
+                            .style('pointer-events', 'none');
+                            
+                        // Calculate percentage
+                        const total = d3.sum(pieData, d => d.value);
+                        const percent = d.data.value / total * 100;
+                            
+                        tooltip.html(`
+                            <div><strong>${d.data.name}</strong></div>
+                            <div>Value: ${this.formatValue ? this.formatValue(d.data.value) : d.data.value}</div>
+                            <div>Percentage: ${percent.toFixed(1)}%</div>
+                        `);
+                        
+                        // Position tooltip
+                        const tooltipNode = tooltip.node();
+                        const eventPos = d3.pointer(event, container);
+                        
+                        tooltip
+                            .style('left', `${eventPos[0]}px`)
+                            .style('top', `${eventPos[1] - tooltipNode.offsetHeight - 10}px`);
+                    })
+                    .on('mouseout', (event) => {
+                        // Reset slice style
+                        d3.select(event.currentTarget)
+                            .style('opacity', 0.8)
+                            .style('stroke', '#1a1a1a')
+                            .style('stroke-width', '1px')
+                            .attr('transform', 'scale(1)');
+                            
+                        // Remove tooltip
+                        d3.select(container).selectAll('.chart-tooltip').remove();
+                    });
+                
+                // Add legend
+                const legend = svg.append('g')
+                    .attr('class', 'chart-legend')
+                    .attr('transform', `translate(${radius + 20}, ${-radius + 20})`);
+                    
+                pieData.forEach((d, i) => {
+                    const legendItem = legend.append('g')
+                        .attr('transform', `translate(0, ${i * 20})`);
+                        
+                    legendItem.append('rect')
+                        .attr('width', 12)
+                        .attr('height', 12)
+                        .attr('rx', 2)
+                        .attr('fill', colorScale(d.name));
+                        
+                    legendItem.append('text')
+                        .attr('x', 20)
+                        .attr('y', 9)
+                        .style('font-size', '11px')
+                        .style('fill', 'white')
+                        .text(d.name);
+                });
+                
+                // Add date info
+                svg.append('text')
+                    .attr('class', 'date-info')
+                    .attr('text-anchor', 'middle')
+                    .attr('x', 0)
+                    .attr('y', height/2 - 30)
+                    .style('font-size', '14px')
+                    .style('fill', 'rgba(255,255,255,0.7)')
+                    .text(`Date: ${data.displayDates[latestIndex]}`);
+            },
+            
+            // Radar Chart Implementation
+            radarChart(container, data) {
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                const radius = Math.min(width, height) / 2 * 0.7;
+                
+                // Create SVG
+                const svg = d3.select(container)
+                    .append('svg')
+                    .attr('width', width)
+                    .attr('height', height)
+                    .append('g')
+                    .attr('transform', `translate(${width/2},${height/2})`);
+                    
+                // Add title
+                svg.append('text')
+                    .attr('class', 'chart-title')
+                    .attr('x', 0)
+                    .attr('y', -height/2 + 30)
+                    .attr('text-anchor', 'middle')
+                    .style('font-size', '16px')
+                    .style('fill', 'white')
+                    .text(`${data.countryName} - Multi-Metric Comparison`);
+                
+                // Use the most recent date's data
+                const latestIndex = data.dates.length - 1;
+                
+                // Get the metrics (columns) that have data
+                const metrics = Object.keys(data.series).filter(column => {
+                    const value = data.series[column][latestIndex];
+                    return value !== null && value !== undefined && value > 0;
+                });
+                
+                if (metrics.length < 3) {
+                    this.showError(container, "Radar chart requires at least 3 data points");
+                    return;
+                }
+                
+                // Get values for each metric
+                const values = metrics.map(metric => ({
+                    metric: metric,
+                    value: data.series[metric][latestIndex]
+                }));
+                
+                // Calculate angles for each metric
+                const angleStep = (Math.PI * 2) / metrics.length;
+                
+                // Scale for data values
+                const maxValue = d3.max(values, d => d.value) * 1.1; // 10% padding
+                const rScale = d3.scaleLinear()
+                    .domain([0, maxValue])
+                    .range([0, radius]);
+                
+                // Draw radar background circles and labels
+                const levels = 5;
+                const levelStep = maxValue / levels;
+                
+                // Draw circular grid lines
+                for (let level = 1; level <= levels; level++) {
+                    const levelValue = levelStep * level;
+                    const levelRadius = rScale(levelValue);
+                    
+                    // Draw circle
+                    svg.append('circle')
+                        .attr('cx', 0)
+                        .attr('cy', 0)
+                        .attr('r', levelRadius)
+                        .attr('fill', 'none')
+                        .attr('stroke', 'rgba(255,255,255,0.1)')
+                        .attr('stroke-dasharray', '3,3');
+                        
+                    // Add value label to the right side
+                    svg.append('text')
+                        .attr('x', 5)
+                        .attr('y', -levelRadius + 4)
+                        .style('font-size', '10px')
+                        .style('fill', 'rgba(255,255,255,0.6)')
+                        .text(this.formatValue ? this.formatValue(levelValue) : levelValue);
+                }
+                
+                // Draw axes and labels
+                metrics.forEach((metric, i) => {
+                    const angle = i * angleStep - Math.PI / 2; // Start from top (- PI/2)
+                    const lineEndX = radius * Math.cos(angle);
+                    const lineEndY = radius * Math.sin(angle);
+                    
+                    // Draw axis line
+                    svg.append('line')
+                        .attr('x1', 0)
+                        .attr('y1', 0)
+                        .attr('x2', lineEndX)
+                        .attr('y2', lineEndY)
+                        .attr('stroke', 'rgba(255,255,255,0.3)')
+                        .attr('stroke-width', 1);
+                    
+                    // Add axis label with proper positioning
+                    const labelDistance = radius * 1.15; // Place label slightly outside the radar
+                    const labelX = labelDistance * Math.cos(angle);
+                    const labelY = labelDistance * Math.sin(angle);
+                    
+                    // Handle text anchor based on angle position
+                    let textAnchor = 'middle';
+                    if (angle > -Math.PI/4 && angle < Math.PI/4) textAnchor = 'start';
+                    else if (angle > Math.PI*3/4 || angle < -Math.PI*3/4) textAnchor = 'end';
+                    
+                    svg.append('text')
+                        .attr('x', labelX)
+                        .attr('y', labelY)
+                        .attr('text-anchor', textAnchor)
+                        .attr('dy', '0.3em')
+                        .style('font-size', '11px')
+                        .style('fill', 'white')
+                        .text(metric);
+                });
+                
+                // Create radar path points
+                const radarPoints = values.map((d, i) => {
+                    const angle = i * angleStep - Math.PI / 2;
+                    const radius = rScale(d.value);
+                    return {
+                        x: radius * Math.cos(angle),
+                        y: radius * Math.sin(angle),
+                        value: d.value,
+                        metric: d.metric
+                    };
+                });
+                
+                // Draw radar path
+                const radarLine = d3.line()
+                    .x(d => d.x)
+                    .y(d => d.y)
+                    .curve(d3.curveLinearClosed);
+                    
+                svg.append('path')
+                    .datum(radarPoints)
+                    .attr('d', radarLine)
+                    .attr('fill', '#8b0000')
+                    .attr('fill-opacity', 0.3)
+                    .attr('stroke', '#ff4136')
+                    .attr('stroke-width', 2);
+                    
+                // Add data points with tooltips
+                svg.selectAll('.radar-point')
+                    .data(radarPoints)
+                    .enter()
+                    .append('circle')
+                    .attr('class', 'radar-point')
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y)
+                    .attr('r', 5)
+                    .attr('fill', '#ff4136')
+                    .on('mouseover', (event, d) => {
+                        // Highlight point
+                        d3.select(event.currentTarget)
+                            .attr('r', 7)
+                            .attr('stroke', 'white');
+                            
+                        // Show tooltip
+                        const tooltip = d3.select(container).append('div')
+                            .attr('class', 'chart-tooltip')
+                            .style('position', 'absolute')
+                            .style('background-color', 'rgba(0,0,0,0.9)')
+                            .style('color', 'white')
+                            .style('padding', '8px')
+                            .style('border-radius', '4px')
+                            .style('font-size', '12px')
+                            .style('z-index', 100)
+                            .style('pointer-events', 'none');
+                            
+                        tooltip.html(`
+                            <div><strong>${d.metric}</strong></div>
+                            <div>Value: ${this.formatValue ? this.formatValue(d.value) : d.value}</div>
+                            <div>Date: ${data.displayDates[latestIndex]}</div>
+                        `);
+                        
+                        // Position tooltip
+                        const tooltipNode = tooltip.node();
+                        const eventPos = d3.pointer(event, container);
+                        
+                        tooltip
+                            .style('left', `${eventPos[0]}px`)
+                            .style('top', `${eventPos[1] - tooltipNode.offsetHeight - 10}px`);
+                    })
+                    .on('mouseout', (event) => {
+                        // Reset point
+                        d3.select(event.currentTarget)
+                            .attr('r', 5)
+                            .attr('stroke', null);
+                            
+                        // Remove tooltip
+                        d3.select(container).selectAll('.chart-tooltip').remove();
+                    });
+                    
+                // Add date info
+                svg.append('text')
+                    .attr('class', 'date-info')
+                    .attr('text-anchor', 'middle')
+                    .attr('x', 0)
+                    .attr('y', height/2 - 30)
+                    .style('font-size', '12px')
+                    .style('fill', 'rgba(255,255,255,0.7)')
+                    .text(`Date: ${data.displayDates[latestIndex]}`);
+            },
+            
+            // Heat Map Implementation
+            heatmapChart(container, data) {
+                const margin = { top: 50, right: 100, bottom: 80, left: 80 };
+                const width = container.clientWidth - margin.left - margin.right;
+                const height = container.clientHeight - margin.top - margin.bottom;
+                
+                // Create SVG
+                const svg = d3.select(container)
+                    .append('svg')
+                    .attr('width', container.clientWidth)
+                    .attr('height', container.clientHeight)
+                    .append('g')
+                    .attr('transform', `translate(${margin.left},${margin.top})`);
+                    
+                // Add title
+                svg.append('text')
+                    .attr('class', 'chart-title')
+                    .attr('x', width / 2)
+                    .attr('y', -25)
+                    .attr('text-anchor', 'middle')
+                    .style('font-size', '16px')
+                    .style('fill', 'white')
+                    .text(`${data.countryName} - Data Heat Map`);
+                
+                // Select metrics with sufficient data
+                const metrics = Object.keys(data.series).filter(column => {
+                    const values = data.series[column].filter(v => v !== null && v !== undefined);
+                    return values.length > data.dates.length * 0.3; // At least 30% of dates have data
+                });
+                
+                if (metrics.length < 2 || data.dates.length < 3) {
+                    this.showError(container, "Not enough data for heat map visualization");
+                    return;
+                }
+                
+                // Limit to most recent dates for readability
+                const maxDates = Math.min(20, data.dates.length);
+                const selectedDates = data.dates.slice(-maxDates);
+                const selectedDisplayDates = data.displayDates.slice(-maxDates);
+                
+                // Prepare data for heatmap
+                const heatmapData = [];
+                for (let i = 0; i < selectedDates.length; i++) {
+                    for (let j = 0; j < metrics.length; j++) {
+                        const metric = metrics[j];
+                        const value = data.series[metric][data.dates.length - maxDates + i];
+                        
+                        if (value !== null && value !== undefined) {
+                            heatmapData.push({
+                                date: selectedDates[i],
+                                displayDate: selectedDisplayDates[i],
+                                metric: metric,
+                                value: value,
+                                row: j,
+                                col: i
+                            });
+                        }
+                    }
+                }
+                
+                if (heatmapData.length === 0) {
+                    this.showError(container, "No valid data for heat map visualization");
+                    return;
+                }
+                
+                // Calculate cell size
+                const cellHeight = Math.min(40, height / metrics.length);
+                const cellWidth = Math.min(40, width / selectedDates.length);
+                
+                // X scale for dates
+                const x = d3.scaleBand()
+                    .domain(selectedDates)
+                    .range([0, cellWidth * selectedDates.length])
+                    .padding(0.05);
+                    
+                // Y scale for metrics
+                const y = d3.scaleBand()
+                    .domain(metrics)
+                    .range([0, cellHeight * metrics.length])
+                    .padding(0.05);
+                
+                // Color scale for values
+                const maxValue = d3.max(heatmapData, d => d.value);
+                const colorScale = d3.scaleSequential(d3.interpolateInferno)
+                    .domain([0, maxValue]);
+                
+                // Add X axis
+                svg.append('g')
+                    .attr('transform', `translate(0,${cellHeight * metrics.length})`)
+                    .call(d3.axisBottom(x)
+                        .tickFormat((d, i) => i % 2 === 0 ? selectedDisplayDates[i] : ''))
+                    .selectAll('text')
+                    .attr('transform', 'translate(-10,5)rotate(-45)')
+                    .style('text-anchor', 'end')
+                    .style('fill', 'white')
+                    .style('font-size', '10px');
+                    
+                // Add Y axis
+                svg.append('g')
+                    .call(d3.axisLeft(y))
+                    .selectAll('text')
+                    .style('fill', 'white')
+                    .style('font-size', '10px');
+                
+                // Draw heat map cells
+                svg.selectAll('.heat-cell')
+                    .data(heatmapData)
+                    .enter()
+                    .append('rect')
+                    .attr('class', 'heat-cell')
+                    .attr('x', d => x(d.date))
+                    .attr('y', d => y(d.metric))
+                    .attr('width', x.bandwidth())
+                    .attr('height', y.bandwidth())
+                    .attr('fill', d => d.value === null ? '#222' : colorScale(d.value))
+                    .attr('stroke', '#1a1a1a')
+                    .attr('stroke-width', 1)
+                    .on('mouseover', (event, d) => {
+                        // Highlight cell
+                        d3.select(event.currentTarget)
+                            .attr('stroke', '#ffffff')
+                            .attr('stroke-width', 2);
+                            
+                        // Show tooltip
+                        const tooltip = d3.select(container).append('div')
+                            .attr('class', 'chart-tooltip')
+                            .style('position', 'absolute')
+                            .style('background-color', 'rgba(0,0,0,0.9)')
+                            .style('color', 'white')
+                            .style('padding', '8px')
+                            .style('border-radius', '4px')
+                            .style('font-size', '12px')
+                            .style('z-index', 100)
+                            .style('pointer-events', 'none');
+                            
+                        tooltip.html(`
+                            <div><strong>${d.metric}</strong></div>
+                            <div>Date: ${d.displayDate}</div>
+                            <div>Value: ${this.formatValue ? this.formatValue(d.value) : d.value}</div>
+                        `);
+                        
+                        // Position tooltip
+                        const tooltipNode = tooltip.node();
+                        const eventPos = d3.pointer(event, container);
+                        
+                        tooltip
+                            .style('left', `${eventPos[0]}px`)
+                            .style('top', `${eventPos[1] - tooltipNode.offsetHeight - 10}px`);
+                    })
+                    .on('mouseout', (event) => {
+                        // Reset cell
+                        d3.select(event.currentTarget)
+                            .attr('stroke', '#1a1a1a')
+                            .attr('stroke-width', 1);
+                            
+                        // Remove tooltip
+                        d3.select(container).selectAll('.chart-tooltip').remove();
+                    });
+                
+                // Add color legend
+                const legendWidth = 20;
+                const legendHeight = 150;
+                
+                // Create gradient for legend
+                const defs = svg.append('defs');
+                const linearGradient = defs.append('linearGradient')
+                    .attr('id', 'heatmap-gradient')
+                    .attr('x1', '0%')
+                    .attr('y1', '100%')
+                    .attr('x2', '0%')
+                    .attr('y2', '0%');
+                    
+                // Add color stops
+                linearGradient.append('stop')
+                    .attr('offset', '0%')
+                    .attr('stop-color', colorScale(0));
+                    
+                linearGradient.append('stop')
+                    .attr('offset', '100%')
+                    .attr('stop-color', colorScale(maxValue));
+                
+                // Draw legend rectangle
+                const legend = svg.append('g')
+                    .attr('transform', `translate(${width + 20}, 0)`);
+                    
+                legend.append('rect')
+                    .attr('width', legendWidth)
+                    .attr('height', legendHeight)
+                    .style('fill', 'url(#heatmap-gradient)');
+                    
+                // Add legend axis
+                const legendScale = d3.scaleLinear()
+                    .domain([0, maxValue])
+                    .range([legendHeight, 0]);
+                    
+                legend.append('g')
+                    .attr('transform', `translate(${legendWidth}, 0)`)
+                    .call(d3.axisRight(legendScale)
+                        .ticks(5)
+                        .tickFormat(d => this.formatValue ? this.formatValue(d) : d3.format(',.0f')(d)))
+                    .selectAll('text')
+                    .style('fill', 'white')
+                    .style('font-size', '10px');
+                    
+                // Add legend title
+                legend.append('text')
+                    .attr('x', legendWidth / 2)
+                    .attr('y', -10)
+                    .attr('text-anchor', 'middle')
+                    .style('fill', 'white')
+                    .style('font-size', '12px')
+                    .text('Value');
+            },
+            
+            // Helper methods for formatting
+            formatValue(value) {
+                if (value === null || value === undefined) return 'N/A';
+                return value >= 1000000 ? 
+                    `${(value / 1000000).toFixed(2)}M` : 
+                    value >= 1000 ? 
+                    `${(value / 1000).toFixed(1)}K` : 
+                    value.toLocaleString();
+            },
+            
+            formatTickValue(value) {
+                if (value === 0) return '0';
+                return value >= 1000000 ? 
+                    `${(value / 1000000).toFixed(1)}M` : 
+                    value >= 1000 ? 
+                    `${(value / 1000).toFixed(1)}K` : 
+                    value;
             }
         };
 
