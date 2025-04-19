@@ -383,7 +383,7 @@ h1 {
 }
 
 /* Make sure all country names are white */
-#countryName, 
+#countryName,
 .country-item span,
 .tooltip-header strong,
 .stat-label,
@@ -524,13 +524,13 @@ h1 {
         right: 60px;
         gap: 5px;
     }
-    
+
     .dataset-btn {
         width: 32px;
         height: 32px;
         padding: 5px;
     }
-    
+
     .dataset-icon {
         width: 20px;
         height: 20px;
@@ -994,6 +994,139 @@ h1 {
 .error-suggestion {
     font-size: 14px;
     color: rgba(255,255,255,0.7);
+}
+
+/* Chart tooltip styling */
+.chart-tooltip {
+
+}
+
+/* Chart Controls */
+.chart-controls-container {
+    background-color: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    margin-bottom: 15px;
+    padding: 15px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.chart-control-section {
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.chart-control-section h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: rgba(255,255,255,0.9);
+    font-size: 14px;
+}
+
+.column-checkbox-container {
+    max-height: 150px;
+    overflow-y: auto;
+    padding: 5px;
+    background-color: rgba(0,0,0,0.2);
+    border-radius: 4px;
+}
+
+.column-checkbox-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+    padding: 3px 0;
+}
+
+.column-checkbox-row label {
+    margin-left: 8px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.8);
+}
+
+.select-all-row {
+    display: flex;
+    margin-bottom: 8px;
+}
+
+.select-all-row button {
+    background-color: rgba(0,0,0,0.3);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 3px 8px;
+    border-radius: 3px;
+    margin-right: 8px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.select-all-row button:hover {
+    background-color: rgba(0,0,0,0.5);
+}
+
+.date-mode-radio-container {
+    display: flex;
+    margin-bottom: 10px;
+}
+
+.date-mode-option {
+    display: flex;
+    align-items: center;
+    margin-right: 20px;
+}
+
+.date-mode-option label {
+    margin-left: 5px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.8);
+}
+
+.date-slider-container {
+    background-color: rgba(0,0,0,0.2);
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.slider-with-label {
+    margin-bottom: 10px;
+}
+
+.slider-with-label label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.8);
+}
+
+.slider-value {
+    display: inline-block;
+    margin-left: 10px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.9);
+    min-width: 100px;
+}
+
+.slider-with-label input[type="range"] {
+    width: 100%;
+    margin-top: 5px;
+}
+
+/* Interactive legend styling */
+.legend-item {
+    transition: opacity 0.2s;
+}
+
+.legend-item:hover {
+    opacity: 0.8;
+}
+
+.legend-item .legend-hitbox {
+    opacity: 0;
+}
+
+.legend-item:hover .legend-hitbox {
+    opacity: 0.1;
 }
 
 /* Chart tooltip styling */

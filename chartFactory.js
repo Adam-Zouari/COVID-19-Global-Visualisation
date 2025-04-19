@@ -1,7 +1,7 @@
 // Chart Factory - A modular approach to creating visualizations
 const ChartFactory = {
     // Core visualization methods
-    createChart(container, countryCode, vizType) {
+    createChart(container, countryCode, vizType, settings) {
         // Clear the container
         container.innerHTML = '';
 
@@ -16,29 +16,84 @@ const ChartFactory = {
             return;
         }
 
+        // Initialize chart controls if not provided
+        if (!settings) {
+            // Initialize chart controls and get initial settings
+            settings = ChartControls.initialize(container, countryCode, vizType);
+        }
+
+        // Apply settings to filter data
+        const filteredData = this.applySettings(data, settings);
+
         // Clear loading indicator
         container.innerHTML = '';
 
         // Create the appropriate chart
         switch (vizType) {
             case 'bar':
-                this.barChart(container, data);
+                this.barChart(container, filteredData);
                 break;
             case 'line':
-                this.lineChart(container, data);
+                this.lineChart(container, filteredData);
                 break;
             case 'pie':
-                this.pieChart(container, data);
+                this.pieChart(container, filteredData);
                 break;
             case 'radar':
-                this.radarChart(container, data);
+                this.radarChart(container, filteredData);
                 break;
             case 'heatmap':
-                this.heatmapChart(container, data);
+                this.heatmapChart(container, filteredData);
                 break;
             default:
                 this.showError(container, `Chart type "${vizType}" not supported`);
         }
+    },
+
+    // Apply user settings to filter data
+    applySettings(data, settings) {
+        // Create a copy of the data to avoid modifying the original
+        const result = {
+            ...data,
+            columns: [],
+            series: {}
+        };
+
+        // Include all columns but mark selected state
+        result.columns = [...data.columns];
+        result.series = {...data.series};
+
+        // Add selection state to the result for rendering
+        result.columnSelectionState = settings.selectedColumns || {};
+
+        // Apply date filtering
+        if (settings.dateMode === 'single') {
+            // For single date mode, only include the selected date
+            const dateIndex = Math.floor(settings.singleDate / 100 * (data.dates.length - 1));
+
+            result.dates = [data.dates[dateIndex]];
+            result.displayDates = [data.displayDates[dateIndex]];
+
+            // Filter series data to only include the selected date
+            result.columns.forEach(column => {
+                result.series[column] = [data.series[column][dateIndex]];
+            });
+        }
+        else if (settings.dateMode === 'range') {
+            // For range mode, include dates within the selected range
+            const startIndex = Math.floor(settings.dateRange.start / 100 * (data.dates.length - 1));
+            const endIndex = Math.floor(settings.dateRange.end / 100 * (data.dates.length - 1));
+
+            result.dates = data.dates.slice(startIndex, endIndex + 1);
+            result.displayDates = data.displayDates.slice(startIndex, endIndex + 1);
+
+            // Filter series data to only include dates in the range
+            result.columns.forEach(column => {
+                result.series[column] = data.series[column].slice(startIndex, endIndex + 1);
+            });
+        }
+
+        return result;
     },
 
     // Data preparation
