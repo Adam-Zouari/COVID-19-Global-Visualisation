@@ -1,0 +1,21 @@
+<!-- Visualization Panel -->
+<div id="visualizationPanel">
+    <div class="viz-header">
+        <div class="viz-title">
+            <img id="viz-flag" src="" alt="Country Flag">
+            <h2 id="viz-country-name">Country Data</h2>
+        </div>
+        <div class="viz-controls">
+            <select id="vizTypeSelector" class="viz-selector" onchange="changeVisualization()">
+                <option value="bar">Bar Chart</option>
+                <option value="line">Line Chart</option>
+                <option value="pie">Pie Chart</option>
+                <option value="radar">Radar Chart</option>
+                <option value="heatmap">Heat Map</option>
+            </select>
+        </div>
+    </div>
+    <div class="viz-content">
+        <div id="chartContainer" class="chart-container"></div>
+    </div>
+</div>
