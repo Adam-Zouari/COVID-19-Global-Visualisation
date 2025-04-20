@@ -31,6 +31,7 @@ ChartFactory.lineChart = function(container, data) {
 
     // Add X axis
     svg.append('g')
+        .attr('class', 'x-axis')
         .attr('transform', `translate(0,${height})`)
         .call(d3.axisBottom(x)
             .ticks(Math.min(data.dates.length / 2, 10))

@@ -23,18 +23,19 @@ ChartFactory.barChart = function(container, data) {
         .style('fill', 'white')
         .text(`${data.countryName} - Data Comparison`);
 
-    // Limit to most recent dates for readability
-    const maxDates = Math.min(15, data.displayDates.length);
-    const recentDates = data.displayDates.slice(-maxDates);
+    // Use the dates provided by the data (already filtered by date range/single date)
+    const displayDates = data.displayDates;
+    const maxDates = displayDates.length;
 
     // X scale
     const x = d3.scaleBand()
-        .domain(recentDates)
+        .domain(displayDates)
         .range([0, width])
         .padding(0.2);
 
     // Add X axis
     svg.append('g')
+        .attr('class', 'x-axis')
         .attr('transform', `translate(0,${height})`)
         .call(d3.axisBottom(x)
             .tickFormat((d, i) => i % 2 === 0 ? d : '')) // Show every other label to prevent overlap
@@ -96,7 +97,16 @@ ChartFactory.barChart = function(container, data) {
     // Calculate bar width based on number of series
     const columnCount = Object.keys(data.series).length;
     const groupPadding = 0.2; // 20% of the band width for padding between groups
-    const barWidth = (x.bandwidth() * (1 - groupPadding)) / columnCount;
+
+    // For single date mode, use a different layout
+    let barWidth;
+    if (data.isSingleDate) {
+        // In single date mode, spread bars across the width
+        barWidth = (width * 0.6) / columnCount;
+    } else {
+        // In range mode, calculate based on x-axis bandwidth
+        barWidth = (x.bandwidth() * (1 - groupPadding)) / columnCount;
+    }
 
     // Color scale for the series
     const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
@@ -127,7 +137,15 @@ ChartFactory.barChart = function(container, data) {
             .data(seriesValues)
             .enter()
             .append('rect')
-            .attr('x', (d, i) => x(recentDates[i]) + (barWidth * columnIndex) + (x.bandwidth() * groupPadding / 2))
+            .attr('x', (d, i) => {
+                if (data.isSingleDate) {
+                    // For single date mode, center the bars
+                    return (width / 2) - ((columnCount * barWidth) / 2) + (columnIndex * barWidth);
+                } else {
+                    // For range mode, position based on x-axis
+                    return x(displayDates[i]) + (barWidth * columnIndex) + (x.bandwidth() * groupPadding / 2);
+                }
+            })
             .attr('y', d => d === null ? height : y(d))
             .attr('width', barWidth)
             .attr('height', d => d === null ? 0 : height - y(d))
@@ -156,7 +174,7 @@ ChartFactory.barChart = function(container, data) {
 
                 tooltip.html(`
                     <div><strong>${column}</strong></div>
-                    <div>Date: ${recentDates[i]}</div>
+                    <div>Date: ${displayDates[i]}</div>
                     <div>Value: ${d === null ? 'No data' : ChartFactory.formatValue(d)}</div>
                 `);
 

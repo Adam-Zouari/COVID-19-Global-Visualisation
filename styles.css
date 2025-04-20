@@ -1143,6 +1143,51 @@ h1 {
     max-width: 250px;
 }
 
+/* Chart error styling */
+.chart-error {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    color: #ff6b6b;
+    text-align: center;
+    padding: 8px 12px;
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    max-width: 80%;
+    margin: 0 auto;
+    width: auto;
+    height: auto;
+}
+
+.error-icon {
+    font-size: 24px;
+    margin-right: 10px;
+    line-height: 1;
+}
+
+.error-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+}
+
+.error-message {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 3px;
+    line-height: 1.2;
+}
+
+.error-suggestion {
+    font-size: 14px;
+    color: #aaa;
+    margin: 0;
+    line-height: 1.2;
+}
+
 /* Chart-specific styling */
 .chart-title {
     font-size: 16px;

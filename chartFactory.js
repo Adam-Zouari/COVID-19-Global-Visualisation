@@ -71,26 +71,35 @@ const ChartFactory = {
             // For single date mode, only include the selected date
             const dateIndex = Math.floor(settings.singleDate / 100 * (data.dates.length - 1));
 
-            result.dates = [data.dates[dateIndex]];
-            result.displayDates = [data.displayDates[dateIndex]];
+            // Make sure we have a valid index
+            if (dateIndex >= 0 && dateIndex < data.dates.length) {
+                result.dates = [data.dates[dateIndex]];
+                result.displayDates = [data.displayDates[dateIndex]];
 
-            // Filter series data to only include the selected date
-            result.columns.forEach(column => {
-                result.series[column] = [data.series[column][dateIndex]];
-            });
+                // Filter series data to only include the selected date
+                result.columns.forEach(column => {
+                    result.series[column] = [data.series[column][dateIndex]];
+                });
+
+                // Add a flag to indicate single date mode
+                result.isSingleDate = true;
+            }
         }
         else if (settings.dateMode === 'range') {
             // For range mode, include dates within the selected range
             const startIndex = Math.floor(settings.dateRange.start / 100 * (data.dates.length - 1));
             const endIndex = Math.floor(settings.dateRange.end / 100 * (data.dates.length - 1));
 
-            result.dates = data.dates.slice(startIndex, endIndex + 1);
-            result.displayDates = data.displayDates.slice(startIndex, endIndex + 1);
+            // Make sure we have valid indices
+            if (startIndex >= 0 && endIndex < data.dates.length && startIndex <= endIndex) {
+                result.dates = data.dates.slice(startIndex, endIndex + 1);
+                result.displayDates = data.displayDates.slice(startIndex, endIndex + 1);
 
-            // Filter series data to only include dates in the range
-            result.columns.forEach(column => {
-                result.series[column] = data.series[column].slice(startIndex, endIndex + 1);
-            });
+                // Filter series data to only include dates in the range
+                result.columns.forEach(column => {
+                    result.series[column] = data.series[column].slice(startIndex, endIndex + 1);
+                });
+            }
         }
 
         return result;
@@ -215,13 +224,34 @@ const ChartFactory = {
     },
 
     showError(container, message) {
-        container.innerHTML = `
-            <div class="chart-error">
-                <div class="error-icon">⚠️</div>
+        // Create error element instead of replacing container content
+        const errorElement = document.createElement('div');
+        errorElement.className = 'chart-error';
+        errorElement.innerHTML = `
+            <div class="error-icon">⚠️</div>
+            <div class="error-content">
                 <div class="error-message">${message}</div>
-                <div class="error-suggestion">Try selecting a different country or visualization type.</div>
+                <div class="error-suggestion">Try selecting different columns from the legend.</div>
             </div>
         `;
+
+        // Position the error slightly to the right of center
+        errorElement.style.position = 'absolute';
+        errorElement.style.top = '50%';
+        errorElement.style.left = '53%';
+        errorElement.style.transform = 'translate(-50%, -50%)';
+        errorElement.style.zIndex = '10';
+        errorElement.style.textAlign = 'center';
+        errorElement.style.width = 'auto';
+
+        // Remove any existing error messages
+        const existingError = container.querySelector('.chart-error');
+        if (existingError) {
+            existingError.remove();
+        }
+
+        // Add the error element to the container
+        container.appendChild(errorElement);
     },
 
     // Helper methods for formatting
