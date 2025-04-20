@@ -8,7 +8,8 @@ const ChartControls = {
             start: 0,
             end: 100
         },
-        singleDate: 100 // Default to most recent date (100%)
+        singleDate: 100, // Default to most recent date (100%)
+        pendingChanges: false // Flag to indicate if there are pending changes
     },
 
     // Initialize chart controls
@@ -40,7 +41,8 @@ const ChartControls = {
         // Create date range slider(s)
         this.createDateSliders(controlsContainer, data);
 
-        // No Apply button needed as changes are applied immediately
+        // Create Apply Changes button
+        this.createApplyChangesButton(controlsContainer);
 
         return this.state;
     },
@@ -83,8 +85,9 @@ const ChartControls = {
                 this.state.dateMode = 'range';
                 document.getElementById('date-range-controls').style.display = 'block';
                 document.getElementById('single-date-controls').style.display = 'none';
-                // Apply changes immediately
-                ChartFactory.createChart(container, countryCode, vizType, this.getSettings());
+                // Mark that there are pending changes
+                this.state.pendingChanges = true;
+                this.updateApplyChangesButton();
             }
         });
 
@@ -105,8 +108,9 @@ const ChartControls = {
                 this.state.dateMode = 'single';
                 document.getElementById('date-range-controls').style.display = 'none';
                 document.getElementById('single-date-controls').style.display = 'block';
-                // Apply changes immediately
-                ChartFactory.createChart(container, countryCode, vizType, this.getSettings());
+                // Mark that there are pending changes
+                this.state.pendingChanges = true;
+                this.updateApplyChangesButton();
             }
         });
 
@@ -177,8 +181,9 @@ const ChartControls = {
             }
             startValue.textContent = formatDateLabel(this.state.dateRange.start);
 
-            // Apply changes immediately as the slider is moved
-            ChartFactory.createChart(container, countryCode, vizType, this.getSettings());
+            // Mark that there are pending changes
+            this.state.pendingChanges = true;
+            this.updateApplyChangesButton();
         });
 
         startContainer.appendChild(startLabel);
@@ -216,8 +221,9 @@ const ChartControls = {
             }
             endValue.textContent = formatDateLabel(this.state.dateRange.end);
 
-            // Apply changes immediately as the slider is moved
-            ChartFactory.createChart(container, countryCode, vizType, this.getSettings());
+            // Mark that there are pending changes
+            this.state.pendingChanges = true;
+            this.updateApplyChangesButton();
         });
 
         endContainer.appendChild(endLabel);
@@ -256,8 +262,9 @@ const ChartControls = {
             this.state.singleDate = parseInt(e.target.value);
             singleValue.textContent = formatDateLabel(this.state.singleDate);
 
-            // Apply changes immediately as the slider is moved
-            ChartFactory.createChart(container, countryCode, vizType, this.getSettings());
+            // Mark that there are pending changes
+            this.state.pendingChanges = true;
+            this.updateApplyChangesButton();
         });
 
         singleContainer.appendChild(singleLabel);
@@ -269,6 +276,63 @@ const ChartControls = {
         // Add both control sets to container
         container.appendChild(rangeControls);
         container.appendChild(singleControls);
+    },
+
+    // Create Apply Changes button
+    createApplyChangesButton(container) {
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'apply-changes-container';
+
+        const applyButton = document.createElement('button');
+        applyButton.id = 'applyChangesBtn';
+        applyButton.className = 'apply-changes-btn';
+        applyButton.textContent = 'Apply Changes';
+        applyButton.disabled = !this.state.pendingChanges;
+
+        applyButton.addEventListener('click', () => {
+            // Get the current country code and visualization type
+            const countryEl = document.getElementById(`country-${window.globeInstance.selectedCountry}`);
+            const countryCode = countryEl ? countryEl.getAttribute('data-country-code') : null;
+            const vizType = document.getElementById('vizTypeSelector').value;
+
+            // Get the actual chart container (not the controls container)
+            const chartContainer = document.getElementById('chartContainer');
+
+            // Apply the changes by recreating the chart
+            if (chartContainer) {
+                // Add visual feedback that changes are being applied
+                applyButton.textContent = 'Applying...';
+                applyButton.disabled = true;
+
+                // Small delay to show the "Applying..." text
+                setTimeout(() => {
+                    // Recreate the chart with new settings
+                    ChartFactory.createChart(chartContainer, countryCode, vizType, this.getSettings());
+
+                    // Reset the pending changes flag
+                    this.state.pendingChanges = false;
+
+                    // Reset button text and update state
+                    applyButton.textContent = 'Apply Changes';
+                    this.updateApplyChangesButton();
+                }, 100);
+            } else {
+                console.error('Chart container not found');
+            }
+        });
+
+        buttonContainer.appendChild(applyButton);
+        container.appendChild(buttonContainer);
+    },
+
+    // Update the Apply Changes button state
+    updateApplyChangesButton() {
+        const applyButton = document.getElementById('applyChangesBtn');
+        if (applyButton) {
+            applyButton.disabled = !this.state.pendingChanges;
+            applyButton.className = this.state.pendingChanges ?
+                'apply-changes-btn active' : 'apply-changes-btn';
+        }
     },
 
     // Get current settings for chart creation
