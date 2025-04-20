@@ -5,7 +5,7 @@ class DataService {
         this.hospitalizationsData = null;
         this.vaccinationsData = null;  // Add vaccinations data storage
         this.countryIndex = null;
-        
+
         // Current state
         this.currentDataset = 'epidem'; // Default dataset
         this.currentDate = null;
@@ -16,27 +16,27 @@ class DataService {
             hospitalizations: [],
             vaccinations: []  // Add vaccinations columns
         };
-        
+
         // Indexed data for faster lookup
         this.indexedData = {
             epidem: {},
             hospitalizations: {},
             vaccinations: {}  // Add vaccinations index
         };
-        
+
         // Cache for calculated colors
         this.colorCache = {
             epidem: {},
             hospitalizations: {},
             vaccinations: {}  // Add vaccinations cache
         };
-        
+
         // Debug flag
         this.debug = true;
-        
+
         // Sample data flag
         this.useSampleData = true;
-        
+
         // API endpoints (when running with Express server)
         this.apiEndpoints = {
             epidem: 'http://localhost:3000/api/epidem',
@@ -51,52 +51,52 @@ class DataService {
         try {
             this.log("Starting data loading process");
             document.getElementById('dataStatus').textContent = "Loading data...";
-            
+
             if (this.useSampleData) {
                 this.log("Using sample data for testing");
                 document.getElementById('dataStatus').textContent = "Generating sample data...";
-                
+
                 // Generate sample data
                 this.epidemData = this.generateSampleEpidemData();
                 this.hospitalizationsData = this.generateSampleHospitalizationsData();
                 this.vaccinationsData = this.generateSampleVaccinationsData();
                 this.countryIndex = this.generateSampleCountryIndex();
-                
+
                 // Log sample data for debugging
                 console.log("Epidem data sample (first 2 records):", this.epidemData.slice(0, 2));
                 console.log("Hospitalization data sample (first 2 records):", this.hospitalizationsData.slice(0, 2));
                 console.log("Vaccination data sample (first 2 records):", this.vaccinationsData.slice(0, 2));
                 console.log("Country index sample (first 5 records):", this.countryIndex.slice(0, 5));
-                
+
                 document.getElementById('dataStatus').textContent = "Sample data generated!";
-                
+
                 this.log(`Generated ${this.epidemData.length} epidem records`);
                 this.log(`Generated ${this.hospitalizationsData.length} hospitalization records`);
                 this.log(`Generated ${this.vaccinationsData.length} vaccination records`);
                 this.log(`Generated ${this.countryIndex.length} country index records`);
-                
+
                 // Check data structure to ensure required fields exist
                 this.validateDataStructure();
-                
+
                 // Build a lookup table for country codes
                 this.buildCountryCodeMap();
-                
+
                 // Process the data
                 this.processData();
-                
+
                 // Set defaults
                 this.setDefaultValues();
-                
+
                 // Index the data for faster lookups
                 document.getElementById('dataStatus').textContent = "Indexing data for performance...";
                 await this.indexAllData();
-                
+
                 // Pre-calculate colors for better performance
                 document.getElementById('dataStatus').textContent = "Pre-calculating colors...";
                 await this.precalculateColors();
-                
+
                 document.getElementById('dataStatus').textContent = "Ready!";
-                
+
                 // Success - return the data
                 return {
                     epidemData: this.epidemData,
@@ -110,9 +110,9 @@ class DataService {
                 try {
                     // Load data from API endpoints
                     this.log("Loading data from API endpoints");
-                    
+
                     console.log("API endpoints being accessed:", this.apiEndpoints);
-                    
+
                     // Load all datasets in parallel
                     const [epidemData, hospitalizationsData, vaccinationsData, countryIndex] = await Promise.all([
                         d3.csv(this.apiEndpoints.epidem),
@@ -120,53 +120,53 @@ class DataService {
                         d3.csv(this.apiEndpoints.vaccinations),
                         d3.csv(this.apiEndpoints.countryIndex)
                     ]);
-                    
+
                     // Log raw data for debugging
                     console.log("Epidem data sample (first 2 records):", epidemData.slice(0, 2));
                     console.log("Hospitalization data sample (first 2 records):", hospitalizationsData.slice(0, 2));
                     console.log("Vaccination data sample (first 2 records):", vaccinationsData.slice(0, 2));
                     console.log("Country index sample (first 5 records):", countryIndex.slice(0, 5));
-                    
-                    if (epidemData && epidemData.length && 
-                        hospitalizationsData && hospitalizationsData.length && 
-                        vaccinationsData && vaccinationsData.length && 
+
+                    if (epidemData && epidemData.length &&
+                        hospitalizationsData && hospitalizationsData.length &&
+                        vaccinationsData && vaccinationsData.length &&
                         countryIndex && countryIndex.length) {
-                        
+
                         this.log("Successfully loaded data from API endpoints");
                         document.getElementById('dataStatus').textContent = "Data loaded successfully!";
-                        
+
                         this.epidemData = epidemData;
                         this.hospitalizationsData = hospitalizationsData;
                         this.vaccinationsData = vaccinationsData;
                         this.countryIndex = countryIndex;
-                        
+
                         this.log(`Loaded ${this.epidemData.length} epidem records`);
                         this.log(`Loaded ${this.hospitalizationsData.length} hospitalization records`);
                         this.log(`Loaded ${this.vaccinationsData.length} vaccination records`);
                         this.log(`Loaded ${this.countryIndex.length} country index records`);
-                        
+
                         // Check data structure to ensure required fields exist
                         this.validateDataStructure();
-                        
+
                         // Build a lookup table for country codes
                         this.buildCountryCodeMap();
-                        
+
                         // Process the data
                         this.processData();
-                        
+
                         // Set defaults
                         this.setDefaultValues();
-                        
+
                         // Index the data for faster lookups
                         document.getElementById('dataStatus').textContent = "Indexing data for performance...";
                         await this.indexAllData();
-                        
+
                         // Pre-calculate colors for better performance
                         document.getElementById('dataStatus').textContent = "Pre-calculating colors...";
                         await this.precalculateColors();
-                        
+
                         document.getElementById('dataStatus').textContent = "Ready!";
-                        
+
                         // Success - return the data
                         return {
                             epidemData: this.epidemData,
@@ -194,65 +194,65 @@ class DataService {
             throw error; // Make sure the error propagates
         }
     }
-    
+
     // New method: Index all data for fast access
     async indexAllData() {
         this.log("Indexing data for faster access");
-        
+
         // Clear any existing indexed data
         this.indexedData = {
             epidem: {},
             hospitalizations: {},
             vaccinations: {}  // Add vaccinations index
         };
-        
+
         // Function to index a dataset
         const indexDataset = (dataset, datasetName) => {
             return new Promise(resolve => {
                 // Create an index for each country and date
                 dataset.forEach(record => {
                     if (!record.country_key || !record.date) return;
-                    
+
                     const countryKey = record.country_key.toLowerCase();
-                    
+
                     // Create country entry if not exists
                     if (!this.indexedData[datasetName][countryKey]) {
                         this.indexedData[datasetName][countryKey] = {};
                     }
-                    
+
                     // Store the record indexed by date
                     this.indexedData[datasetName][countryKey][record.date] = record;
                 });
-                
+
                 // Report indexing progress
                 const countries = Object.keys(this.indexedData[datasetName]).length;
                 this.log(`Indexed ${datasetName} data: ${countries} countries`);
-                
+
                 resolve();
             });
         };
-        
+
         // Process both datasets using Promise.all for parallel processing
         await Promise.all([
             indexDataset(this.epidemData, 'epidem'),
             indexDataset(this.hospitalizationsData, 'hospitalizations'),
             indexDataset(this.vaccinationsData, 'vaccinations')
         ]);
-        
+
         this.log("Data indexing complete");
     }
-    
+
     // New method: Pre-calculate colors for all countries and dates
     async precalculateColors() {
         this.log("Pre-calculating colors for all metrics");
-        
+
         // Clear any existing color cache
         this.colorCache = {
             epidem: {},
             hospitalizations: {},
             vaccinations: {}  // Add vaccinations cache
         };
-        
+
         // First calculate global min/max values for each dataset and column
         // This ensures color consistency across all dates
         this.globalDataRanges = {
@@ -260,45 +260,45 @@ class DataService {
             hospitalizations: {},
             vaccinations: {}
         };
-        
+
         // Calculate global data ranges first
         for (const datasetName of ['epidem', 'hospitalizations', 'vaccinations']) {
-            document.getElementById('dataStatus').textContent = 
+            document.getElementById('dataStatus').textContent =
                 `Analyzing ${datasetName} data ranges...`;
-            
+
             // For each column in this dataset
             for (const column of this.availableColumns[datasetName]) {
                 // Get all non-zero values across all dates for this column
                 let allValues = [];
-                
+
                 for (const date of this.availableDates) {
                     const dataForDate = this.getDataForDate(datasetName, date);
-                    
+
                     const values = dataForDate
                         .map(d => {
                             const value = d[column];
                             return value ? parseFloat(value) : 0;
                         })
                         .filter(v => !isNaN(v) && v > 0);
-                    
+
                     allValues = allValues.concat(values);
                 }
-                
+
                 if (allValues.length === 0) {
                     this.globalDataRanges[datasetName][column] = { min: 0, max: 1 };
                     continue;
                 }
-                
+
                 // Calculate statistics for better scaling
                 const max = d3.max(allValues);
                 const min = d3.min(allValues);
                 const q1 = d3.quantile(allValues.sort(d3.ascending), 0.25);
                 const q3 = d3.quantile(allValues.sort(d3.ascending), 0.75);
-                
+
                 // Check if we have extreme outliers
                 const iqr = q3 - q1;
                 const upperOutlierThreshold = q3 + 1.5 * iqr;
-                
+
                 // Determine domain max (with outlier handling)
                 let domainMax;
                 if (max > upperOutlierThreshold && upperOutlierThreshold > 0) {
@@ -307,7 +307,7 @@ class DataService {
                 } else {
                     domainMax = max;
                 }
-                
+
                 // Store the global range
                 this.globalDataRanges[datasetName][column] = {
                     min: 0,
@@ -316,93 +316,93 @@ class DataService {
                     q1: q1,
                     q3: q3
                 };
-                
+
                 this.log(`Global range for ${datasetName}.${column}: [0, ${domainMax}]`);
             }
         }
-        
+
         // Function to calculate colors for a dataset, column, and date
         const calculateColorsForDate = (datasetName, column, date) => {
             return new Promise(resolve => {
                 // Get data for this date
                 const dataForDate = this.getDataForDate(datasetName, date);
-                
+
                 if (dataForDate.length === 0) {
                     resolve();
                     return;
                 }
-                
+
                 // Get the global range for this dataset and column
                 const range = this.globalDataRanges[datasetName][column];
                 if (!range) {
                     resolve();
                     return;
                 }
-                
-                // Choose color scheme based on dataset
+
+                // Choose color scheme based on dataset - using even lighter base colors to black
                 let colorInterpolator;
                 if (datasetName === 'epidem') {
-                    colorInterpolator = d3.interpolateRgb('#2ECC40', '#FF4136');
+                    colorInterpolator = d3.interpolateRgb('#cc5555', '#000000');
                 } else if (datasetName === 'hospitalizations') {
-                    colorInterpolator = d3.interpolateRgb('#2ECC40', '#0074D9');
+                    colorInterpolator = d3.interpolateRgb('#6688cc', '#000000');
                 } else if (datasetName === 'vaccinations') {
-                    colorInterpolator = d3.interpolateRgb('#2ECC40', '#9932CC');
+                    colorInterpolator = d3.interpolateRgb('#44cc99', '#000000');
                 }
-                
+
                 // Power scale exponent for better visual distribution
                 const exponent = 0.5;
-                
+
                 // Cache colors for each country
                 if (!this.colorCache[datasetName][column]) {
                     this.colorCache[datasetName][column] = {};
                 }
-                
+
                 if (!this.colorCache[datasetName][column][date]) {
                     this.colorCache[datasetName][column][date] = {};
                 }
-                
+
                 // Calculate and cache color for each country using the GLOBAL range
                 Object.keys(this.indexedData[datasetName]).forEach(countryKey => {
                     const countryData = this.indexedData[datasetName][countryKey][date];
                     if (!countryData) return;
-                    
+
                     const value = countryData[column];
                     if (!value) return;
-                    
+
                     const parsedValue = parseFloat(value);
                     if (isNaN(parsedValue) || parsedValue <= 0) return;
-                    
+
                     // Calculate using the global range - this ensures consistent colors across dates
                     const normalizedValue = Math.min(1, parsedValue / range.max);
                     const scaledValue = Math.pow(normalizedValue, exponent);
                     this.colorCache[datasetName][column][date][countryKey] = colorInterpolator(scaledValue);
                 });
-                
+
                 resolve();
             });
         };
-        
+
         // Now process all combinations with our global ranges
         for (const datasetName of ['epidem', 'hospitalizations', 'vaccinations']) {
             for (const column of this.availableColumns[datasetName]) {
                 // Update status indicator to show progress
-                document.getElementById('dataStatus').textContent = 
+                document.getElementById('dataStatus').textContent =
                     `Calculating colors: ${datasetName} - ${column}...`;
-                
+
                 // Process dates in smaller batches to avoid UI freezing
                 const batchSize = 10;
                 for (let i = 0; i < this.availableDates.length; i += batchSize) {
                     const batch = this.availableDates.slice(i, i + batchSize);
-                    await Promise.all(batch.map(date => 
+                    await Promise.all(batch.map(date =>
                         calculateColorsForDate(datasetName, column, date)
                     ));
                 }
             }
         }
-        
+
         this.log("Color pre-calculation complete");
     }
-    
+
     // Get all data for a specific date from a dataset
     getDataForDate(datasetName, date) {
         if (datasetName === 'epidem') {
@@ -414,24 +414,24 @@ class DataService {
         }
         return [];
     }
-    
+
     // Get cached color for a country
     getCachedColor(countryKey, date) {
         if (!countryKey) return null;
-        
+
         const normalizedKey = countryKey.toLowerCase();
-        
+
         try {
             // Check if we have a cached color
             if (
-                this.colorCache[this.currentDataset] && 
-                this.colorCache[this.currentDataset][this.currentColumn] && 
-                this.colorCache[this.currentDataset][this.currentColumn][date] && 
+                this.colorCache[this.currentDataset] &&
+                this.colorCache[this.currentDataset][this.currentColumn] &&
+                this.colorCache[this.currentDataset][this.currentColumn][date] &&
                 this.colorCache[this.currentDataset][this.currentColumn][date][normalizedKey]
             ) {
                 return this.colorCache[this.currentDataset][this.currentColumn][date][normalizedKey];
             }
-            
+
             // If no cached color, return null to use default
             return null;
         } catch (e) {
@@ -439,22 +439,22 @@ class DataService {
             return null;
         }
     }
-    
+
     // New method: Validate data structure
     validateDataStructure() {
         if (this.epidemData.length > 0) {
             const firstRecord = this.epidemData[0];
             console.log("Epidem data fields:", Object.keys(firstRecord));
-            
+
             // Check for required fields
             if (!('date' in firstRecord)) {
                 console.error("Epidem data is missing 'date' field!");
             }
-            
+
             // Check what field is used for country identification
             const possibleCountryFields = ['country_key', 'country_code', 'location_key', 'country', 'iso_code'];
             const foundCountryField = possibleCountryFields.find(field => field in firstRecord);
-            
+
             if (foundCountryField && foundCountryField !== 'country_key') {
                 console.log(`Found country identifier in field '${foundCountryField}' instead of 'country_key'`);
                 // If we found a different field name, map it to country_key
@@ -469,20 +469,20 @@ class DataService {
                 console.error("Could not find any country identifier field in epidem data!");
             }
         }
-        
+
         if (this.hospitalizationsData.length > 0) {
             const firstRecord = this.hospitalizationsData[0];
             console.log("Hospitalization data fields:", Object.keys(firstRecord));
-            
+
             // Check for required fields
             if (!('date' in firstRecord)) {
                 console.error("Hospitalization data is missing 'date' field!");
             }
-            
+
             // Check what field is used for country identification
             const possibleCountryFields = ['country_key', 'country_code', 'location_key', 'country', 'iso_code'];
             const foundCountryField = possibleCountryFields.find(field => field in firstRecord);
-            
+
             if (foundCountryField && foundCountryField !== 'country_key') {
                 console.log(`Found country identifier in field '${foundCountryField}' instead of 'country_key'`);
                 // If we found a different field name, map it to country_key
@@ -497,20 +497,20 @@ class DataService {
                 console.error("Could not find any country identifier field in hospitalization data!");
             }
         }
-        
+
         if (this.vaccinationsData.length > 0) {
             const firstRecord = this.vaccinationsData[0];
             console.log("Vaccination data fields:", Object.keys(firstRecord));
-            
+
             // Check for required fields
             if (!('date' in firstRecord)) {
                 console.error("Vaccination data is missing 'date' field!");
             }
-            
+
             // Check what field is used for country identification
             const possibleCountryFields = ['country_key', 'country_code', 'location_key', 'country', 'iso_code'];
             const foundCountryField = possibleCountryFields.find(field => field in firstRecord);
-            
+
             if (foundCountryField && foundCountryField !== 'country_key') {
                 console.log(`Found country identifier in field '${foundCountryField}' instead of 'country_key'`);
                 // If we found a different field name, map it to country_key
@@ -526,11 +526,11 @@ class DataService {
             }
         }
     }
-    
+
     showDataFileError(errorDetails = null) {
         const errorDisplay = document.getElementById('errorDisplay');
         const errorMessage = document.getElementById('errorMessage');
-        
+
         let message = `
             <p>Unable to load the required data files. Please try the following:</p>
             <ol>
@@ -555,26 +555,26 @@ class DataService {
                 <button id="processUploads">Process Uploaded Files</button>
             </div>
         `;
-        
+
         if (errorDetails) {
             message += `<p>Error details: ${errorDetails}</p>`;
         }
-        
+
         errorMessage.innerHTML = message;
         errorDisplay.style.display = 'flex';
-        
+
         // Set up file upload event listeners
         setTimeout(() => {
             document.getElementById('errorClose').addEventListener('click', () => {
                 errorDisplay.style.display = 'none';
             });
-            
+
             document.getElementById('processUploads').addEventListener('click', async () => {
                 const epidemFile = document.getElementById('epidemUpload').files[0];
                 const hospitalFile = document.getElementById('hospitalUpload').files[0];
                 const vaccinationFile = document.getElementById('vaccinationUpload').files[0];
                 const indexFile = document.getElementById('indexUpload').files[0];
-                
+
                 if (epidemFile && hospitalFile && vaccinationFile && indexFile) {
                     try {
                         await this.processUploadedFiles(epidemFile, hospitalFile, vaccinationFile, indexFile);
@@ -588,47 +588,47 @@ class DataService {
             });
         }, 100);
     }
-    
+
     async processUploadedFiles(epidemFile, hospitalFile, vaccinationFile, indexFile) {
         document.getElementById('dataStatus').textContent = "Processing uploaded files...";
-        
+
         try {
             // Read and parse the CSV files
             this.epidemData = await this.readCSVFile(epidemFile);
             this.hospitalizationsData = await this.readCSVFile(hospitalFile);
             this.vaccinationsData = await this.readCSVFile(vaccinationFile);
             this.countryIndex = await this.readCSVFile(indexFile);
-            
+
             if (!this.epidemData.length || !this.hospitalizationsData.length || !this.vaccinationsData.length || !this.countryIndex.length) {
                 throw new Error('One or more files are empty or invalid');
             }
-            
+
             this.log(`Loaded ${this.epidemData.length} epidem records from upload`);
             this.log(`Loaded ${this.hospitalizationsData.length} hospitalization records from upload`);
             this.log(`Loaded ${this.vaccinationsData.length} vaccination records from upload`);
             this.log(`Loaded ${this.countryIndex.length} country index records from upload`);
-            
+
             document.getElementById('dataStatus').textContent = "Processing uploaded data...";
-            
+
             // Build a lookup table for country codes
             this.buildCountryCodeMap();
-            
+
             // Process the data
             this.processData();
-            
+
             // Set defaults
             this.setDefaultValues();
-            
+
             // Index the data for faster lookups
             document.getElementById('dataStatus').textContent = "Indexing uploaded data...";
             await this.indexAllData();
-            
+
             // Pre-calculate colors for better performance
             document.getElementById('dataStatus').textContent = "Calculating colors...";
             await this.precalculateColors();
-            
+
             document.getElementById('dataStatus').textContent = "Ready (using uploaded data)";
-            
+
             // Refresh the visualization
             const globe = window.globeInstance;
             if (globe) {
@@ -637,7 +637,7 @@ class DataService {
                 globe.updateGlobeColors();
                 globe.updateCountryInfoPanel(null);
             }
-            
+
             return {
                 epidemData: this.epidemData,
                 hospitalizationsData: this.hospitalizationsData,
@@ -652,11 +652,11 @@ class DataService {
             throw error;
         }
     }
-    
+
     async readCSVFile(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            
+
             reader.onload = (event) => {
                 try {
                     const csvData = event.target.result;
@@ -666,20 +666,20 @@ class DataService {
                     reject(error);
                 }
             };
-            
+
             reader.onerror = (error) => reject(error);
-            
+
             reader.readAsText(file);
         });
     }
-    
+
     // Build a lookup table for quick country code mapping
     buildCountryCodeMap() {
         this.countryCodeMap = {};
         this.countryNameMap = {};
-        
+
         if (!this.countryIndex) return;
-        
+
         for (const entry of this.countryIndex) {
             if (entry.location_key && entry.country_name) {
                 // Store both uppercase and lowercase for better matching
@@ -687,9 +687,9 @@ class DataService {
                 this.countryNameMap[entry.location_key.toLowerCase()] = entry.country_name;
             }
         }
-        
+
         this.log(`Built country code map with ${Object.keys(this.countryCodeMap).length} entries`);
-        
+
         // Add common name variations for major countries
         const commonAliases = {
             'united states': 'us',
@@ -708,11 +708,11 @@ class DataService {
             'iran': 'ir',
             'iran, islamic republic of': 'ir'
         };
-        
+
         for (const [alias, code] of Object.entries(commonAliases)) {
             this.countryCodeMap[alias] = code;
         }
-        
+
         // Print some sample mappings for debugging
         this.log("Sample country mappings:");
         const sampleCountries = ['us', 'gb', 'fr', 'de'];
@@ -720,25 +720,25 @@ class DataService {
             this.log(`${code} -> ${this.getCountryName(code)}`);
         }
     }
-    
+
     // Process the data to extract dates, columns, etc.
     processData() {
         this.log("Processing data");
-        
+
         // Extract dates with actual data (not just all dates)
         const extractDatesWithData = (dataset) => {
             if (!dataset || !dataset.length) return [];
-            
+
             // Count records with actual data for each date
             const dateDataCounts = {};
-            
+
             dataset.forEach(d => {
                 if (!d.date) return;
-                
+
                 // Check if this record has actual data
                 let hasData = false;
                 let dataCount = 0;
-                
+
                 for (const key in d) {
                     if (key !== 'date' && key !== 'country_key' && key !== 'location_key' && d[key]) {
                         const value = parseFloat(d[key]);
@@ -748,7 +748,7 @@ class DataService {
                         }
                     }
                 }
-                
+
                 if (hasData) {
                     if (!dateDataCounts[d.date]) {
                         dateDataCounts[d.date] = 0;
@@ -756,52 +756,52 @@ class DataService {
                     dateDataCounts[d.date] += dataCount;
                 }
             });
-            
+
             // Get dates where we have enough data points (at least 10 countries with data)
             return Object.entries(dateDataCounts)
                 .filter(([date, count]) => count >= 10)
                 .map(([date]) => date);
         };
-        
+
         // Get dates with actual data from each dataset
         const epidemDates = extractDatesWithData(this.epidemData);
         const hospDates = extractDatesWithData(this.hospitalizationsData);
         const vaccinationDates = extractDatesWithData(this.vaccinationsData);
-        
+
         this.log(`Found ${epidemDates.length} dates with data in epidem dataset`);
         this.log(`Found ${hospDates.length} dates with data in hospitalization dataset`);
         this.log(`Found ${vaccinationDates.length} dates with data in vaccination dataset`);
-        
+
         // Combine and sort dates
         let combinedDates = [...new Set([...epidemDates, ...hospDates, ...vaccinationDates])].sort();
-        
+
         // Remove any outlier dates (first/last dates if they're too far from others)
         if (combinedDates.length > 3) {
             // Check if the first date is too isolated
             const firstDate = new Date(combinedDates[0]);
             const secondDate = new Date(combinedDates[1]);
             const daysBetweenFirst = Math.abs((secondDate - firstDate) / (1000 * 60 * 60 * 24));
-            
+
             // Check if the last date is too isolated
             const lastDate = new Date(combinedDates[combinedDates.length - 1]);
             const secondLastDate = new Date(combinedDates[combinedDates.length - 2]);
             const daysBetweenLast = Math.abs((lastDate - secondLastDate) / (1000 * 60 * 60 * 24));
-            
+
             // If more than 30 days gap, consider it an outlier
             if (daysBetweenFirst > 30) {
                 this.log(`First date ${combinedDates[0]} seems isolated, removing it`);
                 combinedDates = combinedDates.slice(1);
             }
-            
+
             if (daysBetweenLast > 30) {
                 this.log(`Last date ${combinedDates[combinedDates.length-1]} seems isolated, removing it`);
                 combinedDates = combinedDates.slice(0, -1);
             }
         }
-        
+
         this.availableDates = combinedDates;
         this.log(`Combined to ${this.availableDates.length} unique dates with actual data`);
-        
+
         // Extract available columns for each dataset (excluding date, country_key, and location_key)
         if (this.epidemData && this.epidemData.length > 0) {
             this.availableColumns.epidem = Object.keys(this.epidemData[0])
@@ -810,7 +810,7 @@ class DataService {
         } else {
             console.error("No epidem data records found!");
         }
-            
+
         if (this.hospitalizationsData && this.hospitalizationsData.length > 0) {
             this.availableColumns.hospitalizations = Object.keys(this.hospitalizationsData[0])
                 .filter(col => col !== 'date' && col !== 'country_key' && col !== 'location_key');
@@ -818,7 +818,7 @@ class DataService {
         } else {
             console.error("No hospitalization data records found!");
         }
-        
+
         if (this.vaccinationsData && this.vaccinationsData.length > 0) {
             this.availableColumns.vaccinations = Object.keys(this.vaccinationsData[0])
                 .filter(col => col !== 'date' && col !== 'country_key' && col !== 'location_key');
@@ -826,34 +826,34 @@ class DataService {
         } else {
             console.error("No vaccination data records found!");
         }
-        
+
         // Analyze some sample data for a few countries
         const sampleCountries = ['us', 'gb', 'fr', 'de'];
         this.log("Checking for data availability for sample countries:");
-        
+
         for (const countryKey of sampleCountries) {
-            const epidemCount = this.epidemData.filter(d => 
+            const epidemCount = this.epidemData.filter(d =>
                 d.country_key && d.country_key.toLowerCase() === countryKey.toLowerCase()
             ).length;
-            
-            const hospCount = this.hospitalizationsData.filter(d => 
+
+            const hospCount = this.hospitalizationsData.filter(d =>
                 d.country_key && d.country_key.toLowerCase() === countryKey.toLowerCase()
             ).length;
-            
-            const vaccinationCount = this.vaccinationsData.filter(d => 
+
+            const vaccinationCount = this.vaccinationsData.filter(d =>
                 d.country_key && d.country_key.toLowerCase() === countryKey.toLowerCase()
             ).length;
-            
+
             this.log(`${countryKey} (${this.getCountryName(countryKey)}): Epidem: ${epidemCount}, Hospital: ${hospCount}, Vaccination: ${vaccinationCount}`);
         }
-        
+
         // List the first few country_key values from the data to help debugging
         if (this.epidemData && this.epidemData.length > 0) {
             const uniqueKeys = [...new Set(this.epidemData.slice(0, 100).map(d => d.country_key))];
             this.log(`Sample country keys in epidem data: ${uniqueKeys.slice(0, 10).join(', ')}`);
         }
     }
-    
+
     // Set default values
     setDefaultValues() {
         // Set default column for visualization (pick one that's likely to have data)
@@ -864,38 +864,38 @@ class DataService {
         } else {
             this.currentColumn = this.availableColumns[this.currentDataset][0] || null;
         }
-        
+
         this.log(`Set default column to: ${this.currentColumn}`);
     }
-    
+
     // Get country name from country key
     getCountryName(countryKey) {
         if (!countryKey) return 'Unknown';
         if (!this.countryNameMap) return countryKey;
-        
+
         return this.countryNameMap[countryKey.toLowerCase()] || countryKey;
     }
-    
+
     // Get country key from country name
     getCountryKeyFromName(countryName) {
         if (!countryName) return null;
         if (!this.countryCodeMap) return null;
-        
+
         const normalizedName = countryName.toLowerCase().trim();
         return this.countryCodeMap[normalizedName] || null;
     }
-    
+
     // Get data for a specific country on the current date
     getCountryData(countryKey) {
         if (!countryKey) return null;
-        
+
         // Check in the indexed data first for better performance
         const normalizedKey = countryKey.toLowerCase();
         const datasetName = this.currentDataset;
-        
+
         if (
-            this.indexedData[datasetName] && 
-            this.indexedData[datasetName][normalizedKey] && 
+            this.indexedData[datasetName] &&
+            this.indexedData[datasetName][normalizedKey] &&
             this.indexedData[datasetName][normalizedKey][this.currentDate]
         ) {
             const countryData = this.indexedData[datasetName][normalizedKey][this.currentDate];
@@ -906,25 +906,25 @@ class DataService {
                 ...countryData
             };
         }
-        
+
         // If not found for current date, try to find closest date
         if (this.indexedData[datasetName] && this.indexedData[datasetName][normalizedKey]) {
             const availableDates = Object.keys(this.indexedData[datasetName][normalizedKey]).sort();
-            
+
             if (availableDates.length > 0) {
                 // Find closest date
                 availableDates.sort((a, b) => {
                     const dateA = new Date(a);
                     const dateB = new Date(b);
-                    return Math.abs(dateA - new Date(this.currentDate)) - 
+                    return Math.abs(dateA - new Date(this.currentDate)) -
                            Math.abs(dateB - new Date(this.currentDate));
                 });
-                
+
                 const closestDate = availableDates[0];
                 const countryData = this.indexedData[datasetName][normalizedKey][closestDate];
-                
+
                 this.log(`Using closest date ${closestDate} for ${countryKey}`);
-                
+
                 return {
                     countryKey,
                     countryName: this.getCountryName(countryKey),
@@ -933,11 +933,11 @@ class DataService {
                 };
             }
         }
-        
+
         // If still not found, return null
         return null;
     }
-    
+
     // Get current dataset based on selection
     getCurrentDataset() {
         if (this.currentDataset === 'epidem') {
@@ -949,43 +949,43 @@ class DataService {
         }
         return null;
     }
-    
+
     // Get data for all countries on current date
     getAllCountriesDataForCurrentDate() {
         const dataset = this.getCurrentDataset();
         if (!dataset) return [];
-        
+
         return dataset.filter(d => d.date === this.currentDate);
     }
-    
+
     // Get value for current column for a country
     getDataValue(countryKey) {
         const countryData = this.getCountryData(countryKey);
         if (!countryData || !this.currentColumn) return 0;
-        
+
         const value = countryData[this.currentColumn];
         return value ? parseFloat(value) : 0;
     }
-    
+
     // Get color for a country using pre-calculated cache
     getCountryColor(countryKey) {
-        if (!countryKey) return '#5da85d'; // Default color
-        
+        if (!countryKey) return this.getDefaultColor(); // Default color based on dataset
+
         const normalizedKey = countryKey.toLowerCase();
         const cachedColor = this.getCachedColor(normalizedKey, this.currentDate);
-        
+
         if (cachedColor) {
             return cachedColor;
         }
-        
+
         // If no cached color, fall back to calculating it
         try {
             const value = this.getDataValue(countryKey);
-            
+
             if (!value || value === 0) {
-                return '#5da85d'; // Default for no data
+                return this.getDefaultColor(); // Default for no data based on dataset
             }
-            
+
             const colorScale = this.getColorScale();
             // Log color values for debugging
             if (['us', 'gb', 'fr', 'de', 'jp'].includes(normalizedKey)) {
@@ -994,10 +994,23 @@ class DataService {
             return colorScale(value);
         } catch (e) {
             console.error('Error calculating country color:', e);
-            return '#5da85d'; // Default on error
+            return this.getDefaultColor(); // Default on error based on dataset
         }
     }
-    
+
+    // Get default color based on current dataset
+    getDefaultColor() {
+        // Return the background color for the current dataset
+        if (this.currentDataset === 'epidem') {
+            return '#4a0000'; // Red background for epidemiology
+        } else if (this.currentDataset === 'hospitalizations') {
+            return '#1a315a'; // Blue background for hospitalizations
+        } else if (this.currentDataset === 'vaccinations') {
+            return '#004d40'; // Green background for vaccinations
+        }
+        return '#4a0000'; // Default to epidem color
+    }
+
     // Change dataset
     changeDataset(dataset) {
         this.currentDataset = dataset;
@@ -1009,15 +1022,15 @@ class DataService {
         } else {
             this.currentColumn = this.availableColumns[dataset][0] || null;
         }
-        
+
         this.log(`Changed dataset to ${dataset}, column set to ${this.currentColumn}`);
-        
+
         return {
             columns: this.availableColumns[dataset],
             currentColumn: this.currentColumn
         };
     }
-    
+
     // Change date
     changeDate(date) {
         if (this.availableDates.includes(date)) {
@@ -1027,7 +1040,7 @@ class DataService {
         }
         return false;
     }
-    
+
     // Change column
     changeColumn(column) {
         if (this.availableColumns[this.currentDataset].includes(column)) {
@@ -1037,29 +1050,29 @@ class DataService {
         }
         return false;
     }
-    
+
     // Get color scale for current data column
     getColorScale() {
         // Use the pre-calculated global range if available
-        if (this.globalDataRanges && 
-            this.globalDataRanges[this.currentDataset] && 
+        if (this.globalDataRanges &&
+            this.globalDataRanges[this.currentDataset] &&
             this.globalDataRanges[this.currentDataset][this.currentColumn]) {
-            
+
             const range = this.globalDataRanges[this.currentDataset][this.currentColumn];
-            
-            // Choose color scheme based on current dataset
+
+            // Choose color scheme based on current dataset - using even lighter base colors to black
             let colorInterpolator;
             if (this.currentDataset === 'epidem') {
-                colorInterpolator = d3.interpolateRgb('#2ECC40', '#FF4136');
+                colorInterpolator = d3.interpolateRgb('#cc5555', '#000000');
             } else if (this.currentDataset === 'hospitalizations') {
-                colorInterpolator = d3.interpolateRgb('#2ECC40', '#0074D9');
+                colorInterpolator = d3.interpolateRgb('#6688cc', '#000000');
             } else if (this.currentDataset === 'vaccinations') {
-                colorInterpolator = d3.interpolateRgb('#2ECC40', '#9932CC');
+                colorInterpolator = d3.interpolateRgb('#44cc99', '#000000');
             }
-            
+
             // Create a power scale with adjustable exponent for better visual scaling
             const exponent = 0.5;
-            
+
             return d3.scaleSequential()
                 .domain([0, range.max])
                 .interpolator(value => {
@@ -1069,43 +1082,43 @@ class DataService {
                     return colorInterpolator(scaledValue);
                 });
         }
-        
+
         // Fall back to original method if global ranges aren't available
         const dataset = this.getAllCountriesDataForCurrentDate();
-        
+
         if (!dataset.length || !this.currentColumn) {
             this.log("Using default color scale (no data)");
             return d3.scaleSequential(d3.interpolateGreens).domain([0, 1]);
         }
-        
+
         // Extract values for current column
         const values = dataset.map(d => {
             const value = d[this.currentColumn];
             return value ? parseFloat(value) : 0;
         }).filter(v => !isNaN(v) && v > 0); // Filter out zero values for better scaling
-        
+
         if (!values.length) {
             this.log("Using default color scale (no valid values)");
             return d3.scaleSequential(d3.interpolateGreens).domain([0, 1]);
         }
-        
+
         // Calculate statistics for better scaling
         const max = d3.max(values);
         const min = d3.min(values);
         const median = d3.median(values);
         const q1 = d3.quantile(values.sort(d3.ascending), 0.25);
         const q3 = d3.quantile(values.sort(d3.ascending), 0.75);
-        
+
         console.log(`Color scale stats for ${this.currentColumn}: min=${min}, Q1=${q1}, median=${median}, Q3=${q3}, max=${max}`);
-        
+
         // Choose domain based on data distribution
         // Use quantile-based domain to handle skewed distributions better
         let domainMax;
-        
+
         // Check if we have extreme outliers
         const iqr = q3 - q1;
         const upperOutlierThreshold = q3 + 1.5 * iqr;
-        
+
         if (max > upperOutlierThreshold && upperOutlierThreshold > 0) {
             // If we have outliers, cap at the upper outlier threshold for better visualization
             domainMax = upperOutlierThreshold;
@@ -1113,25 +1126,25 @@ class DataService {
         } else {
             domainMax = max;
         }
-        
-        // Choose color scheme based on current dataset with more vibrant colors
+
+        // Choose color scheme based on current dataset - using even lighter base colors to black
         let colorInterpolator;
         if (this.currentDataset === 'epidem') {
-            // Virus data: vibrant green to red gradient
-            colorInterpolator = d3.interpolateRgb('#2ECC40', '#FF4136');
+            // Virus data: even lighter red to black gradient
+            colorInterpolator = d3.interpolateRgb('#cc5555', '#000000');
         } else if (this.currentDataset === 'hospitalizations') {
-            // Hospital data: vibrant green to blue gradient
-            colorInterpolator = d3.interpolateRgb('#2ECC40', '#0074D9');
+            // Hospital data: even lighter blue to black gradient
+            colorInterpolator = d3.interpolateRgb('#6688cc', '#000000');
         } else if (this.currentDataset === 'vaccinations') {
-            // Vaccination data: vibrant green to purple gradient
-            colorInterpolator = d3.interpolateRgb('#2ECC40', '#9932CC');
+            // Vaccination data: even lighter green to black gradient
+            colorInterpolator = d3.interpolateRgb('#44cc99', '#000000');
         }
-        
+
         // Create a power scale with adjustable exponent for better visual scaling
         // Lower exponent (0.5) gives more emphasis to lower values
         // Higher exponent (2) gives more emphasis to higher values
         const exponent = 0.5; // Emphasize lower values for better visualization
-        
+
         return d3.scaleSequential()
             .domain([0, domainMax])
             .interpolator(value => {
@@ -1141,21 +1154,21 @@ class DataService {
                 return colorInterpolator(scaledValue);
             });
     }
-    
+
     // Get date index for slider
     getDateIndex(date) {
         return this.availableDates.indexOf(date);
     }
-    
+
     // Get date from index
     getDateFromIndex(index) {
         return this.availableDates[index] || this.currentDate;
     }
-    
+
     // Format date for display
     formatDate(dateString) {
         if (!dateString) return '';
-        
+
         // Assuming dates are in YYYY-MM-DD format
         const date = new Date(dateString);
         return date.toLocaleDateString('en-US', {
@@ -1164,13 +1177,13 @@ class DataService {
             day: 'numeric'
         });
     }
-    
+
     // Format number for display
     formatNumber(num) {
         if (num === undefined || num === null || isNaN(num)) return '-';
         return parseFloat(num).toLocaleString();
     }
-    
+
     // Utility method for conditional logging
     log(message, data) {
         if (this.debug) {
@@ -1181,7 +1194,7 @@ class DataService {
             }
         }
     }
-    
+
     // Generate sample country index data
     generateSampleCountryIndex() {
         const countries = [
@@ -1216,30 +1229,30 @@ class DataService {
             { location_key: 'nz', country_name: 'New Zealand' },
             { location_key: 'sg', country_name: 'Singapore' }
         ];
-        
+
         return countries;
     }
-    
+
     // Generate sample epidemiological data
     generateSampleEpidemData() {
         return this.generateSampleDataset('epidem');
     }
-    
+
     // Generate sample hospitalizations data
     generateSampleHospitalizationsData() {
         return this.generateSampleDataset('hospitalizations');
     }
-    
+
     // Generate sample vaccinations data
     generateSampleVaccinationsData() {
         return this.generateSampleDataset('vaccinations');
     }
-    
+
     // Generic sample data generator
     generateSampleDataset(datasetType) {
         const data = [];
         const countries = this.generateSampleCountryIndex();
-        
+
         // Generate data for the last 30 days
         const today = new Date();
         const dates = [];
@@ -1249,7 +1262,7 @@ class DataService {
             const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD format
             dates.push(dateString);
         }
-        
+
         // Define columns based on dataset type
         let columns = {};
         if (datasetType === 'epidem') {
@@ -1273,7 +1286,7 @@ class DataService {
                 cumulative_vaccine_doses_administered: (country, date, index) => Math.floor(2000000 * index/30 * (1 + Math.random()*0.5))
             };
         }
-        
+
         // Generate data for each country and date
         countries.forEach(country => {
             dates.forEach((date, dateIndex) => {
@@ -1281,16 +1294,16 @@ class DataService {
                     country_key: country.location_key,
                     date: date
                 };
-                
+
                 // Add values for each column
                 Object.keys(columns).forEach(column => {
                     record[column] = columns[column](country.location_key, date, dateIndex);
                 });
-                
+
                 data.push(record);
             });
         });
-        
+
         return data;
     }
 }
