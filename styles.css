@@ -780,7 +780,8 @@ h1 {
     margin-top: 10px;
     width: 100%;
     font-weight: bold;
-    transition: background-color 0.3s, transform 0.2s;
+    /* Remove transition for background-color */
+    transition: transform 0.2s;
 }
 
 #seeMoreBtn:hover {

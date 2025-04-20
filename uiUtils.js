@@ -37,6 +37,48 @@ function changeDataset(datasetKey) {
         activeBtn.classList.add('active');
     }
 
+    // Update the See More Visualizations button color based on dataset
+    const seeMoreBtn = document.getElementById('seeMoreBtn');
+    if (seeMoreBtn) {
+        // Define colors for each dataset (matching the Reset View button colors)
+        const buttonColors = {
+            'epidem': '#8b0000',            // Dark red for epidemiology
+            'hospitalizations': '#1a315a',  // Dark blue for hospitalizations
+            'vaccinations': '#004d40'       // Dark green for vaccinations
+        };
+
+        // Define hover colors for each dataset
+        const hoverColors = {
+            'epidem': '#a00000',            // Lighter red for hover
+            'hospitalizations': '#2a4570',  // Lighter blue for hover
+            'vaccinations': '#00695c'       // Lighter green for hover
+        };
+
+        // Apply the color without transition
+        seeMoreBtn.style.backgroundColor = buttonColors[datasetKey] || '#8b0000';
+
+        // Update hover style
+        const styleId = 'see-more-button-style';
+        let styleEl = document.getElementById(styleId);
+
+        // Remove existing style element if it exists
+        if (styleEl) {
+            styleEl.remove();
+        }
+
+        // Create new style element with updated hover color
+        styleEl = document.createElement('style');
+        styleEl.id = styleId;
+        styleEl.textContent = `
+            #seeMoreBtn:hover {
+                background-color: ${hoverColors[datasetKey] || hoverColors['epidem']} !important;
+            }
+        `;
+
+        // Add the style element to the document head
+        document.head.appendChild(styleEl);
+    }
+
     // If a visualization is visible, update it with the new dataset
     const vizPanel = document.getElementById('visualizationPanel');
     if (vizPanel && vizPanel.style.display === 'flex') {
@@ -85,6 +127,35 @@ function initializeUI() {
 
             // Initialize reset button color to match default dataset (epidem)
             globeInstance.updateResetButtonColor('epidem');
+
+            // Initialize See More button color to match default dataset (epidem)
+            const seeMoreBtn = document.getElementById('seeMoreBtn');
+            if (seeMoreBtn) {
+                // Set color without transition
+                seeMoreBtn.style.transition = 'none';
+                seeMoreBtn.style.backgroundColor = '#8b0000'; // Dark red for epidemiology (same as Reset button)
+
+                // Set up hover style for the See More button
+                const styleId = 'see-more-button-style';
+                let styleEl = document.getElementById(styleId);
+
+                // Remove existing style element if it exists
+                if (styleEl) {
+                    styleEl.remove();
+                }
+
+                // Create new style element with hover color
+                styleEl = document.createElement('style');
+                styleEl.id = styleId;
+                styleEl.textContent = `
+                    #seeMoreBtn:hover {
+                        background-color: #a00000 !important; /* Lighter red for hover */
+                    }
+                `;
+
+                // Add the style element to the document head
+                document.head.appendChild(styleEl);
+            }
         }
     });
 
