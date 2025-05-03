@@ -8,6 +8,7 @@
 
     <!-- CSS / Favicon -->
     <link href="styles.css" rel="stylesheet" />
+    <link href="compare-styles.css" rel="stylesheet" />
 
     <!-- Core JavaScript Libraries -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -41,6 +42,10 @@
     <script src="charts/pieChart.js" defer></script>
     <script src="charts/radarChart.js" defer></script>
     <script src="charts/heatmapChart.js" defer></script>
+    <script src="charts/multiCountryChart.js" defer></script>
+
+    <!-- Compare Feature -->
+    <script src="compare.js" defer></script>
 </head>
 
 <body>
@@ -88,6 +93,8 @@
         <div id="countryStats"></div>
         <!-- Add the See More button -->
         <button id="seeMoreBtn" onclick="showVisualizations()">See More Visualizations</button>
+        <!-- Add the Compare button -->
+        <button id="compareBtn" onclick="showComparePanel()">Compare</button>
     </div>
 
     <!-- Controls Panel -->
@@ -147,6 +154,98 @@
 
     <!-- Minimized Globe Container -->
     <div id="minimizedGlobe" class="globe-minimized" style="display:none" onclick="restoreGlobe()"></div>
+
+    <!-- Compare Panel -->
+    <div id="comparePanel" class="compare-panel">
+        <div class="compare-header">
+            <h2>Compare Countries</h2>
+            <button id="closeCompareBtn" onclick="closeComparePanel()">×</button>
+        </div>
+
+        <div class="compare-content">
+            <div class="country-selection-container">
+                <div class="country-selection">
+                    <div class="country-slot" id="countrySlot1">
+                        <div class="country-placeholder">Select Country 1</div>
+                        <button class="select-country-btn" onclick="openCountrySelector(1)">Select</button>
+                    </div>
+
+                    <div class="country-slot" id="countrySlot2">
+                        <div class="country-placeholder">Select Country 2</div>
+                        <button class="select-country-btn" onclick="openCountrySelector(2)">Select</button>
+                    </div>
+
+                    <div class="country-slot" id="countrySlot3" style="display:none">
+                        <div class="country-placeholder">Select Country 3</div>
+                        <button class="select-country-btn" onclick="openCountrySelector(3)">Select</button>
+                    </div>
+
+                    <div class="country-slot" id="countrySlot4" style="display:none">
+                        <div class="country-placeholder">Select Country 4</div>
+                        <button class="select-country-btn" onclick="openCountrySelector(4)">Select</button>
+                    </div>
+
+                    <div class="add-country-container">
+                        <button id="addCountryBtn" onclick="addCountrySlot()">+ Add Country</button>
+                    </div>
+                </div>
+
+                <div class="display-options">
+                    <div class="display-option">
+                        <label>Display Mode:</label>
+                        <div class="display-buttons">
+                            <button id="separateChartsBtn" class="display-btn active" onclick="setDisplayMode('separate')">
+                                Separate Charts
+                            </button>
+                            <button id="combinedChartBtn" class="display-btn" onclick="setDisplayMode('combined')">
+                                Combined Chart
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="compare-actions">
+                <button id="generateComparisonBtn" onclick="generateComparison()">Generate Comparison</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compare Country Selector -->
+    <div id="compareCountrySelector" class="compare-country-selector">
+        <div class="selector-header">
+            <h3>Select a Country</h3>
+            <button class="close-selector" onclick="closeCountrySelector()">×</button>
+        </div>
+
+        <div class="selector-content">
+            <input type="text" id="compareCountrySearchInput" placeholder="Type country name..." autocomplete="off">
+            <div id="compareCountryList" class="compare-country-list"></div>
+        </div>
+    </div>
+
+    <!-- Compare Visualization Panel -->
+    <div id="compareVisualizationPanel" class="compare-visualization-panel">
+        <div class="viz-header">
+            <div class="viz-title">
+                <h2>Country Comparison</h2>
+            </div>
+            <div class="viz-controls">
+                <select id="compareVizTypeSelector" class="viz-selector" onchange="changeComparisonVisualization()">
+                    <option value="bar">Bar Chart</option>
+                    <option value="line">Line Chart</option>
+                    <option value="pie">Pie Chart</option>
+                    <option value="radar">Radar Chart</option>
+                    <option value="heatmap">Heat Map</option>
+                </select>
+                <button id="backToCompareBtn" onclick="backToComparePanel()">Back to Selection</button>
+            </div>
+        </div>
+
+        <div class="viz-content">
+            <div id="compareChartContainer" class="compare-chart-container"></div>
+        </div>
+    </div>
 </body>
 
 </html>

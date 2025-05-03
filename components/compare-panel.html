@@ -1,0 +1,45 @@
+<!-- Compare Panel -->
+<div id="comparePanel" class="compare-panel">
+    <div class="compare-header">
+        <h2>Compare Countries</h2>
+        <button id="closeCompareBtn" onclick="closeComparePanel()">×</button>
+    </div>
+    
+    <div class="compare-content">
+        <div class="country-selection-container">
+            <div class="country-selection">
+                <div class="country-slot" id="countrySlot1">
+                    <div class="country-placeholder">Select Country 1</div>
+                    <button class="select-country-btn" onclick="openCountrySelector(1)">Select</button>
+                </div>
+                
+                <div class="country-slot" id="countrySlot2">
+                    <div class="country-placeholder">Select Country 2</div>
+                    <button class="select-country-btn" onclick="openCountrySelector(2)">Select</button>
+                </div>
+                
+                <div class="add-country-container">
+                    <button id="addCountryBtn" onclick="addCountrySlot()">+ Add Country</button>
+                </div>
+            </div>
+            
+            <div class="display-options">
+                <div class="display-option">
+                    <label>Display Mode:</label>
+                    <div class="display-buttons">
+                        <button id="separateChartsBtn" class="display-btn active" onclick="setDisplayMode('separate')">
+                            Separate Charts
+                        </button>
+                        <button id="combinedChartBtn" class="display-btn" onclick="setDisplayMode('combined')">
+                            Combined Chart
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="compare-actions">
+            <button id="generateComparisonBtn" onclick="generateComparison()">Generate Comparison</button>
+        </div>
+    </div>
+</div>

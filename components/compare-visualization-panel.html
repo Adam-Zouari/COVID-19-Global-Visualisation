@@ -1,0 +1,22 @@
+<!-- Compare Visualization Panel -->
+<div id="compareVisualizationPanel" class="compare-visualization-panel">
+    <div class="viz-header">
+        <div class="viz-title">
+            <h2>Country Comparison</h2>
+        </div>
+        <div class="viz-controls">
+            <select id="compareVizTypeSelector" class="viz-selector" onchange="changeComparisonVisualization()">
+                <option value="bar">Bar Chart</option>
+                <option value="line">Line Chart</option>
+                <option value="pie">Pie Chart</option>
+                <option value="radar">Radar Chart</option>
+                <option value="heatmap">Heat Map</option>
+            </select>
+            <button id="backToCompareBtn" onclick="backToComparePanel()">Back to Selection</button>
+        </div>
+    </div>
+    
+    <div class="viz-content">
+        <div id="compareChartContainer" class="compare-chart-container"></div>
+    </div>
+</div>
