@@ -32,14 +32,19 @@ const ChartControls = {
             controlsContainer.innerHTML = ''; // Clear existing controls
         }
 
+        // For pie and radar charts, force single date mode
+        if (vizType === 'pie' || vizType === 'radar') {
+            this.state.dateMode = 'single';
+        }
+
         // Initialize column selection state (but don't create UI elements)
         this.createColumnSelector(data, countryCode, vizType);
 
-        // Create date mode selector
-        this.createDateModeSelector(controlsContainer, data);
+        // Create date mode selector (only if not pie or radar chart)
+        this.createDateModeSelector(controlsContainer, data, vizType);
 
         // Create date range slider(s)
-        this.createDateSliders(controlsContainer, data);
+        this.createDateSliders(controlsContainer, data, vizType);
 
         // Create Apply Changes button
         this.createApplyChangesButton(controlsContainer);
@@ -60,7 +65,7 @@ const ChartControls = {
     },
 
     // Create date mode selector (range or single)
-    createDateModeSelector(container, data) {
+    createDateModeSelector(container, data, vizType) {
         const dateModeSection = document.createElement('div');
         dateModeSection.className = 'chart-control-section';
 
@@ -72,35 +77,53 @@ const ChartControls = {
         const radioContainer = document.createElement('div');
         radioContainer.className = 'date-mode-radio-container';
 
-        // Range option
-        const rangeRadio = document.createElement('input');
-        rangeRadio.type = 'radio';
-        rangeRadio.id = 'date-mode-range';
-        rangeRadio.name = 'date-mode';
-        rangeRadio.value = 'range';
-        rangeRadio.checked = this.state.dateMode === 'range';
+        // For pie and radar charts, only show single date option
+        const isPieOrRadar = (vizType === 'pie' || vizType === 'radar');
 
-        rangeRadio.addEventListener('change', () => {
-            if (rangeRadio.checked) {
-                this.state.dateMode = 'range';
-                document.getElementById('date-range-controls').style.display = 'block';
-                document.getElementById('single-date-controls').style.display = 'none';
-                // Update chart in real-time
-                this.updateChartInRealTime();
-            }
-        });
+        if (!isPieOrRadar) {
+            // Range option - only show for non-pie/radar charts
+            const rangeRadio = document.createElement('input');
+            rangeRadio.type = 'radio';
+            rangeRadio.id = 'date-mode-range';
+            rangeRadio.name = 'date-mode';
+            rangeRadio.value = 'range';
+            rangeRadio.checked = this.state.dateMode === 'range';
 
-        const rangeLabel = document.createElement('label');
-        rangeLabel.htmlFor = 'date-mode-range';
-        rangeLabel.textContent = 'Date Range';
+            rangeRadio.addEventListener('change', () => {
+                if (rangeRadio.checked) {
+                    this.state.dateMode = 'range';
+                    document.getElementById('date-range-controls').style.display = 'block';
+                    document.getElementById('single-date-controls').style.display = 'none';
+                    // Update chart in real-time
+                    this.updateChartInRealTime();
+                }
+            });
 
-        // Single date option
+            const rangeLabel = document.createElement('label');
+            rangeLabel.htmlFor = 'date-mode-range';
+            rangeLabel.textContent = 'Date Range';
+
+            // Add range option to container
+            const rangeOption = document.createElement('div');
+            rangeOption.className = 'date-mode-option';
+            rangeOption.appendChild(rangeRadio);
+            rangeOption.appendChild(rangeLabel);
+            radioContainer.appendChild(rangeOption);
+        }
+
+        // Single date option - always show this
         const singleRadio = document.createElement('input');
         singleRadio.type = 'radio';
         singleRadio.id = 'date-mode-single';
         singleRadio.name = 'date-mode';
         singleRadio.value = 'single';
         singleRadio.checked = this.state.dateMode === 'single';
+
+        // For pie/radar charts, force single date and disable the radio
+        if (isPieOrRadar) {
+            singleRadio.checked = true;
+            singleRadio.disabled = true; // Disable the radio button since it's the only option
+        }
 
         singleRadio.addEventListener('change', () => {
             if (singleRadio.checked) {
@@ -116,124 +139,128 @@ const ChartControls = {
         singleLabel.htmlFor = 'date-mode-single';
         singleLabel.textContent = 'Single Date';
 
-        // Add radio buttons to container
-        const rangeOption = document.createElement('div');
-        rangeOption.className = 'date-mode-option';
-        rangeOption.appendChild(rangeRadio);
-        rangeOption.appendChild(rangeLabel);
-
+        // Add single date option to container
         const singleOption = document.createElement('div');
         singleOption.className = 'date-mode-option';
         singleOption.appendChild(singleRadio);
         singleOption.appendChild(singleLabel);
-
-        radioContainer.appendChild(rangeOption);
         radioContainer.appendChild(singleOption);
-        dateModeSection.appendChild(radioContainer);
 
+        dateModeSection.appendChild(radioContainer);
         container.appendChild(dateModeSection);
     },
 
     // Create date range sliders
-    createDateSliders(container, data) {
+    createDateSliders(container, data, vizType) {
         // Format dates for display
         const formatDateLabel = (percent) => {
             const index = Math.floor(percent / 100 * (data.dates.length - 1));
             return data.displayDates[index] || '';
         };
 
-        // Date range controls
-        const rangeControls = document.createElement('div');
-        rangeControls.id = 'date-range-controls';
-        rangeControls.className = 'date-slider-container';
-        rangeControls.style.display = this.state.dateMode === 'range' ? 'block' : 'none';
+        // Check if we're dealing with pie or radar chart
+        const isPieOrRadar = (vizType === 'pie' || vizType === 'radar');
 
-        // Start date slider
-        const startContainer = document.createElement('div');
-        startContainer.className = 'slider-with-label';
+        // Date range controls - only create for non-pie/radar charts
+        if (!isPieOrRadar) {
+            const rangeControls = document.createElement('div');
+            rangeControls.id = 'date-range-controls';
+            rangeControls.className = 'date-slider-container';
+            rangeControls.style.display = this.state.dateMode === 'range' ? 'block' : 'none';
 
-        const startLabel = document.createElement('label');
-        startLabel.htmlFor = 'date-range-start';
-        startLabel.textContent = 'Start Date:';
+            // Start date slider
+            const startContainer = document.createElement('div');
+            startContainer.className = 'slider-with-label';
 
-        const startValue = document.createElement('span');
-        startValue.id = 'date-range-start-value';
-        startValue.className = 'slider-value';
-        startValue.textContent = formatDateLabel(this.state.dateRange.start);
+            const startLabel = document.createElement('label');
+            startLabel.htmlFor = 'date-range-start';
+            startLabel.textContent = 'Start Date:';
 
-        const startSlider = document.createElement('input');
-        startSlider.type = 'range';
-        startSlider.id = 'date-range-start';
-        startSlider.min = 0;
-        startSlider.max = 100;
-        startSlider.value = this.state.dateRange.start;
-
-        startSlider.addEventListener('input', (e) => {
-            const value = parseInt(e.target.value);
-            // Ensure start doesn't go beyond end
-            if (value > this.state.dateRange.end) {
-                e.target.value = this.state.dateRange.end;
-                this.state.dateRange.start = this.state.dateRange.end;
-            } else {
-                this.state.dateRange.start = value;
-            }
+            const startValue = document.createElement('span');
+            startValue.id = 'date-range-start-value';
+            startValue.className = 'slider-value';
             startValue.textContent = formatDateLabel(this.state.dateRange.start);
 
-            // Update chart in real-time
-            this.updateChartInRealTime();
-        });
+            const startSlider = document.createElement('input');
+            startSlider.type = 'range';
+            startSlider.id = 'date-range-start';
+            startSlider.min = 0;
+            startSlider.max = 100;
+            startSlider.value = this.state.dateRange.start;
 
-        startContainer.appendChild(startLabel);
-        startContainer.appendChild(startValue);
-        startContainer.appendChild(startSlider);
+            startSlider.addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                // Ensure start doesn't go beyond end
+                if (value > this.state.dateRange.end) {
+                    e.target.value = this.state.dateRange.end;
+                    this.state.dateRange.start = this.state.dateRange.end;
+                } else {
+                    this.state.dateRange.start = value;
+                }
+                startValue.textContent = formatDateLabel(this.state.dateRange.start);
 
-        // End date slider
-        const endContainer = document.createElement('div');
-        endContainer.className = 'slider-with-label';
+                // Update chart in real-time
+                this.updateChartInRealTime();
+            });
 
-        const endLabel = document.createElement('label');
-        endLabel.htmlFor = 'date-range-end';
-        endLabel.textContent = 'End Date:';
+            startContainer.appendChild(startLabel);
+            startContainer.appendChild(startValue);
+            startContainer.appendChild(startSlider);
 
-        const endValue = document.createElement('span');
-        endValue.id = 'date-range-end-value';
-        endValue.className = 'slider-value';
-        endValue.textContent = formatDateLabel(this.state.dateRange.end);
+            // End date slider
+            const endContainer = document.createElement('div');
+            endContainer.className = 'slider-with-label';
 
-        const endSlider = document.createElement('input');
-        endSlider.type = 'range';
-        endSlider.id = 'date-range-end';
-        endSlider.min = 0;
-        endSlider.max = 100;
-        endSlider.value = this.state.dateRange.end;
+            const endLabel = document.createElement('label');
+            endLabel.htmlFor = 'date-range-end';
+            endLabel.textContent = 'End Date:';
 
-        endSlider.addEventListener('input', (e) => {
-            const value = parseInt(e.target.value);
-            // Ensure end doesn't go below start
-            if (value < this.state.dateRange.start) {
-                e.target.value = this.state.dateRange.start;
-                this.state.dateRange.end = this.state.dateRange.start;
-            } else {
-                this.state.dateRange.end = value;
-            }
+            const endValue = document.createElement('span');
+            endValue.id = 'date-range-end-value';
+            endValue.className = 'slider-value';
             endValue.textContent = formatDateLabel(this.state.dateRange.end);
 
-            // Update chart in real-time
-            this.updateChartInRealTime();
-        });
+            const endSlider = document.createElement('input');
+            endSlider.type = 'range';
+            endSlider.id = 'date-range-end';
+            endSlider.min = 0;
+            endSlider.max = 100;
+            endSlider.value = this.state.dateRange.end;
 
-        endContainer.appendChild(endLabel);
-        endContainer.appendChild(endValue);
-        endContainer.appendChild(endSlider);
+            endSlider.addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                // Ensure end doesn't go below start
+                if (value < this.state.dateRange.start) {
+                    e.target.value = this.state.dateRange.start;
+                    this.state.dateRange.end = this.state.dateRange.start;
+                } else {
+                    this.state.dateRange.end = value;
+                }
+                endValue.textContent = formatDateLabel(this.state.dateRange.end);
 
-        rangeControls.appendChild(startContainer);
-        rangeControls.appendChild(endContainer);
+                // Update chart in real-time
+                this.updateChartInRealTime();
+            });
 
-        // Single date controls
+            endContainer.appendChild(endLabel);
+            endContainer.appendChild(endValue);
+            endContainer.appendChild(endSlider);
+
+            rangeControls.appendChild(startContainer);
+            rangeControls.appendChild(endContainer);
+
+            // Add range controls to container
+            container.appendChild(rangeControls);
+        }
+
+        // Single date controls - always create these
         const singleControls = document.createElement('div');
         singleControls.id = 'single-date-controls';
         singleControls.className = 'date-slider-container';
-        singleControls.style.display = this.state.dateMode === 'single' ? 'block' : 'none';
+
+        // For pie/radar charts, always show single date controls
+        // For other charts, show based on dateMode
+        singleControls.style.display = isPieOrRadar || this.state.dateMode === 'single' ? 'block' : 'none';
 
         const singleContainer = document.createElement('div');
         singleContainer.className = 'slider-with-label';
@@ -268,8 +295,7 @@ const ChartControls = {
 
         singleControls.appendChild(singleContainer);
 
-        // Add both control sets to container
-        container.appendChild(rangeControls);
+        // Add single date controls to container
         container.appendChild(singleControls);
     },
 
@@ -306,6 +332,35 @@ const ChartControls = {
         const countryEl = document.getElementById(`country-${window.globeInstance.selectedCountry}`);
         const countryCode = countryEl ? countryEl.getAttribute('data-country-code') : null;
         const vizType = document.getElementById('vizTypeSelector').value;
+
+        // For pie and radar charts, ensure we're in single date mode
+        if (vizType === 'pie' || vizType === 'radar') {
+            this.state.dateMode = 'single';
+
+            // Update UI to reflect this change
+            const singleDateControls = document.getElementById('single-date-controls');
+            if (singleDateControls) {
+                singleDateControls.style.display = 'block';
+            }
+
+            const dateRangeControls = document.getElementById('date-range-controls');
+            if (dateRangeControls) {
+                dateRangeControls.style.display = 'none';
+            }
+
+            // Update radio button if it exists
+            const singleRadio = document.getElementById('date-mode-single');
+            if (singleRadio) {
+                singleRadio.checked = true;
+                singleRadio.disabled = true;
+            }
+        } else {
+            // For other chart types, enable the single date radio if it was disabled
+            const singleRadio = document.getElementById('date-mode-single');
+            if (singleRadio) {
+                singleRadio.disabled = false;
+            }
+        }
 
         // Get the chart container
         const chartContainer = document.getElementById('chartContainer');
