@@ -13,15 +13,7 @@ ChartFactory.barChart = function(container, data) {
         .append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
 
-    // Add title
-    svg.append('text')
-        .attr('class', 'chart-title')
-        .attr('x', width / 2)
-        .attr('y', -25)
-        .attr('text-anchor', 'middle')
-        .style('font-size', '16px')
-        .style('fill', 'white')
-        .text(`${data.countryName} - Data Comparison`);
+    // No title
 
     // Use the dates provided by the data (already filtered by date range/single date)
     const displayDates = data.displayDates;

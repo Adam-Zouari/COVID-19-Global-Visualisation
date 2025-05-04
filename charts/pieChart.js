@@ -12,15 +12,7 @@ ChartFactory.pieChart = function(container, data) {
         .append('g')
         .attr('transform', `translate(${width/2},${height/2})`);
 
-    // Add title
-    svg.append('text')
-        .attr('class', 'chart-title')
-        .attr('x', 0)
-        .attr('y', -height/2 + 30)
-        .attr('text-anchor', 'middle')
-        .style('font-size', '16px')
-        .style('fill', 'white')
-        .text(`${data.countryName} - Latest Data Distribution`);
+    // No title
 
     // Use the most recent date's data for the pie chart
     const latestIndex = data.dates.length - 1;

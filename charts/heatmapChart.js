@@ -12,15 +12,7 @@ ChartFactory.heatmapChart = function(container, data) {
         .append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
 
-    // Add title
-    svg.append('text')
-        .attr('class', 'chart-title')
-        .attr('x', width / 2)
-        .attr('y', -25)
-        .attr('text-anchor', 'middle')
-        .style('font-size', '16px')
-        .style('fill', 'white')
-        .text(`${data.countryName} - Data Heat Map`);
+    // No title
 
     // Get all metrics for the legend
     const allMetrics = [];

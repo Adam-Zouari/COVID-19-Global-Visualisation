@@ -166,34 +166,36 @@
         </div>
 
         <div class="compare-options">
-            <div class="display-mode-selector">
-                <label>Display Mode:</label>
-                <div class="display-mode-buttons">
-                    <button id="separateChartsBtn" class="display-mode-btn active" onclick="CompareMode.changeDisplayMode('separate')">Separate Charts</button>
-                    <button id="combinedChartBtn" class="display-mode-btn" onclick="CompareMode.changeDisplayMode('combined')">Combined Chart</button>
+            <div class="controls-row">
+                <div class="display-mode-selector">
+                    <label>Display Mode:</label>
+                    <div class="display-mode-buttons">
+                        <button id="separateChartsBtn" class="display-mode-btn active" onclick="CompareMode.changeDisplayMode('separate')">Separate Charts</button>
+                        <button id="combinedChartBtn" class="display-mode-btn" onclick="CompareMode.changeDisplayMode('combined')">Combined Chart</button>
+                    </div>
                 </div>
-            </div>
 
-            <div class="chart-type-selector">
-                <label>Chart Type:</label>
-                <select id="compareChartType" onchange="CompareMode.changeChartType(this.value)">
-                    <option value="bar">Bar Chart</option>
-                    <option value="line">Line Chart</option>
-                    <option value="pie">Pie Chart</option>
-                    <option value="radar">Radar Chart</option>
-                    <option value="heatmap">Heat Map</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="date-selection-panel">
-            <h3>Date Range</h3>
-            <div class="date-range-slider-container">
-                <div class="date-range-labels">
-                    <span id="startDateLabel">Start Date</span>
-                    <span id="endDateLabel">End Date</span>
+                <div class="chart-type-selector">
+                    <label>Chart Type:</label>
+                    <select id="compareChartType" onchange="CompareMode.changeChartType(this.value)">
+                        <option value="bar">Bar Chart</option>
+                        <option value="line">Line Chart</option>
+                        <option value="pie">Pie Chart</option>
+                        <option value="radar">Radar Chart</option>
+                        <option value="heatmap">Heat Map</option>
+                    </select>
                 </div>
-                <div id="dateRangeSlider"></div>
+
+                <div class="date-selection-panel">
+                    <label>Date Range:</label>
+                    <div class="date-range-slider-container">
+                        <div class="date-range-labels">
+                            <span id="startDateLabel">Start Date</span>
+                            <span id="endDateLabel">End Date</span>
+                        </div>
+                        <div id="dateRangeSlider"></div>
+                    </div>
+                </div>
             </div>
         </div>
 

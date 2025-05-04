@@ -256,16 +256,7 @@ const CompareMode = {
             const countryData = window.globeInstance.dataService.getCountryData(countryCode);
             if (!countryData) return;
 
-            // Add country name header
-            const countryHeader = document.createElement('div');
-            countryHeader.className = 'country-chart-header';
-            countryHeader.innerHTML = `
-                <img src="https://flagcdn.com/${countryCode.toLowerCase()}.svg" alt="${countryData.countryName}" class="country-flag">
-                <h3>${countryData.countryName}</h3>
-            `;
-            countryChartContainer.appendChild(countryHeader);
-
-            // Create chart container
+            // Create chart container (no header)
             const chartDiv = document.createElement('div');
             chartDiv.className = 'chart-div';
             countryChartContainer.appendChild(chartDiv);

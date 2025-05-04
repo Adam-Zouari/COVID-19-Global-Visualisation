@@ -4,21 +4,21 @@ const CompareCharts = {
     createCombinedChart(container, countryCodes, chartType, settings) {
         // Clear the container
         container.innerHTML = '';
-        
+
         // Add loading state
         container.innerHTML = '<div class="chart-loading">Loading chart data...</div>';
-        
+
         // Prepare data for all countries
         const countriesData = this.prepareDataForCountries(countryCodes);
-        
+
         if (!countriesData || countriesData.length === 0) {
             container.innerHTML = '<div class="chart-error">No data available for selected countries</div>';
             return;
         }
-        
+
         // Remove loading state
         container.innerHTML = '';
-        
+
         // Create the chart based on type
         switch (chartType) {
             case 'bar':
@@ -40,14 +40,14 @@ const CompareCharts = {
                 container.innerHTML = '<div class="chart-error">Unsupported chart type</div>';
         }
     },
-    
+
     // Prepare data for multiple countries
     prepareDataForCountries(countryCodes) {
         return countryCodes.map(countryCode => {
             return ChartFactory.prepareDataForCountry(countryCode);
         }).filter(data => data !== null);
     },
-    
+
     // Create a combined bar chart
     createCombinedBarChart(container, countriesData, settings) {
         // Create SVG element
@@ -63,24 +63,16 @@ const CompareCharts = {
             .append('g')
             .attr('transform', `translate(${margin.left},${margin.top})`);
 
-        // Add title
-        svg.append('text')
-            .attr('class', 'chart-title')
-            .attr('x', width / 2)
-            .attr('y', -25)
-            .attr('text-anchor', 'middle')
-            .style('font-size', '16px')
-            .style('fill', 'white')
-            .text('Country Comparison - Bar Chart');
-            
+        // No title
+
         // Get common dates across all countries
         const commonDates = this.findCommonDates(countriesData);
-        
+
         if (commonDates.length === 0) {
             container.innerHTML = '<div class="chart-error">No common dates found across selected countries</div>';
             return;
         }
-        
+
         // Apply date range filter if provided
         let filteredDates = commonDates;
         if (settings && settings.dateRange) {
@@ -88,18 +80,18 @@ const CompareCharts = {
             const endIdx = Math.floor(commonDates.length * (settings.dateRange.end / 100));
             filteredDates = commonDates.slice(startIdx, endIdx + 1);
         }
-        
+
         // Format dates for display
         const displayDates = filteredDates.map(date => {
             return window.globeInstance.dataService.formatDate(date);
         });
-        
+
         // Create x scale
         const x = d3.scaleBand()
             .domain(displayDates)
             .range([0, width])
             .padding(0.2);
-            
+
         // Add X axis
         svg.append('g')
             .attr('class', 'x-axis')
@@ -115,7 +107,7 @@ const CompareCharts = {
             .attr('dy', '.15em')
             .attr('transform', 'rotate(-45)')
             .style('fill', 'white');
-            
+
         // Get all values for Y scale
         const allValues = [];
         countriesData.forEach(countryData => {
@@ -126,13 +118,13 @@ const CompareCharts = {
                 allValues.push(...values.filter(v => v !== null && v !== undefined));
             }
         });
-        
+
         // Y scale with 10% padding at top
         const maxVal = d3.max(allValues) || 1;
         const y = d3.scaleLinear()
             .domain([0, maxVal * 1.1])
             .range([height, 0]);
-            
+
         // Add Y axis
         svg.append('g')
             .attr('class', 'y-axis')
@@ -141,7 +133,7 @@ const CompareCharts = {
                 .tickFormat(d => ChartFactory.formatTickValue(d)))
             .selectAll('text')
             .style('fill', 'white');
-            
+
         // Add grid lines
         svg.append('g')
             .attr('class', 'grid-lines')
@@ -155,22 +147,22 @@ const CompareCharts = {
             .attr('y2', d => y(d))
             .attr('stroke', 'rgba(255,255,255,0.1)')
             .attr('stroke-dasharray', '3,3');
-            
+
         // Calculate bar width based on number of countries
         const barWidth = (x.bandwidth() * 0.8) / countriesData.length;
-        
+
         // Color scale for countries
         const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
-        
+
         // Draw bars for each country
         countriesData.forEach((countryData, countryIndex) => {
             // Get the first column for each country (simplification)
             const firstColumn = Object.keys(countryData.series)[0];
             if (!firstColumn) return;
-            
+
             // Get values for this country
             const values = countryData.series[firstColumn];
-            
+
             // Filter values to match filtered dates
             const filteredValues = [];
             filteredDates.forEach(date => {
@@ -181,11 +173,11 @@ const CompareCharts = {
                     filteredValues.push(null);
                 }
             });
-            
+
             // Create a group for this country
             const countryGroup = svg.append('g')
                 .attr('class', `country-${countryIndex}`);
-                
+
             // Add bars
             countryGroup.selectAll('rect')
                 .data(filteredValues)
@@ -204,7 +196,7 @@ const CompareCharts = {
                         .attr('opacity', 1)
                         .attr('stroke', 'white')
                         .attr('stroke-width', 1);
-                        
+
                     // Show tooltip
                     const i = filteredValues.indexOf(d);
                     const tooltip = d3.select(container).append('div')
@@ -217,19 +209,19 @@ const CompareCharts = {
                         .style('font-size', '12px')
                         .style('z-index', 100)
                         .style('pointer-events', 'none');
-                        
+
                     tooltip.html(`
                         <div><strong>${countryData.countryName}</strong></div>
                         <div>${displayDates[i]}</div>
                         <div>${firstColumn}: ${d !== null ? ChartFactory.formatValue(d) : 'No data'}</div>
                     `);
-                    
+
                     // Position tooltip
                     const tooltipNode = tooltip.node();
                     if (tooltipNode) {
                         const rect = event.target.getBoundingClientRect();
                         const containerRect = container.getBoundingClientRect();
-                        
+
                         tooltip.style('left', `${rect.left - containerRect.left + rect.width / 2}px`)
                             .style('top', `${rect.top - containerRect.top - tooltipNode.offsetHeight - 10}px`);
                     }
@@ -239,27 +231,27 @@ const CompareCharts = {
                     d3.select(this)
                         .attr('opacity', 0.8)
                         .attr('stroke', 'none');
-                        
+
                     // Remove tooltip
                     d3.select(container).selectAll('.chart-tooltip').remove();
                 });
         });
-        
+
         // Add legend
         const legend = svg.append('g')
             .attr('class', 'legend')
             .attr('transform', `translate(${width + 20}, 0)`);
-            
+
         countriesData.forEach((countryData, i) => {
             const legendItem = legend.append('g')
                 .attr('transform', `translate(0, ${i * 25})`);
-                
+
             legendItem.append('rect')
                 .attr('width', 15)
                 .attr('height', 15)
                 .attr('fill', colorScale(countryData.countryName))
                 .attr('rx', 2);
-                
+
             legendItem.append('text')
                 .attr('x', 25)
                 .attr('y', 12)
@@ -268,7 +260,7 @@ const CompareCharts = {
                 .text(countryData.countryName);
         });
     },
-    
+
     // Create a combined line chart
     createCombinedLineChart(container, countriesData, settings) {
         // Create SVG element
@@ -284,24 +276,16 @@ const CompareCharts = {
             .append('g')
             .attr('transform', `translate(${margin.left},${margin.top})`);
 
-        // Add title
-        svg.append('text')
-            .attr('class', 'chart-title')
-            .attr('x', width / 2)
-            .attr('y', -25)
-            .attr('text-anchor', 'middle')
-            .style('font-size', '16px')
-            .style('fill', 'white')
-            .text('Country Comparison - Line Chart');
-            
+        // No title
+
         // Get common dates across all countries
         const commonDates = this.findCommonDates(countriesData);
-        
+
         if (commonDates.length === 0) {
             container.innerHTML = '<div class="chart-error">No common dates found across selected countries</div>';
             return;
         }
-        
+
         // Apply date range filter if provided
         let filteredDates = commonDates;
         if (settings && settings.dateRange) {
@@ -309,12 +293,12 @@ const CompareCharts = {
             const endIdx = Math.floor(commonDates.length * (settings.dateRange.end / 100));
             filteredDates = commonDates.slice(startIdx, endIdx + 1);
         }
-        
+
         // Create x scale (time scale for dates)
         const x = d3.scaleTime()
             .domain([new Date(filteredDates[0]), new Date(filteredDates[filteredDates.length - 1])])
             .range([0, width]);
-            
+
         // Add X axis
         svg.append('g')
             .attr('class', 'x-axis')
@@ -328,7 +312,7 @@ const CompareCharts = {
             .attr('dy', '.15em')
             .attr('transform', 'rotate(-45)')
             .style('fill', 'white');
-            
+
         // Get all values for Y scale
         const allValues = [];
         countriesData.forEach(countryData => {
@@ -339,13 +323,13 @@ const CompareCharts = {
                 allValues.push(...values.filter(v => v !== null && v !== undefined));
             }
         });
-        
+
         // Y scale with 10% padding at top
         const maxVal = d3.max(allValues) || 1;
         const y = d3.scaleLinear()
             .domain([0, maxVal * 1.1])
             .range([height, 0]);
-            
+
         // Add Y axis
         svg.append('g')
             .attr('class', 'y-axis')
@@ -354,7 +338,7 @@ const CompareCharts = {
                 .tickFormat(d => ChartFactory.formatTickValue(d)))
             .selectAll('text')
             .style('fill', 'white');
-            
+
         // Add grid lines
         svg.append('g')
             .attr('class', 'grid-lines')
@@ -368,26 +352,26 @@ const CompareCharts = {
             .attr('y2', d => y(d))
             .attr('stroke', 'rgba(255,255,255,0.1)')
             .attr('stroke-dasharray', '3,3');
-            
+
         // Color scale for countries
         const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
-        
+
         // Create line generator
         const line = d3.line()
             .defined(d => d.value !== null && d.value !== undefined)
             .x(d => x(new Date(d.date)))
             .y(d => y(d.value))
             .curve(d3.curveMonotoneX); // Smoother curve
-            
+
         // Draw lines for each country
         countriesData.forEach((countryData, countryIndex) => {
             // Get the first column for each country (simplification)
             const firstColumn = Object.keys(countryData.series)[0];
             if (!firstColumn) return;
-            
+
             // Get values for this country
             const values = countryData.series[firstColumn];
-            
+
             // Create data points for the line
             const lineData = [];
             filteredDates.forEach((date, i) => {
@@ -399,12 +383,12 @@ const CompareCharts = {
                     });
                 }
             });
-            
+
             // Skip if no valid data
             if (!lineData.some(d => d.value !== null && d.value !== undefined)) {
                 return;
             }
-            
+
             // Add the line
             svg.append('path')
                 .datum(lineData)
@@ -413,7 +397,7 @@ const CompareCharts = {
                 .attr('stroke', colorScale(countryData.countryName))
                 .attr('stroke-width', 2)
                 .attr('d', line);
-                
+
             // Add data points
             svg.selectAll(`.point-${countryIndex}`)
                 .data(lineData.filter(d => d.value !== null && d.value !== undefined))
@@ -432,7 +416,7 @@ const CompareCharts = {
                         .attr('r', 6)
                         .attr('stroke', 'white')
                         .attr('stroke-width', 2);
-                        
+
                     // Show tooltip
                     const tooltip = d3.select(container).append('div')
                         .attr('class', 'chart-tooltip')
@@ -444,19 +428,19 @@ const CompareCharts = {
                         .style('font-size', '12px')
                         .style('z-index', 100)
                         .style('pointer-events', 'none');
-                        
+
                     tooltip.html(`
                         <div><strong>${countryData.countryName}</strong></div>
                         <div>${window.globeInstance.dataService.formatDate(d.date)}</div>
                         <div>${firstColumn}: ${d.value !== null ? ChartFactory.formatValue(d.value) : 'No data'}</div>
                     `);
-                    
+
                     // Position tooltip
                     const tooltipNode = tooltip.node();
                     if (tooltipNode) {
                         const rect = event.target.getBoundingClientRect();
                         const containerRect = container.getBoundingClientRect();
-                        
+
                         tooltip.style('left', `${rect.left - containerRect.left + rect.width / 2}px`)
                             .style('top', `${rect.top - containerRect.top - tooltipNode.offsetHeight - 10}px`);
                     }
@@ -467,21 +451,21 @@ const CompareCharts = {
                         .attr('r', 4)
                         .attr('stroke', '#1a1a1a')
                         .attr('stroke-width', 1);
-                        
+
                     // Remove tooltip
                     d3.select(container).selectAll('.chart-tooltip').remove();
                 });
         });
-        
+
         // Add legend
         const legend = svg.append('g')
             .attr('class', 'legend')
             .attr('transform', `translate(${width + 20}, 0)`);
-            
+
         countriesData.forEach((countryData, i) => {
             const legendItem = legend.append('g')
                 .attr('transform', `translate(0, ${i * 25})`);
-                
+
             legendItem.append('line')
                 .attr('x1', 0)
                 .attr('y1', 7.5)
@@ -489,7 +473,7 @@ const CompareCharts = {
                 .attr('y2', 7.5)
                 .attr('stroke', colorScale(countryData.countryName))
                 .attr('stroke-width', 2);
-                
+
             legendItem.append('text')
                 .attr('x', 25)
                 .attr('y', 12)
@@ -498,38 +482,38 @@ const CompareCharts = {
                 .text(countryData.countryName);
         });
     },
-    
+
     // Create a combined pie chart (simplified implementation)
     createCombinedPieChart(container, countriesData, settings) {
         // For pie charts, we'll show the latest data point for each country
         container.innerHTML = '<div class="chart-message">Pie charts are not ideal for country comparisons. Please select a different chart type.</div>';
     },
-    
+
     // Create a combined radar chart (simplified implementation)
     createCombinedRadarChart(container, countriesData, settings) {
         // For radar charts, we'll show the latest data point for each country
         container.innerHTML = '<div class="chart-message">Radar charts are not ideal for country comparisons. Please select a different chart type.</div>';
     },
-    
+
     // Create a combined heatmap chart (simplified implementation)
     createCombinedHeatmapChart(container, countriesData, settings) {
         // For heatmaps, we'll show a message that it's not ideal for comparisons
         container.innerHTML = '<div class="chart-message">Heatmap charts are not ideal for country comparisons. Please select a different chart type.</div>';
     },
-    
+
     // Find common dates across all country datasets
     findCommonDates(countriesData) {
         if (countriesData.length === 0) return [];
-        
+
         // Start with all dates from the first country
         let commonDates = [...countriesData[0].dates];
-        
+
         // Intersect with dates from each other country
         for (let i = 1; i < countriesData.length; i++) {
             const countryDates = countriesData[i].dates;
             commonDates = commonDates.filter(date => countryDates.includes(date));
         }
-        
+
         return commonDates;
     }
 };

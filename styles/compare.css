@@ -79,16 +79,26 @@
 
 /* Compare Options */
 .compare-options {
-    display: flex;
-    justify-content: center;
-    gap: 30px;
     margin-bottom: 15px;
     padding: 10px;
     border-radius: 4px;
     background-color: rgba(30, 30, 30, 0.5);
 }
 
-.display-mode-selector,
+.controls-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 30px;
+    flex-wrap: wrap;
+}
+
+.display-mode-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .chart-type-selector {
     display: flex;
     align-items: center;
@@ -125,23 +135,17 @@
 
 /* Date Selection Panel */
 .date-selection-panel {
-    margin-bottom: 15px;
-    padding: 10px;
-    border-radius: 4px;
-    background-color: rgba(30, 30, 30, 0.5);
-    max-width: 600px; /* Added max-width to make it slimmer */
-    margin-left: auto;
-    margin-right: auto;
-}
-
-.date-selection-panel h3 {
-    margin: 0 0 10px 0;
-    font-size: 16px;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 250px;
 }
 
 .date-range-slider-container {
-    padding: 0 20px;
+    width: 250px;
+    position: relative;
+    padding-top: 25px;
+    margin: 0 10px;
 }
 
 .date-range-labels {
@@ -149,7 +153,25 @@
     justify-content: space-between;
     margin-bottom: 5px;
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.8);
+    color: white;
+    font-weight: bold;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+}
+
+/* Individual date labels */
+#startDateLabel, #endDateLabel {
+    max-width: 110px;
+    overflow: visible;
+    white-space: nowrap;
+}
+
+/* Position end date label to ensure it's visible */
+#endDateLabel {
+    text-align: right;
 }
 
 #dateRangeSlider {
@@ -215,7 +237,7 @@
     padding: 10px;
     display: flex;
     flex-direction: column;
-    min-height: 400px; /* Added min-height to ensure charts have enough space */
+    min-height: 350px; /* Reduced from 400px to 350px */
 }
 
 /* Charts Wrapper for separate charts */
@@ -236,32 +258,19 @@
     background-color: rgba(30, 30, 30, 0.5);
     border-radius: 4px;
     overflow: hidden;
-}
-
-.country-chart-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
     padding: 10px;
-    background-color: rgba(40, 40, 40, 0.8);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.country-chart-header h3 {
-    margin: 0;
-    font-size: 16px;
 }
 
 .chart-div {
     flex-grow: 1;
-    min-height: 300px;
+    min-height: 250px; /* Reduced from 300px to 250px */
     padding: 10px;
 }
 
 /* Combined chart container */
 .combined-chart-container {
     flex-grow: 1;
-    min-height: 400px;
+    min-height: 350px; /* Reduced from 400px to 350px */
 }
 
 /* Chart loading and error messages */

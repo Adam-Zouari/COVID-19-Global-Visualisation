@@ -76,11 +76,22 @@ const CompareUI = {
                     const dates = dataService.availableDates;
 
                     if (dates && dates.length > 0) {
-                        const startIdx = Math.floor(dates.length * (startSlider.value / 100));
-                        const endIdx = Math.floor(dates.length * (endSlider.value / 100));
+                        // Calculate indices with special handling for the end value
+                        let startIdx = Math.floor(dates.length * (startSlider.value / 100));
+                        let endIdx = Math.floor(dates.length * (endSlider.value / 100));
 
-                        startLabel.textContent = dataService.formatDate(dates[startIdx]);
-                        endLabel.textContent = dataService.formatDate(dates[endIdx]);
+                        // Ensure endIdx doesn't exceed the array bounds
+                        if (endIdx >= dates.length) endIdx = dates.length - 1;
+                        if (startIdx >= dates.length) startIdx = dates.length - 1;
+
+                        // Use shorter date format for better visibility
+                        const startDate = dataService.formatDate(dates[startIdx]);
+                        const endDate = dataService.formatDate(dates[endIdx]);
+
+                        startLabel.textContent = startDate;
+                        endLabel.textContent = endDate;
+
+                        console.log(`Date range: ${startDate} to ${endDate}`);
                     }
                 }
             };
