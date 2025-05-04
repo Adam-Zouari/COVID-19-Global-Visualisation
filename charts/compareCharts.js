@@ -597,10 +597,176 @@ const CompareCharts = {
         });
     },
 
-    // Create a combined pie chart (simplified implementation)
+    // Create a combined pie chart
     createCombinedPieChart(container, countriesData, settings) {
-        // For pie charts, we'll show the latest data point for each country
-        container.innerHTML = '<div class="chart-message">Pie charts are not ideal for country comparisons. Please select a different chart type.</div>';
+        // Create SVG element
+        const margin = { top: 50, right: 200, bottom: 50, left: 50 };
+        const width = container.clientWidth - margin.left - margin.right;
+        const height = container.clientHeight - margin.top - margin.bottom;
+        const radius = Math.min(width, height) / 2;
+
+        // Create SVG
+        const svg = d3.select(container)
+            .append('svg')
+            .attr('width', container.clientWidth)
+            .attr('height', container.clientHeight)
+            .append('g')
+            .attr('transform', `translate(${container.clientWidth / 2 - margin.right / 2},${container.clientHeight / 2})`);
+
+        // Get common dates across all countries
+        const commonDates = this.findCommonDates(countriesData);
+
+        if (commonDates.length === 0) {
+            container.innerHTML = '<div class="chart-error">No common dates found across selected countries</div>';
+            return;
+        }
+
+        // For pie charts, we'll use the most recent date by default
+        let dateIndex = commonDates.length - 1;
+
+        // If date range is provided, use the end date
+        if (settings && settings.dateRange) {
+            dateIndex = Math.floor(commonDates.length * (settings.dateRange.end / 100));
+            if (dateIndex >= commonDates.length) dateIndex = commonDates.length - 1;
+        }
+
+        const selectedDate = commonDates[dateIndex];
+
+        // Use the selected column from settings, or default to first column
+        const selectedColumn = settings && settings.selectedColumn ? settings.selectedColumn : null;
+
+        // Prepare data for the pie chart
+        const pieData = [];
+
+        countriesData.forEach(countryData => {
+            // Get the selected column or fall back to first column if not available
+            const column = selectedColumn && countryData.series[selectedColumn] ?
+                selectedColumn : Object.keys(countryData.series)[0];
+
+            if (!column) return;
+
+            // Get the value for the selected date
+            const dateIdx = countryData.dates.indexOf(selectedDate);
+            if (dateIdx === -1) return;
+
+            const value = countryData.series[column][dateIdx];
+            if (value === null || value === undefined || value <= 0) return;
+
+            pieData.push({
+                country: countryData.countryName,
+                countryCode: countryData.countryCode,
+                value: value
+            });
+        });
+
+        if (pieData.length === 0) {
+            container.innerHTML = '<div class="chart-error">No data available for the selected date and column</div>';
+            return;
+        }
+
+        // Color scale for countries
+        const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+        // Create pie generator
+        const pie = d3.pie()
+            .value(d => d.value)
+            .sort(null);
+
+        // Create arc generator
+        const arc = d3.arc()
+            .innerRadius(0)
+            .outerRadius(radius);
+
+        // Create arcs
+        const arcs = svg.selectAll('arc')
+            .data(pie(pieData))
+            .enter()
+            .append('g')
+            .attr('class', 'arc');
+
+        // Add path (slice)
+        arcs.append('path')
+            .attr('d', arc)
+            .attr('fill', (d, i) => colorScale(d.data.country))
+            .attr('stroke', 'white')
+            .attr('stroke-width', 1)
+            .style('opacity', 0.8)
+            .on('mouseover', function(event, d) {
+                // Highlight on hover
+                d3.select(this)
+                    .style('opacity', 1)
+                    .attr('stroke-width', 2);
+
+                // Show tooltip
+                const tooltip = d3.select(container).append('div')
+                    .attr('class', 'chart-tooltip')
+                    .style('position', 'absolute')
+                    .style('background-color', 'rgba(0,0,0,0.9)')
+                    .style('color', 'white')
+                    .style('padding', '8px')
+                    .style('border-radius', '4px')
+                    .style('font-size', '12px')
+                    .style('z-index', 100)
+                    .style('pointer-events', 'none');
+
+                tooltip.html(`
+                    <div><strong>${d.data.country}</strong></div>
+                    <div>${window.globeInstance.dataService.formatDate(selectedDate)}</div>
+                    <div>${selectedColumn || column}: ${ChartFactory.formatValue(d.data.value)}</div>
+                    <div>${Math.round(d.data.value / d3.sum(pieData, d => d.value) * 100)}% of total</div>
+                `);
+
+                // Position tooltip
+                const tooltipNode = tooltip.node();
+                if (tooltipNode) {
+                    const rect = event.target.getBoundingClientRect();
+                    const containerRect = container.getBoundingClientRect();
+
+                    tooltip.style('left', `${event.clientX - containerRect.left}px`)
+                        .style('top', `${event.clientY - containerRect.top - tooltipNode.offsetHeight - 10}px`);
+                }
+            })
+            .on('mouseout', function() {
+                // Remove highlight
+                d3.select(this)
+                    .style('opacity', 0.8)
+                    .attr('stroke-width', 1);
+
+                // Remove tooltip
+                d3.select(container).selectAll('.chart-tooltip').remove();
+            });
+
+        // Add title
+        svg.append('text')
+            .attr('class', 'chart-title')
+            .attr('text-anchor', 'middle')
+            .attr('y', -height / 2 + 20)
+            .style('font-size', '16px')
+            .style('fill', 'white')
+            .text(`${selectedColumn || 'Data'} by Country on ${window.globeInstance.dataService.formatDate(selectedDate)}`);
+
+        // Add legend
+        const legend = svg.append('g')
+            .attr('class', 'legend')
+            .attr('transform', `translate(${radius + 20}, ${-radius})`);
+
+        pieData.forEach((d, i) => {
+            const legendItem = legend.append('g')
+                .attr('transform', `translate(0, ${i * 25})`);
+
+            legendItem.append('rect')
+                .attr('width', 15)
+                .attr('height', 15)
+                .attr('fill', colorScale(d.country))
+                .attr('rx', 2);
+
+            legendItem.append('text')
+                .attr('x', 25)
+                .attr('y', 12)
+                .style('fill', 'white')
+                .style('font-size', '12px')
+                .text(`${d.country} (${ChartFactory.formatValue(d.value)})`);
+        });
     },
 
     // Create a combined radar chart (simplified implementation)
