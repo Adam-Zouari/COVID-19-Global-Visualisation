@@ -85,9 +85,8 @@ const ChartControls = {
                 this.state.dateMode = 'range';
                 document.getElementById('date-range-controls').style.display = 'block';
                 document.getElementById('single-date-controls').style.display = 'none';
-                // Mark that there are pending changes
-                this.state.pendingChanges = true;
-                this.updateApplyChangesButton();
+                // Update chart in real-time
+                this.updateChartInRealTime();
             }
         });
 
@@ -108,9 +107,8 @@ const ChartControls = {
                 this.state.dateMode = 'single';
                 document.getElementById('date-range-controls').style.display = 'none';
                 document.getElementById('single-date-controls').style.display = 'block';
-                // Mark that there are pending changes
-                this.state.pendingChanges = true;
-                this.updateApplyChangesButton();
+                // Update chart in real-time
+                this.updateChartInRealTime();
             }
         });
 
@@ -181,9 +179,8 @@ const ChartControls = {
             }
             startValue.textContent = formatDateLabel(this.state.dateRange.start);
 
-            // Mark that there are pending changes
-            this.state.pendingChanges = true;
-            this.updateApplyChangesButton();
+            // Update chart in real-time
+            this.updateChartInRealTime();
         });
 
         startContainer.appendChild(startLabel);
@@ -221,9 +218,8 @@ const ChartControls = {
             }
             endValue.textContent = formatDateLabel(this.state.dateRange.end);
 
-            // Mark that there are pending changes
-            this.state.pendingChanges = true;
-            this.updateApplyChangesButton();
+            // Update chart in real-time
+            this.updateChartInRealTime();
         });
 
         endContainer.appendChild(endLabel);
@@ -262,9 +258,8 @@ const ChartControls = {
             this.state.singleDate = parseInt(e.target.value);
             singleValue.textContent = formatDateLabel(this.state.singleDate);
 
-            // Mark that there are pending changes
-            this.state.pendingChanges = true;
-            this.updateApplyChangesButton();
+            // Update chart in real-time
+            this.updateChartInRealTime();
         });
 
         singleContainer.appendChild(singleLabel);
@@ -278,51 +273,11 @@ const ChartControls = {
         container.appendChild(singleControls);
     },
 
-    // Create Apply Changes button
+    // Create Apply Changes button (now hidden since we update in real-time)
     createApplyChangesButton(container) {
-        const buttonContainer = document.createElement('div');
-        buttonContainer.className = 'apply-changes-container';
-
-        const applyButton = document.createElement('button');
-        applyButton.id = 'applyChangesBtn';
-        applyButton.className = 'apply-changes-btn';
-        applyButton.textContent = 'Apply Changes';
-        applyButton.disabled = !this.state.pendingChanges;
-
-        applyButton.addEventListener('click', () => {
-            // Get the current country code and visualization type
-            const countryEl = document.getElementById(`country-${window.globeInstance.selectedCountry}`);
-            const countryCode = countryEl ? countryEl.getAttribute('data-country-code') : null;
-            const vizType = document.getElementById('vizTypeSelector').value;
-
-            // Get the actual chart container (not the controls container)
-            const chartContainer = document.getElementById('chartContainer');
-
-            // Apply the changes by recreating the chart
-            if (chartContainer) {
-                // Add visual feedback that changes are being applied
-                applyButton.textContent = 'Applying...';
-                applyButton.disabled = true;
-
-                // Small delay to show the "Applying..." text
-                setTimeout(() => {
-                    // Recreate the chart with new settings
-                    ChartFactory.createChart(chartContainer, countryCode, vizType, this.getSettings());
-
-                    // Reset the pending changes flag
-                    this.state.pendingChanges = false;
-
-                    // Reset button text and update state
-                    applyButton.textContent = 'Apply Changes';
-                    this.updateApplyChangesButton();
-                }, 100);
-            } else {
-                console.error('Chart container not found');
-            }
-        });
-
-        buttonContainer.appendChild(applyButton);
-        container.appendChild(buttonContainer);
+        // We're not adding the Apply Changes button anymore since charts update in real-time
+        // This method is kept for compatibility with existing code
+        console.log("Apply Changes button not needed - charts update in real-time");
     },
 
     // Update the Apply Changes button state
@@ -343,5 +298,25 @@ const ChartControls = {
             dateRange: this.state.dateRange,
             singleDate: this.state.singleDate
         };
+    },
+
+    // Update chart in real-time without requiring the Apply Changes button
+    updateChartInRealTime() {
+        // Get the current country code and visualization type
+        const countryEl = document.getElementById(`country-${window.globeInstance.selectedCountry}`);
+        const countryCode = countryEl ? countryEl.getAttribute('data-country-code') : null;
+        const vizType = document.getElementById('vizTypeSelector').value;
+
+        // Get the chart container
+        const chartContainer = document.getElementById('chartContainer');
+
+        if (chartContainer && countryCode) {
+            // Update the chart with new settings
+            ChartFactory.createChart(chartContainer, countryCode, vizType, this.getSettings());
+
+            // Since we're updating in real-time, we don't need the Apply Changes button
+            this.state.pendingChanges = false;
+            this.updateApplyChangesButton();
+        }
     }
 };
