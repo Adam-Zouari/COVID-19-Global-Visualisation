@@ -3,12 +3,12 @@
 /* Compare Panel */
 .compare-panel {
     position: absolute;
-    top: 50%;
+    top: 55%; /* Moved from 50% to 55% to lower the panel */
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 95%; /* Increased from 90% to 95% */
-    max-width: 1400px; /* Increased from 1200px to 1400px */
-    height: 80vh; /* Reduced from 85vh to 80vh */
+    width: 95%;
+    max-width: 1400px;
+    height: 80vh;
     background-color: rgba(0, 0, 0, 0.8);
     border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -35,6 +35,32 @@
 .compare-header h2 {
     margin: 0;
     font-size: 20px;
+}
+
+/* Countries in header */
+.header-countries {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    max-width: 80%;
+}
+
+.header-country-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background-color: rgba(50, 50, 50, 0.8);
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.header-country-flag {
+    width: 24px;
+    height: 16px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .exit-compare-btn {
@@ -135,48 +161,7 @@
     flex: 1;
 }
 
-/* Countries List */
-.countries-list-container {
-    margin-bottom: 15px;
-    padding: 10px;
-    border-radius: 4px;
-    background-color: rgba(30, 30, 30, 0.5);
-    max-width: 600px;
-    margin-left: auto;
-    margin-right: auto;
-}
-
-.countries-list-container h3 {
-    margin: 0 0 10px 0;
-    font-size: 16px;
-    text-align: center;
-}
-
-.selected-countries-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 10px;
-    justify-content: center;
-}
-
-.country-list-item {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    background-color: rgba(50, 50, 50, 0.8);
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: 13px;
-}
-
-.country-flag {
-    width: 20px;
-    height: 14px;
-    object-fit: cover;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
+/* Remove button in header country items */
 .remove-country-btn {
     background: none;
     border: none;
@@ -197,12 +182,17 @@
     background: #8b0000;
     color: white;
     border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
     cursor: pointer;
-    font-size: 14px;
-    display: block;
-    margin: 0 auto;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    line-height: 1;
 }
 
 .add-country-btn:hover {

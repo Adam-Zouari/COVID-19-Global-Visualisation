@@ -159,7 +159,9 @@
     <!-- Compare Panel -->
     <div id="comparePanel" class="compare-panel">
         <div class="compare-header">
-            <h2>Compare Countries</h2>
+            <div class="header-countries" id="headerCountriesList">
+                <!-- Country items will be added here -->
+            </div>
             <button id="exitCompareBtn" class="exit-compare-btn" onclick="CompareMode.exit()">Exit Compare Mode</button>
         </div>
 
@@ -195,13 +197,7 @@
             </div>
         </div>
 
-        <div class="countries-list-container">
-            <h3>Selected Countries</h3>
-            <div id="selectedCountriesList" class="selected-countries-list">
-                <!-- Country items will be added here -->
-            </div>
-            <button id="addCountryBtn" class="add-country-btn" onclick="openSearch()">Add Country</button>
-        </div>
+        <!-- Countries are now only shown in the header -->
 
         <div id="compareChartContainer" class="compare-chart-container">
             <!-- Charts will be rendered here -->

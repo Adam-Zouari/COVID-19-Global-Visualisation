@@ -18,7 +18,7 @@ const CompareUI = {
         // Initialize date range slider
         this.initializeDateRangeSlider();
 
-        // Update the country list
+        // Update the country list (this will also set up the header with title and + button)
         this.updateCountryList();
 
         console.log("Compare panel displayed");
@@ -186,22 +186,34 @@ const CompareUI = {
     updateCountryList() {
         console.log("Updating country list with countries:", CompareMode.state.countries);
 
-        const countriesList = document.getElementById('selectedCountriesList');
-        if (!countriesList) {
-            console.error("Countries list element not found");
+        // Update the header countries list
+        const headerCountriesList = document.getElementById('headerCountriesList');
+        if (!headerCountriesList) {
+            console.error("Header countries list element not found");
             return;
         }
 
-        // Clear the list
-        countriesList.innerHTML = '';
+        // Clear the header list
+        headerCountriesList.innerHTML = '';
 
-        // If no countries, show message
+        // If no countries, show title and add button
         if (CompareMode.state.countries.length === 0) {
-            countriesList.innerHTML = '<div class="no-countries-message">No countries selected. Click "Add Country" to select countries to compare.</div>';
+            // Add title and + button to header
+            headerCountriesList.innerHTML = '<h2>Compare Countries</h2>';
+
+            // Add the + button to header
+            const addBtn = document.createElement('button');
+            addBtn.id = 'addCountryBtn';
+            addBtn.className = 'add-country-btn';
+            addBtn.innerHTML = '+';
+            addBtn.onclick = function() {
+                openSearch();
+            };
+            headerCountriesList.appendChild(addBtn);
             return;
         }
 
-        // Add each country to the list
+        // Add each country to the header list
         CompareMode.state.countries.forEach(countryCode => {
             const countryData = window.globeInstance.dataService.getCountryData(countryCode);
             if (!countryData) {
@@ -209,18 +221,19 @@ const CompareUI = {
                 return;
             }
 
-            console.log("Adding country to list:", countryData.countryName);
+            console.log("Adding country to header:", countryData.countryName);
 
-            const countryItem = document.createElement('div');
-            countryItem.className = 'country-list-item';
-            countryItem.innerHTML = `
-                <img src="https://flagcdn.com/${countryCode.toLowerCase()}.svg" alt="${countryData.countryName}" class="country-flag">
+            // Add to header list
+            const headerCountryItem = document.createElement('div');
+            headerCountryItem.className = 'header-country-item';
+            headerCountryItem.innerHTML = `
+                <img src="https://flagcdn.com/${countryCode.toLowerCase()}.svg" alt="${countryData.countryName}" class="header-country-flag">
                 <span>${countryData.countryName}</span>
                 <button class="remove-country-btn" data-country="${countryCode}">×</button>
             `;
 
             // Add event listener directly to the remove button
-            const removeBtn = countryItem.querySelector('.remove-country-btn');
+            const removeBtn = headerCountryItem.querySelector('.remove-country-btn');
             if (removeBtn) {
                 removeBtn.onclick = function() {
                     console.log("Remove button clicked for country:", countryCode);
@@ -228,8 +241,18 @@ const CompareUI = {
                 };
             }
 
-            countriesList.appendChild(countryItem);
+            headerCountriesList.appendChild(headerCountryItem);
         });
+
+        // Add the + button to header after all countries
+        const addBtn = document.createElement('button');
+        addBtn.id = 'addCountryBtn';
+        addBtn.className = 'add-country-btn';
+        addBtn.innerHTML = '+';
+        addBtn.onclick = function() {
+            openSearch();
+        };
+        headerCountriesList.appendChild(addBtn);
     },
 
     // Show message when no countries are selected
@@ -240,7 +263,7 @@ const CompareUI = {
         chartContainer.innerHTML = `
             <div class="no-countries-message">
                 <p>No countries selected for comparison.</p>
-                <p>Click "Add Country" to select countries to compare.</p>
+                <p>Click "+" in the header to select countries to compare.</p>
             </div>
         `;
     },
