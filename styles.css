@@ -632,19 +632,11 @@ h1 {
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.8);
-    z-index: 1000;
-    display: flex;
+    z-index: 2000; /* Increased z-index to be above compare panel */
+    display: none;
     justify-content: center;
     align-items: flex-start;
     padding-top: 10vh;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s ease, visibility 0.3s;
-}
-
-.search-modal.active {
-    opacity: 1;
-    visibility: visible;
 }
 
 .search-container {

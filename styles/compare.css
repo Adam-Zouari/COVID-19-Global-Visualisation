@@ -1,0 +1,327 @@
+/* Compare Mode Styles */
+
+/* Compare Panel */
+.compare-panel {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 95%; /* Increased from 90% to 95% */
+    max-width: 1400px; /* Increased from 1200px to 1400px */
+    height: 80vh; /* Reduced from 85vh to 80vh */
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 25px rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    padding: 20px;
+    display: none;
+    flex-direction: column;
+    color: white;
+    overflow: auto;
+    transition: opacity 0.4s ease-in-out;
+}
+
+/* Compare Header */
+.compare-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 10px;
+}
+
+.compare-header h2 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.exit-compare-btn {
+    background: rgba(139, 0, 0, 0.8);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.exit-compare-btn:hover {
+    background: rgba(160, 0, 0, 0.9);
+}
+
+/* Compare Options */
+.compare-options {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-bottom: 15px;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: rgba(30, 30, 30, 0.5);
+}
+
+.display-mode-selector,
+.chart-type-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.display-mode-buttons {
+    display: flex;
+    gap: 5px;
+}
+
+.display-mode-btn {
+    background: rgba(50, 50, 50, 0.8);
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.display-mode-btn.active {
+    background: #8b0000;
+}
+
+#compareChartType {
+    background-color: rgba(50, 50, 50, 0.8);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 13px;
+}
+
+/* Date Selection Panel */
+.date-selection-panel {
+    margin-bottom: 15px;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: rgba(30, 30, 30, 0.5);
+    max-width: 600px; /* Added max-width to make it slimmer */
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.date-selection-panel h3 {
+    margin: 0 0 10px 0;
+    font-size: 16px;
+    text-align: center;
+}
+
+.date-range-slider-container {
+    padding: 0 20px;
+}
+
+.date-range-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+#dateRangeSlider {
+    display: flex;
+    gap: 10px;
+}
+
+.date-slider {
+    flex: 1;
+}
+
+/* Countries List */
+.countries-list-container {
+    margin-bottom: 15px;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: rgba(30, 30, 30, 0.5);
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.countries-list-container h3 {
+    margin: 0 0 10px 0;
+    font-size: 16px;
+    text-align: center;
+}
+
+.selected-countries-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 10px;
+    justify-content: center;
+}
+
+.country-list-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background-color: rgba(50, 50, 50, 0.8);
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.country-flag {
+    width: 20px;
+    height: 14px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.remove-country-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 0 0 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.remove-country-btn:hover {
+    color: white;
+}
+
+.add-country-btn {
+    background: #8b0000;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    display: block;
+    margin: 0 auto;
+}
+
+.add-country-btn:hover {
+    background: #a00000;
+}
+
+.no-countries-message {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.7);
+    padding: 20px;
+    font-size: 14px;
+}
+
+/* Compare Chart Container */
+.compare-chart-container {
+    flex-grow: 1;
+    overflow: auto;
+    background-color: rgba(20, 20, 20, 0.5);
+    border-radius: 4px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    min-height: 400px; /* Added min-height to ensure charts have enough space */
+}
+
+/* Charts Wrapper for separate charts */
+.compare-charts-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;
+    height: 100%;
+}
+
+.country-chart-container {
+    flex: 1;
+    min-width: 300px;
+    max-width: calc(50% - 10px);
+    display: flex;
+    flex-direction: column;
+    background-color: rgba(30, 30, 30, 0.5);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.country-chart-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background-color: rgba(40, 40, 40, 0.8);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.country-chart-header h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.chart-div {
+    flex-grow: 1;
+    min-height: 300px;
+    padding: 10px;
+}
+
+/* Combined chart container */
+.combined-chart-container {
+    flex-grow: 1;
+    min-height: 400px;
+}
+
+/* Chart loading and error messages */
+.chart-loading,
+.chart-error,
+.chart-message {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    color: rgba(255, 255, 255, 0.7);
+    text-align: center;
+    padding: 20px;
+}
+
+.chart-error {
+    color: #ff6b6b;
+}
+
+/* Compare Button */
+#compareBtn {
+    background: #8b0000;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px;
+    width: 100%;
+    font-weight: bold;
+    transition: transform 0.2s;
+}
+
+#compareBtn:hover {
+    background: #a00000;
+    transform: scale(1.03);
+}
+
+/* Animation for panel appearance */
+@keyframes showPanel {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.9);
+    }
+    100% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+.panel-appearing {
+    animation: showPanel 0.5s forwards;
+}

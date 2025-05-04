@@ -79,6 +79,53 @@ function changeDataset(datasetKey) {
         document.head.appendChild(styleEl);
     }
 
+    // Update the Compare button color based on dataset
+    const compareBtn = document.getElementById('compareBtn');
+    if (compareBtn) {
+        // Use the same colors as the See More button
+        const buttonColors = {
+            'epidem': '#8b0000',            // Dark red for epidemiology
+            'hospitalizations': '#1a315a',  // Dark blue for hospitalizations
+            'vaccinations': '#004d40'       // Dark green for vaccinations
+        };
+
+        // Define hover colors for each dataset
+        const hoverColors = {
+            'epidem': '#a00000',            // Lighter red for hover
+            'hospitalizations': '#2a4570',  // Lighter blue for hover
+            'vaccinations': '#00695c'       // Lighter green for hover
+        };
+
+        // Apply the color without transition
+        compareBtn.style.backgroundColor = buttonColors[datasetKey] || '#8b0000';
+
+        // Update hover style
+        const styleId = 'compare-button-style';
+        let styleEl = document.getElementById(styleId);
+
+        // Remove existing style element if it exists
+        if (styleEl) {
+            styleEl.remove();
+        }
+
+        // Create new style element with updated hover color
+        styleEl = document.createElement('style');
+        styleEl.id = styleId;
+        styleEl.textContent = `
+            #compareBtn:hover {
+                background-color: ${hoverColors[datasetKey] || hoverColors['epidem']} !important;
+            }
+        `;
+
+        // Add the style element to the document head
+        document.head.appendChild(styleEl);
+
+        // Also update the compare UI if it's active
+        if (typeof CompareUI !== 'undefined') {
+            CompareUI.updateCompareButtonColor(datasetKey);
+        }
+    }
+
     // If a visualization is visible, update it with the new dataset
     const vizPanel = document.getElementById('visualizationPanel');
     if (vizPanel && vizPanel.style.display === 'flex') {
@@ -149,6 +196,35 @@ function initializeUI() {
                 styleEl.id = styleId;
                 styleEl.textContent = `
                     #seeMoreBtn:hover {
+                        background-color: #a00000 !important; /* Lighter red for hover */
+                    }
+                `;
+
+                // Add the style element to the document head
+                document.head.appendChild(styleEl);
+            }
+
+            // Initialize Compare button color to match default dataset (epidem)
+            const compareBtn = document.getElementById('compareBtn');
+            if (compareBtn) {
+                // Set color without transition
+                compareBtn.style.transition = 'none';
+                compareBtn.style.backgroundColor = '#8b0000'; // Dark red for epidemiology (same as Reset button)
+
+                // Set up hover style for the Compare button
+                const styleId = 'compare-button-style';
+                let styleEl = document.getElementById(styleId);
+
+                // Remove existing style element if it exists
+                if (styleEl) {
+                    styleEl.remove();
+                }
+
+                // Create new style element with hover color
+                styleEl = document.createElement('style');
+                styleEl.id = styleId;
+                styleEl.textContent = `
+                    #compareBtn:hover {
                         background-color: #a00000 !important; /* Lighter red for hover */
                     }
                 `;

@@ -1184,19 +1184,6 @@ class DataService {
         return parseFloat(num).toLocaleString();
     }
 
-    // Get all countries for selection
-    getAllCountries() {
-        if (!this.countryIndex) return [];
-
-        // Create a list of countries with their codes and names
-        return this.countryIndex.map(entry => {
-            return {
-                countryCode: entry.location_key,
-                countryName: entry.country_name
-            };
-        });
-    }
-
     // Utility method for conditional logging
     log(message, data) {
         if (this.debug) {

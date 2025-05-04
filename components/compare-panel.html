@@ -2,44 +2,50 @@
 <div id="comparePanel" class="compare-panel">
     <div class="compare-header">
         <h2>Compare Countries</h2>
-        <button id="closeCompareBtn" onclick="closeComparePanel()">×</button>
+        <button id="exitCompareBtn" class="exit-compare-btn">Exit Compare Mode</button>
     </div>
     
-    <div class="compare-content">
-        <div class="country-selection-container">
-            <div class="country-selection">
-                <div class="country-slot" id="countrySlot1">
-                    <div class="country-placeholder">Select Country 1</div>
-                    <button class="select-country-btn" onclick="openCountrySelector(1)">Select</button>
-                </div>
-                
-                <div class="country-slot" id="countrySlot2">
-                    <div class="country-placeholder">Select Country 2</div>
-                    <button class="select-country-btn" onclick="openCountrySelector(2)">Select</button>
-                </div>
-                
-                <div class="add-country-container">
-                    <button id="addCountryBtn" onclick="addCountrySlot()">+ Add Country</button>
-                </div>
-            </div>
-            
-            <div class="display-options">
-                <div class="display-option">
-                    <label>Display Mode:</label>
-                    <div class="display-buttons">
-                        <button id="separateChartsBtn" class="display-btn active" onclick="setDisplayMode('separate')">
-                            Separate Charts
-                        </button>
-                        <button id="combinedChartBtn" class="display-btn" onclick="setDisplayMode('combined')">
-                            Combined Chart
-                        </button>
-                    </div>
-                </div>
+    <div class="compare-options">
+        <div class="display-mode-selector">
+            <label>Display Mode:</label>
+            <div class="display-mode-buttons">
+                <button id="separateChartsBtn" class="display-mode-btn active">Separate Charts</button>
+                <button id="combinedChartBtn" class="display-mode-btn">Combined Chart</button>
             </div>
         </div>
         
-        <div class="compare-actions">
-            <button id="generateComparisonBtn" onclick="generateComparison()">Generate Comparison</button>
+        <div class="chart-type-selector">
+            <label>Chart Type:</label>
+            <select id="compareChartType">
+                <option value="bar">Bar Chart</option>
+                <option value="line">Line Chart</option>
+                <option value="pie">Pie Chart</option>
+                <option value="radar">Radar Chart</option>
+                <option value="heatmap">Heat Map</option>
+            </select>
         </div>
+    </div>
+    
+    <div class="date-selection-panel">
+        <h3>Date Range</h3>
+        <div class="date-range-slider-container">
+            <div class="date-range-labels">
+                <span id="startDateLabel">Start Date</span>
+                <span id="endDateLabel">End Date</span>
+            </div>
+            <div id="dateRangeSlider"></div>
+        </div>
+    </div>
+    
+    <div class="countries-list-container">
+        <h3>Selected Countries</h3>
+        <div id="selectedCountriesList" class="selected-countries-list">
+            <!-- Country items will be added here -->
+        </div>
+        <button id="addCountryBtn" class="add-country-btn">Add Country</button>
+    </div>
+    
+    <div id="compareChartContainer" class="compare-chart-container">
+        <!-- Charts will be rendered here -->
     </div>
 </div>
