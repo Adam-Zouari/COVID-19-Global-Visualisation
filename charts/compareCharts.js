@@ -603,7 +603,7 @@ const CompareCharts = {
         const margin = { top: 50, right: 200, bottom: 50, left: 50 };
         const width = container.clientWidth - margin.left - margin.right;
         const height = container.clientHeight - margin.top - margin.bottom;
-        const radius = Math.min(width, height) / 2;
+        const radius = Math.min(width, height) / 2 * 0.85; // Make the pie chart slightly larger
 
         // Create SVG
         const svg = d3.select(container)
@@ -611,7 +611,7 @@ const CompareCharts = {
             .attr('width', container.clientWidth)
             .attr('height', container.clientHeight)
             .append('g')
-            .attr('transform', `translate(${container.clientWidth / 2 - margin.right / 2},${container.clientHeight / 2})`);
+            .attr('transform', `translate(${container.clientWidth / 2},${container.clientHeight / 2})`);
 
         // Get common dates across all countries
         const commonDates = this.findCommonDates(countriesData);
@@ -736,19 +736,12 @@ const CompareCharts = {
                 d3.select(container).selectAll('.chart-tooltip').remove();
             });
 
-        // Add title
-        svg.append('text')
-            .attr('class', 'chart-title')
-            .attr('text-anchor', 'middle')
-            .attr('y', -height / 2 + 20)
-            .style('font-size', '16px')
-            .style('fill', 'white')
-            .text(`${selectedColumn || 'Data'} by Country on ${window.globeInstance.dataService.formatDate(selectedDate)}`);
+        // No title text
 
         // Add legend
         const legend = svg.append('g')
             .attr('class', 'legend')
-            .attr('transform', `translate(${radius + 20}, ${-radius})`);
+            .attr('transform', `translate(${radius + 30}, ${-radius + 20})`);
 
         pieData.forEach((d, i) => {
             const legendItem = legend.append('g')
