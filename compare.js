@@ -1,5 +1,5 @@
 // Compare Mode - Main functionality for comparing multiple countries
-const CompareMode = {
+window.CompareMode = {
     // State management
     state: {
         active: false,
@@ -9,7 +9,8 @@ const CompareMode = {
         dateRange: {
             start: 0,
             end: 100
-        }
+        },
+        selectedColumn: null // Selected data column for combined chart
     },
 
     // Enter compare mode
@@ -167,9 +168,21 @@ const CompareMode = {
             if (mode === 'separate') {
                 separateBtn.classList.add('active');
                 combinedBtn.classList.remove('active');
+
+                // Hide data column selector in separate mode
+                const dataColumnSelector = document.getElementById('data-column-selector');
+                if (dataColumnSelector) {
+                    dataColumnSelector.style.display = 'none';
+                }
             } else {
                 combinedBtn.classList.add('active');
                 separateBtn.classList.remove('active');
+
+                // Show data column selector in combined mode
+                const dataColumnSelector = document.getElementById('data-column-selector');
+                if (dataColumnSelector) {
+                    dataColumnSelector.style.display = 'flex';
+                }
             }
         }
 
@@ -289,9 +302,23 @@ const CompareMode = {
             this.state.countries,
             this.state.chartType,
             {
-                dateRange: this.state.dateRange
+                dateRange: this.state.dateRange,
+                selectedColumn: this.state.selectedColumn // Pass the selected column if any
             }
         );
+    },
+
+    // Update selected column for combined chart
+    updateSelectedColumn(column) {
+        console.log("Updating selected column to:", column);
+
+        // Update state
+        this.state.selectedColumn = column;
+
+        // Update the comparison view if in combined mode
+        if (this.state.displayMode === 'combined') {
+            this.updateComparisonView();
+        }
     },
 
     // Handle country selection from search

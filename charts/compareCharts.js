@@ -19,6 +19,11 @@ const CompareCharts = {
         // Remove loading state
         container.innerHTML = '';
 
+        // Create column selector if we have data
+        if (countriesData.length > 0) {
+            this.createColumnSelector(container, countriesData, chartType, settings);
+        }
+
         // Create the chart based on type
         switch (chartType) {
             case 'bar':
@@ -38,6 +43,103 @@ const CompareCharts = {
                 break;
             default:
                 container.innerHTML = '<div class="chart-error">Unsupported chart type</div>';
+        }
+    },
+
+    // Create column selector for combined charts
+    createColumnSelector(container, countriesData, chartType, settings) {
+        // Get available columns from the first country (they should be the same for all countries)
+        const availableColumns = countriesData[0].columns;
+
+        if (!availableColumns || availableColumns.length === 0) {
+            return;
+        }
+
+        // Check if we already have a column selector in the compare options
+        let columnSelector = document.getElementById('combined-chart-column-select');
+
+        // If we don't have a column selector yet, create one and add it to the compare options
+        if (!columnSelector) {
+            // Find the controls row in the compare options
+            const controlsRow = document.querySelector('.compare-options .controls-row');
+
+            if (!controlsRow) {
+                console.error("Controls row not found in compare panel");
+                return;
+            }
+
+            // Create a container for the column selector
+            const selectorContainer = document.createElement('div');
+            selectorContainer.className = 'chart-type-selector';
+            selectorContainer.id = 'data-column-selector';
+
+            // Create a label
+            const label = document.createElement('label');
+            label.htmlFor = 'combined-chart-column-select';
+            label.textContent = 'Data Column:';
+
+            // Create the select element
+            columnSelector = document.createElement('select');
+            columnSelector.id = 'combined-chart-column-select';
+
+            // Add options for each column
+            availableColumns.forEach(column => {
+                const option = document.createElement('option');
+                option.value = column;
+                option.textContent = column.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                columnSelector.appendChild(option);
+            });
+
+            // Add elements to container
+            selectorContainer.appendChild(label);
+            selectorContainer.appendChild(columnSelector);
+
+            // Add the selector to the controls row
+            controlsRow.appendChild(selectorContainer);
+        } else {
+            // Clear existing options
+            columnSelector.innerHTML = '';
+
+            // Add options for each column
+            availableColumns.forEach(column => {
+                const option = document.createElement('option');
+                option.value = column;
+                option.textContent = column.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                columnSelector.appendChild(option);
+            });
+        }
+
+        // Set selected column if provided in settings
+        if (settings && settings.selectedColumn) {
+            // Find the option with the matching value
+            const option = columnSelector.querySelector(`option[value="${settings.selectedColumn}"]`);
+            if (option) {
+                option.selected = true;
+            }
+        } else {
+            // If no column is selected in settings, select the first one
+            settings = settings || {};
+            settings.selectedColumn = availableColumns[0];
+        }
+
+        // Add change event listener
+        columnSelector.onchange = () => {
+            // Update the settings
+            settings.selectedColumn = columnSelector.value;
+
+            // Update CompareMode state if available
+            if (window.CompareMode) {
+                window.CompareMode.updateSelectedColumn(columnSelector.value);
+            } else {
+                // Redraw the chart if CompareMode is not available
+                this.createCombinedChart(container, countriesData.map(data => data.countryCode), chartType, settings);
+            }
+        };
+
+        // Show the column selector only in combined mode
+        const dataColumnSelector = document.getElementById('data-column-selector');
+        if (dataColumnSelector) {
+            dataColumnSelector.style.display = 'flex';
         }
     },
 
@@ -110,11 +212,16 @@ const CompareCharts = {
 
         // Get all values for Y scale
         const allValues = [];
+        // Use the selected column from settings, or default to first column
+        const selectedColumn = settings && settings.selectedColumn ? settings.selectedColumn : null;
+
         countriesData.forEach(countryData => {
-            // Get the first column for each country (simplification)
-            const firstColumn = Object.keys(countryData.series)[0];
-            if (firstColumn) {
-                const values = countryData.series[firstColumn];
+            // Get the selected column or fall back to first column if not available
+            const column = selectedColumn && countryData.series[selectedColumn] ?
+                selectedColumn : Object.keys(countryData.series)[0];
+
+            if (column) {
+                const values = countryData.series[column];
                 allValues.push(...values.filter(v => v !== null && v !== undefined));
             }
         });
@@ -156,12 +263,13 @@ const CompareCharts = {
 
         // Draw bars for each country
         countriesData.forEach((countryData, countryIndex) => {
-            // Get the first column for each country (simplification)
-            const firstColumn = Object.keys(countryData.series)[0];
-            if (!firstColumn) return;
+            // Get the selected column or fall back to first column if not available
+            const column = selectedColumn && countryData.series[selectedColumn] ?
+                selectedColumn : Object.keys(countryData.series)[0];
+            if (!column) return;
 
             // Get values for this country
-            const values = countryData.series[firstColumn];
+            const values = countryData.series[column];
 
             // Filter values to match filtered dates
             const filteredValues = [];
@@ -213,7 +321,7 @@ const CompareCharts = {
                     tooltip.html(`
                         <div><strong>${countryData.countryName}</strong></div>
                         <div>${displayDates[i]}</div>
-                        <div>${firstColumn}: ${d !== null ? ChartFactory.formatValue(d) : 'No data'}</div>
+                        <div>${column}: ${d !== null ? ChartFactory.formatValue(d) : 'No data'}</div>
                     `);
 
                     // Position tooltip
@@ -315,11 +423,16 @@ const CompareCharts = {
 
         // Get all values for Y scale
         const allValues = [];
+        // Use the selected column from settings, or default to first column
+        const selectedColumn = settings && settings.selectedColumn ? settings.selectedColumn : null;
+
         countriesData.forEach(countryData => {
-            // Get the first column for each country (simplification)
-            const firstColumn = Object.keys(countryData.series)[0];
-            if (firstColumn) {
-                const values = countryData.series[firstColumn];
+            // Get the selected column or fall back to first column if not available
+            const column = selectedColumn && countryData.series[selectedColumn] ?
+                selectedColumn : Object.keys(countryData.series)[0];
+
+            if (column) {
+                const values = countryData.series[column];
                 allValues.push(...values.filter(v => v !== null && v !== undefined));
             }
         });
@@ -365,12 +478,13 @@ const CompareCharts = {
 
         // Draw lines for each country
         countriesData.forEach((countryData, countryIndex) => {
-            // Get the first column for each country (simplification)
-            const firstColumn = Object.keys(countryData.series)[0];
-            if (!firstColumn) return;
+            // Get the selected column or fall back to first column if not available
+            const column = selectedColumn && countryData.series[selectedColumn] ?
+                selectedColumn : Object.keys(countryData.series)[0];
+            if (!column) return;
 
             // Get values for this country
-            const values = countryData.series[firstColumn];
+            const values = countryData.series[column];
 
             // Create data points for the line
             const lineData = [];
@@ -432,7 +546,7 @@ const CompareCharts = {
                     tooltip.html(`
                         <div><strong>${countryData.countryName}</strong></div>
                         <div>${window.globeInstance.dataService.formatDate(d.date)}</div>
-                        <div>${firstColumn}: ${d.value !== null ? ChartFactory.formatValue(d.value) : 'No data'}</div>
+                        <div>${column}: ${d.value !== null ? ChartFactory.formatValue(d.value) : 'No data'}</div>
                     `);
 
                     // Position tooltip
