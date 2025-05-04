@@ -203,15 +203,31 @@ window.CompareMode = {
             chartTypeSelect.value = type;
         }
 
+        // Update date sliders based on chart type
+        CompareUI.updateDateSliders(type);
+
         // Update the comparison view
         this.updateComparisonView();
     },
 
-    // Update date range
+    // Update date range (for bar, line, and heatmap charts)
     updateDateRange(start, end) {
         // Update state
         this.state.dateRange.start = start;
         this.state.dateRange.end = end;
+
+        // Update the comparison view
+        this.updateComparisonView();
+    },
+
+    // Update single date (for pie and radar charts)
+    updateSingleDate(value) {
+        console.log("Updating single date to:", value);
+
+        // For pie and radar charts, we use the same value for both start and end
+        // This ensures compatibility with existing code that uses dateRange
+        this.state.dateRange.start = value;
+        this.state.dateRange.end = value;
 
         // Update the comparison view
         this.updateComparisonView();
@@ -258,6 +274,9 @@ window.CompareMode = {
         chartsWrapper.className = 'compare-charts-wrapper';
         chartContainer.appendChild(chartsWrapper);
 
+        // Check if we're using pie or radar chart
+        const isPieOrRadar = (this.state.chartType === 'pie' || this.state.chartType === 'radar');
+
         // Create a chart for each country
         this.state.countries.forEach(countryCode => {
             // Create a container for this country's chart
@@ -274,13 +293,26 @@ window.CompareMode = {
             chartDiv.className = 'chart-div';
             countryChartContainer.appendChild(chartDiv);
 
-            // Create chart using ChartFactory
-            const settings = {
-                selectedColumns: {},
-                dateMode: 'range',
-                dateRange: this.state.dateRange,
-                singleDate: 100
-            };
+            // Create chart settings based on chart type
+            let settings;
+
+            if (isPieOrRadar) {
+                // For pie and radar charts, use single date mode
+                settings = {
+                    selectedColumns: {},
+                    dateMode: 'single',
+                    dateRange: this.state.dateRange, // For compatibility
+                    singleDate: this.state.dateRange.end // Use the end value as the single date
+                };
+            } else {
+                // For other charts, use date range mode
+                settings = {
+                    selectedColumns: {},
+                    dateMode: 'range',
+                    dateRange: this.state.dateRange,
+                    singleDate: 100 // Default value, not used in range mode
+                };
+            }
 
             ChartFactory.createChart(chartDiv, countryCode, this.state.chartType, settings);
         });
@@ -296,15 +328,27 @@ window.CompareMode = {
         combinedChartContainer.className = 'combined-chart-container';
         chartContainer.appendChild(combinedChartContainer);
 
+        // Check if we're using pie or radar chart
+        const isPieOrRadar = (this.state.chartType === 'pie' || this.state.chartType === 'radar');
+
+        // Create settings based on chart type
+        const settings = {
+            dateRange: this.state.dateRange,
+            selectedColumn: this.state.selectedColumn, // Pass the selected column if any
+        };
+
+        // For pie and radar charts, add a flag to indicate single date mode
+        if (isPieOrRadar) {
+            settings.singleDateMode = true;
+            settings.singleDate = this.state.dateRange.end; // Use the end value as the single date
+        }
+
         // Create chart using the compare chart factory
         CompareCharts.createCombinedChart(
             combinedChartContainer,
             this.state.countries,
             this.state.chartType,
-            {
-                dateRange: this.state.dateRange,
-                selectedColumn: this.state.selectedColumn // Pass the selected column if any
-            }
+            settings
         );
     },
 

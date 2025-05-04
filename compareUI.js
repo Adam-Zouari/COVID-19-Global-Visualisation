@@ -45,21 +45,113 @@ const CompareUI = {
         console.log("Using compare panel from index.html");
     },
 
-    // Initialize the date range slider
+    // Initialize the date slider based on chart type
     initializeDateRangeSlider() {
-        console.log("Initializing date range slider");
+        console.log("Initializing date slider");
 
-        // This would typically use a library like noUiSlider
-        // For simplicity, we'll use a basic implementation with two range inputs
+        // Check if we should use a single date slider or date range sliders
+        const chartType = CompareMode.state.chartType;
+        const isPieOrRadar = (chartType === 'pie' || chartType === 'radar');
+
+        if (isPieOrRadar) {
+            this.initializeSingleDateSlider();
+        } else {
+            this.initializeDateRangeSliders();
+        }
+    },
+
+    // Initialize a single date slider (for pie and radar charts)
+    initializeSingleDateSlider() {
+        console.log("Initializing single date slider");
+
+        // Get the slider container
+        const dateRangeSlider = document.getElementById('dateRangeSlider');
+        if (!dateRangeSlider) {
+            console.error("Date slider element not found");
+            return;
+        }
+
+        // Update the date range labels
+        const dateRangeLabels = document.querySelector('.date-range-labels');
+        if (dateRangeLabels) {
+            dateRangeLabels.innerHTML = '<span id="singleDateLabel">Selected Date</span>';
+        }
+
+        // Create a single slider
+        dateRangeSlider.innerHTML = `
+            <input type="range" id="singleDateSlider" min="0" max="100" value="${CompareMode.state.dateRange.end}" class="date-slider single-date-slider">
+        `;
+
+        // Add event listeners
+        const singleSlider = document.getElementById('singleDateSlider');
+        const singleLabel = document.getElementById('singleDateLabel');
+
+        if (singleSlider && singleLabel) {
+            // Update label with formatted date
+            const updateLabel = () => {
+                if (window.globeInstance && window.globeInstance.dataService) {
+                    const dataService = window.globeInstance.dataService;
+                    const dates = dataService.availableDates;
+
+                    if (dates && dates.length > 0) {
+                        // Calculate index
+                        let dateIdx = Math.floor(dates.length * (singleSlider.value / 100));
+
+                        // Ensure index doesn't exceed the array bounds
+                        if (dateIdx >= dates.length) dateIdx = dates.length - 1;
+
+                        // Use shorter date format for better visibility
+                        const selectedDate = dataService.formatDate(dates[dateIdx]);
+                        singleLabel.textContent = selectedDate;
+
+                        console.log(`Selected date: ${selectedDate}`);
+                    }
+                }
+            };
+
+            // Initial update
+            updateLabel();
+
+            // Add event listeners
+            singleSlider.oninput = function() {
+                console.log("Single date slider input:", this.value);
+                updateLabel();
+            };
+
+            singleSlider.onchange = function() {
+                console.log("Single date slider change:", this.value);
+                // Update both start and end to the same value for consistency
+                CompareMode.updateSingleDate(parseInt(this.value));
+            };
+        } else {
+            console.error("Single date slider or label not found");
+        }
+    },
+
+    // Initialize date range sliders (for bar, line, and heatmap charts)
+    initializeDateRangeSliders() {
+        console.log("Initializing date range sliders");
+
+        // Get the slider container
         const dateRangeSlider = document.getElementById('dateRangeSlider');
         if (!dateRangeSlider) {
             console.error("Date range slider element not found");
             return;
         }
 
+        // Update the date range labels
+        const dateRangeLabels = document.querySelector('.date-range-labels');
+        if (dateRangeLabels) {
+            dateRangeLabels.innerHTML = `
+                <span id="startDateLabel">Start Date</span>
+                <span id="endDateLabel">End Date</span>
+            `;
+        }
+
+        // Create two sliders for date range
         dateRangeSlider.innerHTML = `
-            <input type="range" id="startDateSlider" min="0" max="100" value="0" class="date-slider">
-            <input type="range" id="endDateSlider" min="0" max="100" value="100" class="date-slider">
+            <input type="range" id="startDateSlider" min="0" max="100" value="${CompareMode.state.dateRange.start}" class="date-slider">
+            <input type="range" id="endDateSlider" min="0" max="100" value="${CompareMode.state.dateRange.end}" class="date-slider">
         `;
 
         // Add event listeners
@@ -129,6 +221,26 @@ const CompareUI = {
             };
         } else {
             console.error("Date sliders not found");
+        }
+    },
+
+    // Toggle between single date and date range sliders based on chart type
+    updateDateSliders(chartType) {
+        console.log("Updating date sliders for chart type:", chartType);
+
+        const isPieOrRadar = (chartType === 'pie' || chartType === 'radar');
+
+        // Update the date selection panel title
+        const dateSelectionTitle = document.querySelector('.date-selection-panel h3');
+        if (dateSelectionTitle) {
+            dateSelectionTitle.textContent = isPieOrRadar ? 'Select Date' : 'Date Range';
+        }
+
+        // Initialize the appropriate slider type
+        if (isPieOrRadar) {
+            this.initializeSingleDateSlider();
+        } else {
+            this.initializeDateRangeSliders();
         }
     },
 
