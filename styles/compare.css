@@ -297,7 +297,26 @@
     max-width: 900px; /* But not too wide */
     min-width: auto; /* Override the default min-width */
     margin-bottom: 20px; /* Add space between stacked charts */
-    height: 350px; /* Fixed height for each chart - increased from 300px */
+    height: 380px; /* Increased height to accommodate title */
+}
+
+.chart-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background-color: rgba(40, 40, 40, 0.7);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-weight: bold;
+    font-size: 16px;
+    color: white;
+}
+
+.chart-title-flag {
+    width: 24px;
+    height: 16px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .chart-div {
