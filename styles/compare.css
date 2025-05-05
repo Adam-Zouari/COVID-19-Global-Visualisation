@@ -54,6 +54,24 @@
     padding: 5px 10px;
     border-radius: 4px;
     font-size: 14px;
+    cursor: grab;
+    transition: background-color 0.2s, transform 0.2s;
+    user-select: none;
+}
+
+/* Styles for dragging state */
+.header-country-item.dragging {
+    opacity: 0.7;
+    background-color: rgba(70, 70, 70, 0.9);
+    transform: scale(1.05);
+    cursor: grabbing;
+    z-index: 10;
+}
+
+/* Styles for drag-over state */
+.header-country-item.drag-over {
+    background-color: rgba(80, 80, 80, 0.9);
+    border: 1px dashed rgba(255, 255, 255, 0.5);
 }
 
 .header-country-flag {

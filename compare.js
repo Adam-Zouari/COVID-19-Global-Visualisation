@@ -375,6 +375,34 @@ window.CompareMode = {
         }
     },
 
+    // Reorder countries in the comparison
+    reorderCountries(draggedCountryCode, targetCountryCode) {
+        console.log(`Reordering countries: moving ${draggedCountryCode} to position of ${targetCountryCode}`);
+
+        // Find the indices of both countries
+        const draggedIndex = this.state.countries.indexOf(draggedCountryCode);
+        const targetIndex = this.state.countries.indexOf(targetCountryCode);
+
+        if (draggedIndex === -1 || targetIndex === -1) {
+            console.error("Could not find one of the countries in the state array");
+            return;
+        }
+
+        // Remove the dragged country from its current position
+        this.state.countries.splice(draggedIndex, 1);
+
+        // Insert it at the target position
+        this.state.countries.splice(targetIndex, 0, draggedCountryCode);
+
+        console.log("New country order:", this.state.countries);
+
+        // Update the UI
+        CompareUI.updateCountryList();
+
+        // Update the comparison view
+        this.updateComparisonView();
+    },
+
     // Handle country selection from search
     handleCountrySelection(countryCode) {
         console.log("Handling country selection in compare mode:", countryCode);

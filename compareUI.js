@@ -349,6 +349,8 @@ const CompareUI = {
             // Add to header list
             const headerCountryItem = document.createElement('div');
             headerCountryItem.className = 'header-country-item';
+            headerCountryItem.setAttribute('draggable', 'true');
+            headerCountryItem.setAttribute('data-country-code', countryCode);
             headerCountryItem.innerHTML = `
                 <img src="https://flagcdn.com/${countryCode.toLowerCase()}.svg" alt="${countryData.countryName}" class="header-country-flag">
                 <span>${countryData.countryName}</span>
@@ -358,11 +360,20 @@ const CompareUI = {
             // Add event listener directly to the remove button
             const removeBtn = headerCountryItem.querySelector('.remove-country-btn');
             if (removeBtn) {
-                removeBtn.onclick = function() {
+                removeBtn.onclick = function(e) {
+                    e.stopPropagation(); // Prevent event bubbling
                     console.log("Remove button clicked for country:", countryCode);
                     CompareMode.removeCountry(countryCode);
                 };
             }
+
+            // Add drag event listeners
+            headerCountryItem.addEventListener('dragstart', this.handleDragStart);
+            headerCountryItem.addEventListener('dragover', this.handleDragOver);
+            headerCountryItem.addEventListener('dragenter', this.handleDragEnter);
+            headerCountryItem.addEventListener('dragleave', this.handleDragLeave);
+            headerCountryItem.addEventListener('drop', this.handleDrop);
+            headerCountryItem.addEventListener('dragend', this.handleDragEnd);
 
             headerCountriesList.appendChild(headerCountryItem);
         });
@@ -376,6 +387,61 @@ const CompareUI = {
             openSearch();
         };
         headerCountriesList.appendChild(addBtn);
+    },
+
+    // Drag and drop handlers
+    handleDragStart(e) {
+        console.log('Drag start:', this.getAttribute('data-country-code'));
+        this.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', this.getAttribute('data-country-code'));
+    },
+
+    handleDragOver(e) {
+        e.preventDefault(); // Necessary to allow dropping
+        e.dataTransfer.dropEffect = 'move';
+        return false;
+    },
+
+    handleDragEnter(e) {
+        this.classList.add('drag-over');
+    },
+
+    handleDragLeave(e) {
+        this.classList.remove('drag-over');
+    },
+
+    handleDrop(e) {
+        e.stopPropagation(); // Stops the browser from redirecting
+        e.preventDefault();
+
+        // Remove drag-over class
+        this.classList.remove('drag-over');
+
+        // Get the dragged country code
+        const draggedCountryCode = e.dataTransfer.getData('text/plain');
+        const targetCountryCode = this.getAttribute('data-country-code');
+
+        console.log(`Dropping ${draggedCountryCode} onto ${targetCountryCode}`);
+
+        // Don't do anything if dropping onto the same item
+        if (draggedCountryCode === targetCountryCode) {
+            return false;
+        }
+
+        // Reorder the countries in the state
+        CompareMode.reorderCountries(draggedCountryCode, targetCountryCode);
+
+        return false;
+    },
+
+    handleDragEnd(e) {
+        // Remove dragging class
+        const items = document.querySelectorAll('.header-country-item');
+        items.forEach(item => {
+            item.classList.remove('dragging');
+            item.classList.remove('drag-over');
+        });
     },
 
     // Show message when no countries are selected
