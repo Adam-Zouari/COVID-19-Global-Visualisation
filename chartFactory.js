@@ -1,5 +1,47 @@
 // Chart Factory - A modular approach to creating visualizations
 const ChartFactory = {
+    // Helper method to create smaller SVG elements
+    createSmallerSVG(container, marginLeft = 0, marginTop = 0) {
+        // Determine if we're in compare mode with separate charts
+        const isCompareModeSeparate = container.closest('.country-chart-container') !== null;
+
+        // Only make charts smaller in compare mode with separate charts
+        if (isCompareModeSeparate) {
+            // Use 90% of the container dimensions for a smaller chart
+            const width = container.clientWidth * 0.9;
+            const height = container.clientHeight * 0.9;
+
+            // Create SVG with reduced dimensions
+            const svg = d3.select(container)
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height)
+                .style('margin', `${container.clientHeight * 0.05}px ${container.clientWidth * 0.05}px`);
+
+            // If margins are provided, create a group with the transform
+            if (marginLeft > 0 || marginTop > 0) {
+                return svg.append('g')
+                    .attr('transform', `translate(${marginLeft},${marginTop})`);
+            }
+
+            return svg;
+        } else {
+            // Regular size for non-compare mode or combined charts
+            const svg = d3.select(container)
+                .append('svg')
+                .attr('width', container.clientWidth)
+                .attr('height', container.clientHeight);
+
+            // If margins are provided, create a group with the transform
+            if (marginLeft > 0 || marginTop > 0) {
+                return svg.append('g')
+                    .attr('transform', `translate(${marginLeft},${marginTop})`);
+            }
+
+            return svg;
+        }
+    },
+
     // Core visualization methods
     createChart(container, countryCode, vizType, settings) {
         // Clear the container

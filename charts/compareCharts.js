@@ -48,6 +48,16 @@ const CompareCharts = {
 
     // Create column selector for combined charts
     createColumnSelector(container, countriesData, chartType, settings) {
+        // Don't show column selector for radar charts in combined mode
+        if (chartType === 'radar') {
+            // Hide the column selector if it exists
+            const dataColumnSelector = document.getElementById('data-column-selector');
+            if (dataColumnSelector) {
+                dataColumnSelector.style.display = 'none';
+            }
+            return;
+        }
+
         // Get available columns from the first country (they should be the same for all countries)
         const availableColumns = countriesData[0].columns;
 
@@ -762,10 +772,285 @@ const CompareCharts = {
         });
     },
 
-    // Create a combined radar chart (simplified implementation)
+    // Create a combined radar chart
     createCombinedRadarChart(container, countriesData, settings) {
-        // For radar charts, we'll show the latest data point for each country
-        container.innerHTML = '<div class="chart-message">Radar charts are not ideal for country comparisons. Please select a different chart type.</div>';
+        // Create SVG element with smaller dimensions
+        const margin = { top: 50, right: 200, bottom: 50, left: 50 };
+        const width = container.clientWidth - margin.left - margin.right;
+        const height = container.clientHeight - margin.top - margin.bottom;
+        const radius = Math.min(width, height) / 2 * 0.6; // Reduced from 0.7 to 0.6
+
+        // Create SVG with reduced dimensions to make the chart smaller
+        const svgWidth = container.clientWidth * 0.9; // 90% of container width
+        const svgHeight = container.clientHeight * 0.9; // 90% of container height
+
+        // Create SVG
+        const svg = d3.select(container)
+            .append('svg')
+            .attr('width', svgWidth)
+            .attr('height', svgHeight)
+            .style('margin', `${container.clientHeight * 0.05}px ${container.clientWidth * 0.05}px`) // Center the smaller SVG
+            .append('g')
+            .attr('transform', `translate(${svgWidth / 2},${svgHeight / 2})`);
+
+        // Get common dates across all countries
+        const commonDates = this.findCommonDates(countriesData);
+
+        if (commonDates.length === 0) {
+            container.innerHTML = '<div class="chart-error">No common dates found across selected countries</div>';
+            return;
+        }
+
+        // For radar charts, we'll use the most recent date by default
+        let dateIndex = commonDates.length - 1;
+
+        // If date range is provided, use the end date
+        if (settings && settings.dateRange) {
+            dateIndex = Math.floor(commonDates.length * (settings.dateRange.end / 100));
+            if (dateIndex >= commonDates.length) dateIndex = commonDates.length - 1;
+        }
+
+        const selectedDate = commonDates[dateIndex];
+
+        // For radar charts, we don't use a selected column - we use all available metrics
+
+        // Get all available metrics (columns) from the first country
+        const availableMetrics = countriesData[0].columns;
+
+        // Filter to metrics that have data for all countries
+        const metrics = availableMetrics.filter(metric => {
+            // Check if this metric has data for all countries
+            return countriesData.every(countryData => {
+                const dateIdx = countryData.dates.indexOf(selectedDate);
+                if (dateIdx === -1) return false;
+
+                const value = countryData.series[metric][dateIdx];
+                return value !== null && value !== undefined && value > 0;
+            });
+        });
+
+        // Check if we have enough metrics for the radar chart
+        if (metrics.length < 3) {
+            container.innerHTML = '<div class="chart-error">Radar chart requires at least 3 data points with values for all countries</div>';
+            return;
+        }
+
+        // Calculate angles for each metric
+        const angleStep = (Math.PI * 2) / metrics.length;
+
+        // Find the maximum value for each metric across all countries
+        const maxValues = {};
+        metrics.forEach(metric => {
+            maxValues[metric] = 0;
+            countriesData.forEach(countryData => {
+                const dateIdx = countryData.dates.indexOf(selectedDate);
+                if (dateIdx !== -1) {
+                    const value = countryData.series[metric][dateIdx];
+                    if (value !== null && value !== undefined && value > maxValues[metric]) {
+                        maxValues[metric] = value;
+                    }
+                }
+            });
+            // Add 10% padding
+            maxValues[metric] *= 1.1;
+        });
+
+        // Draw radar background circles and labels
+        const levels = 5;
+        const maxValue = Math.max(...Object.values(maxValues));
+        const levelStep = maxValue / levels;
+
+        // Draw circular grid lines
+        for (let level = 1; level <= levels; level++) {
+            const levelValue = levelStep * level;
+            const levelRadius = (levelValue / maxValue) * radius;
+
+            // Draw circle
+            svg.append('circle')
+                .attr('cx', 0)
+                .attr('cy', 0)
+                .attr('r', levelRadius)
+                .attr('fill', 'none')
+                .attr('stroke', 'rgba(255,255,255,0.1)')
+                .attr('stroke-dasharray', '3,3');
+
+            // Add value label to the right side
+            svg.append('text')
+                .attr('x', 5)
+                .attr('y', -levelRadius + 4)
+                .style('font-size', '10px')
+                .style('fill', 'rgba(255,255,255,0.6)')
+                .text(ChartFactory.formatValue(levelValue));
+        }
+
+        // Draw axes and labels
+        metrics.forEach((metric, i) => {
+            const angle = i * angleStep - Math.PI / 2; // Start from top (- PI/2)
+            const lineEndX = radius * Math.cos(angle);
+            const lineEndY = radius * Math.sin(angle);
+
+            // Draw axis line
+            svg.append('line')
+                .attr('x1', 0)
+                .attr('y1', 0)
+                .attr('x2', lineEndX)
+                .attr('y2', lineEndY)
+                .attr('stroke', 'rgba(255,255,255,0.3)')
+                .attr('stroke-width', 1);
+
+            // Add axis label
+            const labelRadius = radius * 1.1; // Position labels slightly outside the radar
+            const labelX = labelRadius * Math.cos(angle);
+            const labelY = labelRadius * Math.sin(angle);
+
+            // Adjust text anchor based on position
+            let textAnchor = 'middle';
+            if (angle < -Math.PI * 0.25 || angle > Math.PI * 0.75) {
+                textAnchor = 'middle'; // Top labels
+            } else if (angle < Math.PI * 0.25) {
+                textAnchor = 'start'; // Right labels
+            } else if (angle < Math.PI * 0.75) {
+                textAnchor = 'middle'; // Bottom labels
+            } else {
+                textAnchor = 'end'; // Left labels
+            }
+
+            svg.append('text')
+                .attr('x', labelX)
+                .attr('y', labelY)
+                .attr('dy', '0.35em') // Vertical centering
+                .style('text-anchor', textAnchor)
+                .style('font-size', '10px')
+                .style('fill', 'white')
+                .text(metric.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+        });
+
+        // Color scale for countries
+        const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+        // Draw radar paths for each country
+        countriesData.forEach((countryData, countryIndex) => {
+            const dateIdx = countryData.dates.indexOf(selectedDate);
+            if (dateIdx === -1) return;
+
+            // Create radar path points
+            const radarPoints = metrics.map((metric, i) => {
+                const angle = i * angleStep - Math.PI / 2;
+                const value = countryData.series[metric][dateIdx];
+                const normalizedValue = value / maxValues[metric]; // Normalize to 0-1 range
+                const pointRadius = normalizedValue * radius;
+
+                return {
+                    x: pointRadius * Math.cos(angle),
+                    y: pointRadius * Math.sin(angle),
+                    value: value,
+                    metric: metric
+                };
+            });
+
+            // Draw radar path
+            const radarLine = d3.line()
+                .x(d => d.x)
+                .y(d => d.y)
+                .curve(d3.curveLinearClosed);
+
+            const countryColor = colorScale(countryData.countryName);
+
+            svg.append('path')
+                .datum(radarPoints)
+                .attr('d', radarLine)
+                .attr('fill', countryColor)
+                .attr('fill-opacity', 0.2)
+                .attr('stroke', countryColor)
+                .attr('stroke-width', 2)
+                .attr('stroke-opacity', 0.8);
+
+            // Add data points with tooltips
+            svg.selectAll(`.radar-point-${countryIndex}`)
+                .data(radarPoints)
+                .enter()
+                .append('circle')
+                .attr('class', `radar-point-${countryIndex}`)
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y)
+                .attr('r', 4)
+                .attr('fill', countryColor)
+                .on('mouseover', function(event, d) {
+                    // Highlight point
+                    d3.select(this)
+                        .attr('r', 6)
+                        .attr('stroke', 'white');
+
+                    // Show tooltip
+                    const tooltip = d3.select(container).append('div')
+                        .attr('class', 'chart-tooltip')
+                        .style('position', 'absolute')
+                        .style('background-color', 'rgba(0,0,0,0.9)')
+                        .style('color', 'white')
+                        .style('padding', '8px')
+                        .style('border-radius', '4px')
+                        .style('font-size', '12px')
+                        .style('z-index', 100)
+                        .style('pointer-events', 'none');
+
+                    tooltip.html(`
+                        <div><strong>${countryData.countryName}</strong></div>
+                        <div>${window.globeInstance.dataService.formatDate(selectedDate)}</div>
+                        <div>${d.metric}: ${ChartFactory.formatValue(d.value)}</div>
+                    `);
+
+                    // Position tooltip
+                    const tooltipNode = tooltip.node();
+                    if (tooltipNode) {
+                        const rect = event.target.getBoundingClientRect();
+                        const containerRect = container.getBoundingClientRect();
+
+                        tooltip.style('left', `${rect.left - containerRect.left + rect.width / 2}px`)
+                            .style('top', `${rect.top - containerRect.top - tooltipNode.offsetHeight - 10}px`);
+                    }
+                })
+                .on('mouseout', function() {
+                    // Remove highlight
+                    d3.select(this)
+                        .attr('r', 4)
+                        .attr('stroke', 'none');
+
+                    // Remove tooltip
+                    d3.select(container).selectAll('.chart-tooltip').remove();
+                });
+        });
+
+        // Add legend
+        const legend = svg.append('g')
+            .attr('class', 'legend')
+            .attr('transform', `translate(${radius + 30}, ${-radius + 20})`);
+
+        countriesData.forEach((countryData, i) => {
+            const legendItem = legend.append('g')
+                .attr('transform', `translate(0, ${i * 25})`);
+
+            legendItem.append('rect')
+                .attr('width', 15)
+                .attr('height', 15)
+                .attr('fill', colorScale(countryData.countryName))
+                .attr('rx', 2);
+
+            legendItem.append('text')
+                .attr('x', 25)
+                .attr('y', 12)
+                .style('fill', 'white')
+                .style('font-size', '12px')
+                .text(countryData.countryName);
+        });
+
+        // Add date display at the bottom
+        svg.append('text')
+            .attr('x', 0)
+            .attr('y', radius + 30)
+            .attr('text-anchor', 'middle')
+            .style('fill', 'white')
+            .style('font-size', '12px')
+            .text(`Date: ${window.globeInstance.dataService.formatDate(selectedDate)}`);
     },
 
     // Create a combined heatmap chart (simplified implementation)

@@ -1,16 +1,38 @@
 // Pie Chart Implementation
 ChartFactory.pieChart = function(container, data) {
-    const width = container.clientWidth;
-    const height = container.clientHeight;
-    const radius = Math.min(width, height) / 2 * 0.7;
+    // Determine if we're in compare mode with separate charts
+    const isCompareModeSeparate = container.closest('.country-chart-container') !== null;
 
-    // Create SVG
-    const svg = d3.select(container)
-        .append('svg')
-        .attr('width', width)
-        .attr('height', height)
-        .append('g')
-        .attr('transform', `translate(${width/2},${height/2})`);
+    let width, height, radius;
+
+    if (isCompareModeSeparate) {
+        // Use 90% of the container dimensions for a smaller chart
+        width = container.clientWidth * 0.9;
+        height = container.clientHeight * 0.9;
+        radius = Math.min(width, height) / 2 * 0.65; // Slightly smaller radius
+    } else {
+        width = container.clientWidth;
+        height = container.clientHeight;
+        radius = Math.min(width, height) / 2 * 0.7;
+    }
+
+    // Create SVG with the helper method
+    let svg;
+
+    if (isCompareModeSeparate) {
+        // For pie charts, we need to center the chart in the SVG
+        svg = ChartFactory.createSmallerSVG(container)
+            .append('g')
+            .attr('transform', `translate(${width/2},${height/2})`);
+    } else {
+        // Regular SVG creation for non-compare mode
+        svg = d3.select(container)
+            .append('svg')
+            .attr('width', width)
+            .attr('height', height)
+            .append('g')
+            .attr('transform', `translate(${width/2},${height/2})`);
+    }
 
     // No title
 

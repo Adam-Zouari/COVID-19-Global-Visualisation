@@ -2,16 +2,24 @@
 ChartFactory.barChart = function(container, data) {
     // Create SVG element
     const margin = { top: 50, right: 150, bottom: 80, left: 80 };
-    const width = container.clientWidth - margin.left - margin.right;
-    const height = container.clientHeight - margin.top - margin.bottom;
 
-    // Create SVG
-    const svg = d3.select(container)
-        .append('svg')
-        .attr('width', container.clientWidth)
-        .attr('height', container.clientHeight)
-        .append('g')
-        .attr('transform', `translate(${margin.left},${margin.top})`);
+    // Determine if we're in compare mode with separate charts
+    const isCompareModeSeparate = container.closest('.country-chart-container') !== null;
+
+    // Adjust dimensions based on whether we're in compare mode
+    let width, height;
+
+    if (isCompareModeSeparate) {
+        // Use 90% of the container dimensions for a smaller chart
+        width = (container.clientWidth * 0.9) - margin.left - margin.right;
+        height = (container.clientHeight * 0.9) - margin.top - margin.bottom;
+    } else {
+        width = container.clientWidth - margin.left - margin.right;
+        height = container.clientHeight - margin.top - margin.bottom;
+    }
+
+    // Create SVG using the helper method
+    const svg = ChartFactory.createSmallerSVG(container, margin.left, margin.top);
 
     // No title
 

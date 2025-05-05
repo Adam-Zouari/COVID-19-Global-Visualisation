@@ -237,7 +237,7 @@
     padding: 10px;
     display: flex;
     flex-direction: column;
-    min-height: 350px; /* Reduced from 400px to 350px */
+    min-height: 350px; /* Restored to original value */
 }
 
 /* Charts Wrapper for separate charts */
@@ -263,14 +263,14 @@
 
 .chart-div {
     flex-grow: 1;
-    min-height: 250px; /* Reduced from 300px to 250px */
+    min-height: 250px;
     padding: 10px;
 }
 
 /* Combined chart container */
 .combined-chart-container {
     flex-grow: 1;
-    min-height: 350px; /* Reduced from 400px to 350px */
+    min-height: 350px; /* Restored to original value */
 }
 
 /* Chart loading and error messages */
