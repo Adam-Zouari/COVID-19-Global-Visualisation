@@ -52,6 +52,19 @@ GlobeVis.prototype.stopAutoRotation = function() {
 };
 
 GlobeVis.prototype.resetView = function() {
+    // Ensure the globe element and SVG are visible
+    const globeElement = document.getElementById('globe');
+    if (globeElement) {
+        globeElement.style.display = 'block';
+        globeElement.style.opacity = '1';
+    }
+
+    // Make sure the SVG is visible
+    if (this.svg) {
+        this.svg.style('display', 'block')
+            .style('opacity', 1);
+    }
+
     this.stopAutoRotation();
 
     const targetRotation = [0, 0, 0];
@@ -122,6 +135,13 @@ GlobeVis.prototype.resetView = function() {
     this.svg.transition()
         .duration(750)
         .call(this.zoom.transform, d3.zoomIdentity);
+
+    // Force a re-render after a short delay
+    setTimeout(() => {
+        if (this.renderCountriesByDepth) {
+            this.renderCountriesByDepth();
+        }
+    }, 100);
 };
 
 GlobeVis.prototype.animateToRotation = function(targetRotation, callback) {

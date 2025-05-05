@@ -66,13 +66,27 @@ window.CompareMode = {
         // Hide compare panel
         CompareUI.hide();
 
-        // Show main UI
+        // Show main UI first to ensure elements are visible
         this.showMainUI();
 
-        // Reset the globe view
-        if (window.globeInstance) {
-            window.globeInstance.resetView();
+        // Make sure the globe is properly displayed
+        const globe = document.getElementById('globe');
+        if (globe) {
+            // Force display and opacity
+            globe.style.display = 'block';
+            globe.style.opacity = '1';
         }
+
+        // Reset the globe view with a small delay to ensure DOM is updated
+        setTimeout(() => {
+            if (window.globeInstance) {
+                // Ensure the globe is visible before resetting
+                if (globe && globe.style.display === 'block') {
+                    console.log("Resetting globe view");
+                    window.globeInstance.resetView();
+                }
+            }
+        }, 100);
 
         // Clear the countries list
         this.state.countries = [];
@@ -107,11 +121,21 @@ window.CompareMode = {
 
     // Show main UI elements
     showMainUI() {
-        // Show globe
+        // Show globe with proper visibility
         const globe = document.getElementById('globe');
         if (globe) {
+            // Make sure the globe is visible
             globe.style.display = 'block';
             globe.style.opacity = '1';
+            globe.classList.remove('globe-animating');
+            globe.classList.remove('globe-restoring');
+
+            // Ensure the globe SVG is visible
+            const globeSvg = globe.querySelector('svg');
+            if (globeSvg) {
+                globeSvg.style.display = 'block';
+                globeSvg.style.opacity = '1';
+            }
         }
 
         // Show control panel
@@ -121,6 +145,13 @@ window.CompareMode = {
         // Show data status text
         const dataStatus = document.getElementById('dataStatus');
         if (dataStatus) dataStatus.style.display = 'block';
+
+        // Add a small delay to ensure the globe is properly rendered
+        setTimeout(() => {
+            if (window.globeInstance && window.globeInstance.renderCountriesByDepth) {
+                window.globeInstance.renderCountriesByDepth();
+            }
+        }, 50);
     },
 
     // Add a country to the comparison
