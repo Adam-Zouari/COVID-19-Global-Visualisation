@@ -237,10 +237,11 @@
     padding: 10px;
     display: flex;
     flex-direction: column;
-    min-height: 350px; /* Restored to original value */
+    min-height: 350px;
 }
 
 /* Charts Wrapper for separate charts */
+/* Default horizontal layout for 1-2 countries */
 .compare-charts-wrapper {
     display: flex;
     flex-wrap: wrap;
@@ -249,16 +250,36 @@
     height: 100%;
 }
 
+/* Vertical layout for 3+ countries */
+.compare-charts-wrapper.vertical-layout {
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+    max-height: 100%; /* Ensure it doesn't exceed the container height */
+    padding: 10px 0; /* Add some vertical padding */
+}
+
+/* By default, charts are arranged horizontally (for 1-2 countries) */
 .country-chart-container {
     flex: 1;
     min-width: 300px;
-    max-width: calc(50% - 10px);
+    max-width: calc(50% - 10px); /* Default for 2 charts */
     display: flex;
     flex-direction: column;
     background-color: rgba(30, 30, 30, 0.5);
     border-radius: 4px;
     overflow: hidden;
     padding: 10px;
+}
+
+/* Styles for country chart containers in vertical layout */
+.vertical-layout .country-chart-container {
+    flex: 0 0 auto;
+    width: 90%; /* Take up most of the width */
+    max-width: 900px; /* But not too wide */
+    min-width: auto; /* Override the default min-width */
+    margin-bottom: 20px; /* Add space between stacked charts */
+    height: 350px; /* Fixed height for each chart - increased from 300px */
 }
 
 .chart-div {

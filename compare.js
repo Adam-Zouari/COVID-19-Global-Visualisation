@@ -272,6 +272,16 @@ window.CompareMode = {
         // Create a container for the charts
         const chartsWrapper = document.createElement('div');
         chartsWrapper.className = 'compare-charts-wrapper';
+
+        // Determine if we should use vertical layout (3+ countries)
+        const countryCount = this.state.countries.length;
+        if (countryCount >= 3) {
+            chartsWrapper.classList.add('vertical-layout');
+            console.log(`Using vertical layout for ${countryCount} countries`);
+        } else {
+            console.log(`Using horizontal layout for ${countryCount} countries`);
+        }
+
         chartContainer.appendChild(chartsWrapper);
 
         // Check if we're using pie or radar chart
