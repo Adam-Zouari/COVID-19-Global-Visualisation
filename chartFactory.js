@@ -84,9 +84,6 @@ const ChartFactory = {
             case 'radar':
                 this.radarChart(container, filteredData);
                 break;
-            case 'heatmap':
-                this.heatmapChart(container, filteredData);
-                break;
             default:
                 this.showError(container, `Chart type "${vizType}" not supported`);
         }

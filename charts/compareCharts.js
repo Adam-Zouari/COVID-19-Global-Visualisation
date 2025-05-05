@@ -38,9 +38,6 @@ const CompareCharts = {
             case 'radar':
                 this.createCombinedRadarChart(container, countriesData, settings);
                 break;
-            case 'heatmap':
-                this.createCombinedHeatmapChart(container, countriesData, settings);
-                break;
             default:
                 container.innerHTML = '<div class="chart-error">Unsupported chart type</div>';
         }
@@ -1053,11 +1050,7 @@ const CompareCharts = {
             .text(`Date: ${window.globeInstance.dataService.formatDate(selectedDate)}`);
     },
 
-    // Create a combined heatmap chart (simplified implementation)
-    createCombinedHeatmapChart(container, countriesData, settings) {
-        // For heatmaps, we'll show a message that it's not ideal for comparisons
-        container.innerHTML = '<div class="chart-message">Heatmap charts are not ideal for country comparisons. Please select a different chart type.</div>';
-    },
+
 
     // Find common dates across all country datasets
     findCommonDates(countriesData) {

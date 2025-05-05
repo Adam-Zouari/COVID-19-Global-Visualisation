@@ -128,7 +128,7 @@ const CompareUI = {
         }
     },
 
-    // Initialize date range sliders (for bar, line, and heatmap charts)
+    // Initialize date range sliders (for bar and line charts)
     initializeDateRangeSliders() {
         console.log("Initializing date range sliders");
 

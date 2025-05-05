@@ -213,7 +213,7 @@ window.CompareMode = {
         this.updateComparisonView();
     },
 
-    // Update date range (for bar, line, and heatmap charts)
+    // Update date range (for bar and line charts)
     updateDateRange(start, end) {
         // Update state
         this.state.dateRange.start = start;
