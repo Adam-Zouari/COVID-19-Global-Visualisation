@@ -856,12 +856,27 @@ class DataService {
 
     // Set default values
     setDefaultValues() {
-        // Set default column for visualization (pick one that's likely to have data)
-        if (this.availableColumns[this.currentDataset].includes('new_confirmed')) {
-            this.currentColumn = 'new_confirmed';
-        } else if (this.availableColumns[this.currentDataset].includes('cumulative_confirmed')) {
-            this.currentColumn = 'cumulative_confirmed';
+        // Set default column for visualization based on dataset type
+        if (this.currentDataset === 'epidem') {
+            if (this.availableColumns[this.currentDataset].includes('Daily Cases')) {
+                this.currentColumn = 'Daily Cases';
+            } else {
+                this.currentColumn = this.availableColumns[this.currentDataset][0] || null;
+            }
+        } else if (this.currentDataset === 'hospitalizations') {
+            if (this.availableColumns[this.currentDataset].includes('Daily Patients')) {
+                this.currentColumn = 'Daily Patients';
+            } else {
+                this.currentColumn = this.availableColumns[this.currentDataset][0] || null;
+            }
+        } else if (this.currentDataset === 'vaccinations') {
+            if (this.availableColumns[this.currentDataset].includes('Daily Vaccinations')) {
+                this.currentColumn = 'Daily Vaccinations';
+            } else {
+                this.currentColumn = this.availableColumns[this.currentDataset][0] || null;
+            }
         } else {
+            // Fallback to first column
             this.currentColumn = this.availableColumns[this.currentDataset][0] || null;
         }
 
@@ -1014,12 +1029,28 @@ class DataService {
     // Change dataset
     changeDataset(dataset) {
         this.currentDataset = dataset;
-        // Set first column of new dataset as current or pick a common one
-        if (this.availableColumns[dataset].includes('new_confirmed')) {
-            this.currentColumn = 'new_confirmed';
-        } else if (this.availableColumns[dataset].includes('cumulative_confirmed')) {
-            this.currentColumn = 'cumulative_confirmed';
+
+        // Set appropriate default column based on dataset type
+        if (dataset === 'epidem') {
+            if (this.availableColumns[dataset].includes('Daily Cases')) {
+                this.currentColumn = 'Daily Cases';
+            } else {
+                this.currentColumn = this.availableColumns[dataset][0] || null;
+            }
+        } else if (dataset === 'hospitalizations') {
+            if (this.availableColumns[dataset].includes('Daily Patients')) {
+                this.currentColumn = 'Daily Patients';
+            } else {
+                this.currentColumn = this.availableColumns[dataset][0] || null;
+            }
+        } else if (dataset === 'vaccinations') {
+            if (this.availableColumns[dataset].includes('Daily Vaccinations')) {
+                this.currentColumn = 'Daily Vaccinations';
+            } else {
+                this.currentColumn = this.availableColumns[dataset][0] || null;
+            }
         } else {
+            // Fallback to first column
             this.currentColumn = this.availableColumns[dataset][0] || null;
         }
 
@@ -1198,6 +1229,7 @@ class DataService {
     // Generate sample country index data
     generateSampleCountryIndex() {
         const countries = [
+            // Major countries from all continents
             { location_key: 'us', country_name: 'United States' },
             { location_key: 'gb', country_name: 'United Kingdom' },
             { location_key: 'fr', country_name: 'France' },
@@ -1214,6 +1246,8 @@ class DataService {
             { location_key: 'kr', country_name: 'South Korea' },
             { location_key: 'za', country_name: 'South Africa' },
             { location_key: 'mx', country_name: 'Mexico' },
+
+            // European countries
             { location_key: 'se', country_name: 'Sweden' },
             { location_key: 'no', country_name: 'Norway' },
             { location_key: 'fi', country_name: 'Finland' },
@@ -1226,8 +1260,65 @@ class DataService {
             { location_key: 'pt', country_name: 'Portugal' },
             { location_key: 'gr', country_name: 'Greece' },
             { location_key: 'ie', country_name: 'Ireland' },
+            { location_key: 'cz', country_name: 'Czech Republic' },
+            { location_key: 'hu', country_name: 'Hungary' },
+            { location_key: 'ro', country_name: 'Romania' },
+            { location_key: 'bg', country_name: 'Bulgaria' },
+            { location_key: 'hr', country_name: 'Croatia' },
+            { location_key: 'sk', country_name: 'Slovakia' },
+            { location_key: 'si', country_name: 'Slovenia' },
+            { location_key: 'ee', country_name: 'Estonia' },
+            { location_key: 'lv', country_name: 'Latvia' },
+            { location_key: 'lt', country_name: 'Lithuania' },
+
+            // Asian countries
+            { location_key: 'sg', country_name: 'Singapore' },
+            { location_key: 'th', country_name: 'Thailand' },
+            { location_key: 'vn', country_name: 'Vietnam' },
+            { location_key: 'my', country_name: 'Malaysia' },
+            { location_key: 'id', country_name: 'Indonesia' },
+            { location_key: 'ph', country_name: 'Philippines' },
+            { location_key: 'pk', country_name: 'Pakistan' },
+            { location_key: 'bd', country_name: 'Bangladesh' },
+            { location_key: 'np', country_name: 'Nepal' },
+            { location_key: 'lk', country_name: 'Sri Lanka' },
+            { location_key: 'kz', country_name: 'Kazakhstan' },
+            { location_key: 'uz', country_name: 'Uzbekistan' },
+            { location_key: 'il', country_name: 'Israel' },
+            { location_key: 'sa', country_name: 'Saudi Arabia' },
+            { location_key: 'ae', country_name: 'United Arab Emirates' },
+            { location_key: 'qa', country_name: 'Qatar' },
+            { location_key: 'kw', country_name: 'Kuwait' },
+
+            // American countries
+            { location_key: 'ar', country_name: 'Argentina' },
+            { location_key: 'cl', country_name: 'Chile' },
+            { location_key: 'co', country_name: 'Colombia' },
+            { location_key: 'pe', country_name: 'Peru' },
+            { location_key: 'ec', country_name: 'Ecuador' },
+            { location_key: 'uy', country_name: 'Uruguay' },
+            { location_key: 'py', country_name: 'Paraguay' },
+            { location_key: 'bo', country_name: 'Bolivia' },
+            { location_key: 've', country_name: 'Venezuela' },
+            { location_key: 'pa', country_name: 'Panama' },
+            { location_key: 'cr', country_name: 'Costa Rica' },
+
+            // African countries
+            { location_key: 'ng', country_name: 'Nigeria' },
+            { location_key: 'eg', country_name: 'Egypt' },
+            { location_key: 'ma', country_name: 'Morocco' },
+            { location_key: 'dz', country_name: 'Algeria' },
+            { location_key: 'tn', country_name: 'Tunisia' },
+            { location_key: 'ke', country_name: 'Kenya' },
+            { location_key: 'et', country_name: 'Ethiopia' },
+            { location_key: 'gh', country_name: 'Ghana' },
+            { location_key: 'ci', country_name: 'Ivory Coast' },
+            { location_key: 'sn', country_name: 'Senegal' },
+
+            // Oceania
             { location_key: 'nz', country_name: 'New Zealand' },
-            { location_key: 'sg', country_name: 'Singapore' }
+            { location_key: 'pg', country_name: 'Papua New Guinea' },
+            { location_key: 'fj', country_name: 'Fiji' }
         ];
 
         return countries;
@@ -1253,51 +1344,261 @@ class DataService {
         const data = [];
         const countries = this.generateSampleCountryIndex();
 
-        // Generate data for the last 30 days
-        const today = new Date();
+        // Generate data from January 2020 to December 2022 (3 years)
         const dates = [];
-        for (let i = 30; i >= 0; i--) {
-            const date = new Date();
-            date.setDate(today.getDate() - i);
-            const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+        // Start date: January 1, 2020
+        const startDate = new Date('2020-01-01');
+        // End date: December 31, 2022
+        const endDate = new Date('2022-12-31');
+
+        // Create array of dates (using biweekly intervals to keep data size manageable)
+        const currentDate = new Date(startDate);
+        while (currentDate <= endDate) {
+            const dateString = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD format
             dates.push(dateString);
+            // Add 14 days (biweekly data points)
+            currentDate.setDate(currentDate.getDate() + 14);
         }
 
-        // Define columns based on dataset type
+        this.log(`Generated ${dates.length} dates from ${dates[0]} to ${dates[dates.length-1]}`);
+
+        // Helper function to create realistic COVID waves
+        const getWaveMultiplier = (dateStr, country) => {
+            const date = new Date(dateStr);
+            const month = date.getMonth();
+            const year = date.getFullYear();
+
+            // Country-specific factor (some countries had different timing of waves)
+            // Use the first character of country code as a simple way to vary timing
+            const countryOffset = country.charCodeAt(0) % 3;
+
+            // Base seasonal factor (higher in winter months in Northern Hemisphere)
+            // For Southern Hemisphere countries, we'll adjust this
+            const isNorthern = !['au', 'nz', 'za', 'ar', 'cl', 'br', 'pe', 'uy', 'py', 'bo'].includes(country);
+
+            // Seasonal factor (higher in winter)
+            let seasonalFactor;
+            if (isNorthern) {
+                // Northern Hemisphere: winter = Dec-Feb
+                seasonalFactor = Math.cos((month + countryOffset) * Math.PI / 6) * 0.3 + 0.7;
+            } else {
+                // Southern Hemisphere: winter = Jun-Aug
+                seasonalFactor = Math.cos((month + 6 + countryOffset) * Math.PI / 6) * 0.3 + 0.7;
+            }
+
+            // Major COVID waves (based on rough global patterns)
+            let waveFactor = 1;
+
+            // First wave: March-May 2020
+            if (year === 2020 && month >= 2 && month <= 4) {
+                waveFactor = 1.5;
+            }
+            // Second wave: Oct 2020 - Jan 2021
+            else if ((year === 2020 && month >= 9) || (year === 2021 && month <= 1)) {
+                waveFactor = 2.5;
+            }
+            // Delta wave: May-Aug 2021
+            else if (year === 2021 && month >= 4 && month <= 7) {
+                waveFactor = 3;
+            }
+            // Omicron wave: Dec 2021 - Feb 2022
+            else if ((year === 2021 && month >= 11) || (year === 2022 && month <= 2)) {
+                waveFactor = 4;
+            }
+            // Later waves in 2022
+            else if (year === 2022 && month >= 5) {
+                waveFactor = 1.5 + Math.sin(month * Math.PI / 4) * 0.5;
+            }
+
+            // Country population factor (larger countries have more cases)
+            // This is a very rough approximation based on country code
+            const populationFactor = {
+                'us': 3.0, 'in': 3.5, 'cn': 3.2, 'br': 2.8, 'ru': 2.5, 'jp': 2.3, 'de': 2.0,
+                'gb': 2.0, 'fr': 2.0, 'it': 1.9, 'es': 1.8, 'ca': 1.7, 'au': 1.6, 'mx': 2.2,
+                'kr': 1.8, 'za': 1.7
+            }[country] || (0.8 + Math.random() * 0.8);
+
+            // Combine all factors
+            return waveFactor * seasonalFactor * populationFactor;
+        };
+
+        // Define columns based on dataset type with more realistic patterns
         let columns = {};
         if (datasetType === 'epidem') {
             columns = {
-                new_confirmed: (country, date, index) => Math.floor(Math.random() * 10000 * (1 + Math.sin(index/3))),
-                new_deceased: (country, date, index) => Math.floor(Math.random() * 500 * (1 + Math.sin(index/3))),
-                cumulative_confirmed: (country, date, index) => Math.floor(100000 + Math.random() * 1000000 * (index/30)),
-                cumulative_deceased: (country, date, index) => Math.floor(1000 + Math.random() * 50000 * (index/30))
+                "Daily Cases": (country, dateStr, _index) => {
+                    const waveMultiplier = getWaveMultiplier(dateStr, country);
+                    // Base value with randomness
+                    const baseValue = Math.floor(Math.random() * 5000);
+                    return Math.floor(baseValue * waveMultiplier);
+                },
+                "Daily Deaths": (country, dateStr, _index) => {
+                    const waveMultiplier = getWaveMultiplier(dateStr, country);
+                    // Deaths lag behind cases and are a smaller percentage
+                    const baseValue = Math.floor(Math.random() * 200);
+                    return Math.floor(baseValue * waveMultiplier * 0.8);
+                },
+                "Total Cases": (country, dateStr, _index) => {
+                    // Cumulative values increase over time
+                    const date = new Date(dateStr);
+                    const daysSinceStart = Math.floor((date - startDate) / (1000 * 60 * 60 * 24));
+                    const waveMultiplier = getWaveMultiplier(dateStr, country);
+
+                    // Base cumulative value that grows over time
+                    return Math.floor(10000 + (daysSinceStart * 1000) * waveMultiplier);
+                },
+                "Total Deaths": (country, dateStr, _index) => {
+                    // Cumulative deaths, smaller than cases
+                    const date = new Date(dateStr);
+                    const daysSinceStart = Math.floor((date - startDate) / (1000 * 60 * 60 * 24));
+                    const waveMultiplier = getWaveMultiplier(dateStr, country);
+
+                    return Math.floor(100 + (daysSinceStart * 50) * waveMultiplier * 0.7);
+                }
             };
         } else if (datasetType === 'hospitalizations') {
+            // Track cumulative values for hospitalizations
+            const cumulativePatients = {};
+            const cumulativeICPatients = {};
+
             columns = {
-                new_hospitalized: (country, date, index) => Math.floor(Math.random() * 1000 * (1 + Math.sin(index/3))),
-                current_hospitalized: (country, date, index) => Math.floor(Math.random() * 10000 * (1 + Math.sin(index/5))),
-                current_intensive_care: (country, date, index) => Math.floor(Math.random() * 1000 * (1 + Math.sin(index/4)))
+                "Daily Patients": (country, dateStr, _index) => {
+                    // Hospitalizations lag slightly behind cases
+                    const date = new Date(dateStr);
+                    const laggedDate = new Date(date);
+                    laggedDate.setDate(date.getDate() - 7); // 1 week lag
+                    const laggedDateStr = laggedDate.toISOString().split('T')[0];
+
+                    const waveMultiplier = getWaveMultiplier(laggedDateStr, country);
+                    const baseValue = Math.floor(Math.random() * 500);
+                    return Math.floor(baseValue * waveMultiplier * 0.6);
+                },
+                "Daily IC Patients": (country, dateStr, _index) => {
+                    // IC patients are a subset of total patients
+                    const date = new Date(dateStr);
+                    const laggedDate = new Date(date);
+                    laggedDate.setDate(date.getDate() - 7); // 1 week lag
+                    const laggedDateStr = laggedDate.toISOString().split('T')[0];
+
+                    const waveMultiplier = getWaveMultiplier(laggedDateStr, country);
+                    const baseValue = Math.floor(Math.random() * 100);
+                    return Math.floor(baseValue * waveMultiplier * 0.5);
+                },
+                "Total Patients": (country, dateStr, index) => {
+                    // Initialize country in cumulative tracking if not exists
+                    if (!cumulativePatients[country]) {
+                        cumulativePatients[country] = 0;
+                    }
+
+                    // Get daily value and add to cumulative
+                    const dailyValue = columns["Daily Patients"](country, dateStr, index);
+                    cumulativePatients[country] += dailyValue;
+
+                    return cumulativePatients[country];
+                },
+                "Total IC Patients": (country, dateStr, index) => {
+                    // Initialize country in cumulative tracking if not exists
+                    if (!cumulativeICPatients[country]) {
+                        cumulativeICPatients[country] = 0;
+                    }
+
+                    // Get daily value and add to cumulative
+                    const dailyValue = columns["Daily IC Patients"](country, dateStr, index);
+                    cumulativeICPatients[country] += dailyValue;
+
+                    return cumulativeICPatients[country];
+                }
             };
         } else if (datasetType === 'vaccinations') {
+            // Track cumulative values for vaccinations
+            const cumulativeVaccinations = {};
+            const cumulativeFullVaccinations = {};
+
             columns = {
-                new_persons_vaccinated: (country, date, index) => Math.floor(Math.random() * 100000 * (1 + Math.sin(index/3))),
-                cumulative_persons_vaccinated: (country, date, index) => Math.floor(1000000 * index/30 * (1 + Math.random()*0.5)),
-                cumulative_persons_fully_vaccinated: (country, date, index) => Math.floor(800000 * index/30 * (1 + Math.random()*0.5)),
-                cumulative_vaccine_doses_administered: (country, date, index) => Math.floor(2000000 * index/30 * (1 + Math.random()*0.5))
+                "Daily Vaccinations": (country, dateStr, _index) => {
+                    const date = new Date(dateStr);
+
+                    // Vaccines weren't available until Dec 2020
+                    if (date < new Date('2020-12-01')) {
+                        return 0;
+                    }
+
+                    // Vaccination rates increased over time, then plateaued
+                    const daysSinceVaccineStart = Math.max(0, Math.floor((date - new Date('2020-12-01')) / (1000 * 60 * 60 * 24)));
+
+                    // Early 2021: Slow start
+                    if (date < new Date('2021-03-01')) {
+                        return Math.floor(Math.random() * 20000 * (daysSinceVaccineStart / 90));
+                    }
+                    // Mid 2021: Peak vaccination
+                    else if (date < new Date('2021-09-01')) {
+                        return Math.floor(20000 + Math.random() * 100000);
+                    }
+                    // Late 2021 and 2022: Declining new vaccinations
+                    else {
+                        const daysAfterPeak = Math.floor((date - new Date('2021-09-01')) / (1000 * 60 * 60 * 24));
+                        const declineFactor = Math.max(0.1, 1 - (daysAfterPeak / 365));
+                        return Math.floor((10000 + Math.random() * 50000) * declineFactor);
+                    }
+                },
+                "Daily Full Vaccinations": (country, dateStr, index) => {
+                    const date = new Date(dateStr);
+
+                    // Full vaccinations lag behind first doses
+                    if (date < new Date('2021-01-15')) {
+                        return 0;
+                    }
+
+                    // Get a lagged date to simulate delay between first and second doses
+                    const laggedDate = new Date(date);
+                    laggedDate.setDate(date.getDate() - 28); // 4 week lag
+                    const laggedDateStr = laggedDate.toISOString().split('T')[0];
+
+                    // Base the full vaccination rate on a percentage of first doses from 4 weeks ago
+                    const firstDoseRate = columns["Daily Vaccinations"](country, laggedDateStr, Math.max(0, index - 2));
+                    const completionRate = 0.85; // 85% of people who get first dose complete the series
+
+                    return Math.floor(firstDoseRate * completionRate);
+                },
+                "Total Vaccinations": (country, dateStr, index) => {
+                    // Initialize country in cumulative tracking if not exists
+                    if (!cumulativeVaccinations[country]) {
+                        cumulativeVaccinations[country] = 0;
+                    }
+
+                    // Get daily value and add to cumulative
+                    const dailyValue = columns["Daily Vaccinations"](country, dateStr, index);
+                    cumulativeVaccinations[country] += dailyValue;
+
+                    return cumulativeVaccinations[country];
+                },
+                "Total Full Vaccinations": (country, dateStr, index) => {
+                    // Initialize country in cumulative tracking if not exists
+                    if (!cumulativeFullVaccinations[country]) {
+                        cumulativeFullVaccinations[country] = 0;
+                    }
+
+                    // Get daily value and add to cumulative
+                    const dailyValue = columns["Daily Full Vaccinations"](country, dateStr, index);
+                    cumulativeFullVaccinations[country] += dailyValue;
+
+                    return cumulativeFullVaccinations[country];
+                }
             };
         }
 
         // Generate data for each country and date
         countries.forEach(country => {
-            dates.forEach((date, dateIndex) => {
+            dates.forEach((dateStr, dateIndex) => {
                 const record = {
                     country_key: country.location_key,
-                    date: date
+                    date: dateStr
                 };
 
                 // Add values for each column
                 Object.keys(columns).forEach(column => {
-                    record[column] = columns[column](country.location_key, date, dateIndex);
+                    record[column] = columns[column](country.location_key, dateStr, dateIndex);
                 });
 
                 data.push(record);

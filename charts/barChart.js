@@ -54,7 +54,7 @@ ChartFactory.barChart = function(container, data) {
             allValues.push(...values.filter(v => v !== null && v !== undefined));
         }
     });
-
+    
     // Y scale with 10% padding at top
     const maxVal = d3.max(allValues) || 1;
     const y = d3.scaleLinear()
