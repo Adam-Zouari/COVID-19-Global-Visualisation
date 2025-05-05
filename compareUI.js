@@ -499,5 +499,73 @@ const CompareUI = {
 
         // Add the style element to the document head
         document.head.appendChild(styleEl);
+    },
+
+    // Update all compare UI colors based on dataset
+    updateCompareUIColors(datasetKey) {
+        console.log("Updating compare UI colors for dataset:", datasetKey);
+
+        // Define colors for each dataset
+        const buttonColors = {
+            'epidem': '#8b0000',            // Dark red for epidemiology
+            'hospitalizations': '#1a315a',  // Dark blue for hospitalizations
+            'vaccinations': '#004d40'       // Dark green for vaccinations
+        };
+
+        // Define hover colors for each dataset
+        const hoverColors = {
+            'epidem': '#a00000',            // Lighter red for hover
+            'hospitalizations': '#2a4570',  // Lighter blue for hover
+            'vaccinations': '#00695c'       // Lighter green for hover
+        };
+
+        // Get the current color
+        const currentColor = buttonColors[datasetKey] || buttonColors['epidem'];
+        const currentHoverColor = hoverColors[datasetKey] || hoverColors['epidem'];
+
+        // Update exit button color
+        const exitBtn = document.getElementById('exitCompareBtn');
+        if (exitBtn) {
+            exitBtn.style.backgroundColor = currentColor;
+        }
+
+        // Update active display mode button
+        const activeDisplayBtn = document.querySelector('.display-mode-btn.active');
+        if (activeDisplayBtn) {
+            activeDisplayBtn.style.backgroundColor = currentColor;
+        }
+
+        // Update add country button
+        const addCountryBtn = document.getElementById('addCountryBtn');
+        if (addCountryBtn) {
+            addCountryBtn.style.backgroundColor = currentColor;
+        }
+
+        // Update hover styles for buttons
+        const styleId = 'compare-ui-style';
+        let styleEl = document.getElementById(styleId);
+
+        // Remove existing style element if it exists
+        if (styleEl) {
+            styleEl.remove();
+        }
+
+        // Create new style element with updated hover colors
+        styleEl = document.createElement('style');
+        styleEl.id = styleId;
+        styleEl.textContent = `
+            #exitCompareBtn:hover {
+                background-color: ${currentHoverColor} !important;
+            }
+            .display-mode-btn.active:hover {
+                background-color: ${currentHoverColor} !important;
+            }
+            .add-country-btn:hover {
+                background-color: ${currentHoverColor} !important;
+            }
+        `;
+
+        // Add the style element to the document head
+        document.head.appendChild(styleEl);
     }
 };

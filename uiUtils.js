@@ -123,6 +123,12 @@ function changeDataset(datasetKey) {
         // Also update the compare UI if it's active
         if (typeof CompareUI !== 'undefined') {
             CompareUI.updateCompareButtonColor(datasetKey);
+
+            // If compare mode is active, update the compare UI colors and refresh the charts
+            if (typeof CompareMode !== 'undefined' && CompareMode.state.active) {
+                CompareUI.updateCompareUIColors(datasetKey);
+                CompareMode.updateComparisonView();
+            }
         }
     }
 

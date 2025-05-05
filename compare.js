@@ -26,6 +26,9 @@ window.CompareMode = {
         // Show compare panel
         CompareUI.show();
 
+        // Update the compare panel colors based on current dataset
+        CompareUI.updateCompareUIColors(window.globeInstance.dataService.currentDataset);
+
         // If no countries are selected, add the currently selected country if any
         if (this.state.countries.length === 0) {
             console.log("No countries in compare list, checking for selected country");
