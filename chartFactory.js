@@ -106,10 +106,20 @@ const ChartFactory = {
         // Add selection state to the result for rendering
         result.columnSelectionState = settings.selectedColumns || {};
 
-        // For radar chart, always include all dates
+        // For radar chart, return both filtered (single date) and full data
         if (vizType === 'radar') {
-            // Do not filter dates or series, just return the full data
-            return result;
+            const dateIndex = Math.floor(settings.singleDate / 100 * (data.dates.length - 1));
+            let filtered = { ...result };
+            if (dateIndex >= 0 && dateIndex < data.dates.length) {
+                filtered.dates = [data.dates[dateIndex]];
+                filtered.displayDates = [data.displayDates[dateIndex]];
+                filtered.series = {};
+                filtered.columns.forEach(column => {
+                    filtered.series[column] = [data.series[column][dateIndex]];
+                });
+                filtered.isSingleDate = true;
+            }
+            return { filtered, full: { ...data } };
         }
 
         // Apply date filtering

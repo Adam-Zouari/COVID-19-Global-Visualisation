@@ -1,6 +1,11 @@
 // Radar Chart Implementation
 ChartFactory.radarChart = function(container, data) {
+    // If data contains both filtered and full, use them accordingly
+    let filtered = data.filtered ? data.filtered : data;
+    let full = data.full ? data.full : data;
+
     // Determine if we're in compare mode with separate charts
+    console.log("Radar chart data:", filtered, full);
     const isCompareModeSeparate = container.closest('.country-chart-container') !== null;
 
     let width, height, radius;
@@ -36,16 +41,31 @@ ChartFactory.radarChart = function(container, data) {
 
     // No title
 
-    // Use the most recent date's data
-    const latestIndex = data.dates.length - 1;
+    // Use filtered for value lookups, full for scale
+    let dateIndex = 0;
+    if (filtered.displayDates && filtered.displayDates.length === 1 && filtered.dates.length > 0) {
+        const selectedDate = filtered.dates[0];
+        dateIndex = full.dates.indexOf(selectedDate);
+        if (dateIndex === -1) dateIndex = 0;
+    } else if (filtered.displayDates && filtered.displayDates.length > 1) {
+        // Use the last date (or the one corresponding to the slider)
+        dateIndex = filtered.displayDates.length - 1;
+    }
+
+    // Compute max for each metric across all dates (for scale)
+    const metricMax = {};
+    Object.keys(full.series).forEach(column => {
+        // Ignore null/undefined values
+        metricMax[column] = d3.max(full.series[column].filter(v => v !== null && v !== undefined));
+    });
 
     // Get all metrics for the legend
     const allMetrics = [];
 
     // Get the metrics (columns) that have data
-    Object.keys(data.series).forEach(column => {
-        const value = data.series[column][latestIndex];
-        const isSelected = data.columnSelectionState[column] !== false;
+    Object.keys(filtered.series).forEach(column => {
+        const value = filtered.series[column][0];
+        const isSelected = filtered.columnSelectionState[column] !== false;
 
         // Add to allMetrics if it has valid data
         if (value !== null && value !== undefined && value > 0) {
@@ -58,13 +78,13 @@ ChartFactory.radarChart = function(container, data) {
     });
 
     // Get selected metrics for the chart
-    const metrics = Object.keys(data.series).filter(column => {
+    const metrics = Object.keys(filtered.series).filter(column => {
         // Check if this column is selected
-        const isSelected = data.columnSelectionState[column] !== false;
+        const isSelected = filtered.columnSelectionState[column] !== false;
 
         // Only include selected columns with valid data
         if (isSelected) {
-            const value = data.series[column][latestIndex];
+            const value = filtered.series[column][0];
             return value !== null && value !== undefined && value > 0;
         }
         return false;
@@ -80,24 +100,23 @@ ChartFactory.radarChart = function(container, data) {
 
     // Only draw the radar chart if we have enough metrics
     if (hasEnoughMetrics) {
-        // Get values for each metric
+        // Get normalized values for each metric
         const values = metrics.map(metric => ({
             metric: metric,
-            value: data.series[metric][latestIndex]
+            value: filtered.series[metric][0] / (metricMax[metric] || 1) // Avoid division by zero
         }));
 
         // Calculate angles for each metric
         const angleStep = (Math.PI * 2) / metrics.length;
 
-        // Scale for data values
-        const maxValue = d3.max(values, d => d.value) * 1.1; // 10% padding
+        // Scale for normalized data values [0, 1]
         const rScale = d3.scaleLinear()
-            .domain([0, maxValue])
+            .domain([0, 1])
             .range([0, radius]);
 
         // Draw radar background circles and labels
         const levels = 5;
-        const levelStep = maxValue / levels;
+        const levelStep = 1 / levels;
 
         // Draw circular grid lines
         for (let level = 1; level <= levels; level++) {
@@ -113,13 +132,13 @@ ChartFactory.radarChart = function(container, data) {
                 .attr('stroke', 'rgba(255,255,255,0.1)')
                 .attr('stroke-dasharray', '3,3');
 
-            // Add value label to the right side
+            // Add value label to the right side (show as percentage)
             svg.append('text')
                 .attr('x', 5)
                 .attr('y', -levelRadius + 4)
                 .style('font-size', '10px')
                 .style('fill', 'rgba(255,255,255,0.6)')
-                .text(ChartFactory.formatValue(levelValue));
+                .text(`${Math.round(levelValue * 100)}%`);
         }
 
         // Draw axes and labels
@@ -157,15 +176,16 @@ ChartFactory.radarChart = function(container, data) {
                 .text(metric);
         });
 
-        // Create radar path points
+        // Create radar path points (normalized)
         const radarPoints = values.map((d, i) => {
             const angle = i * angleStep - Math.PI / 2;
-            const radius = rScale(d.value);
+            const r = rScale(d.value);
             return {
-                x: radius * Math.cos(angle),
-                y: radius * Math.sin(angle),
+                x: r * Math.cos(angle),
+                y: r * Math.sin(angle),
                 value: d.value,
-                metric: d.metric
+                metric: d.metric,
+                originalValue: filtered.series[d.metric][0]
             };
         });
 
@@ -213,8 +233,9 @@ ChartFactory.radarChart = function(container, data) {
 
                 tooltip.html(`
                     <div><strong>${d.metric}</strong></div>
-                    <div>Value: ${ChartFactory.formatValue(d.value)}</div>
-                    <div>Date: ${data.displayDates[latestIndex]}</div>
+                    <div>Value: ${ChartFactory.formatValue(d.originalValue)}</div>
+                    <div>Normalized: ${(d.value * 100).toFixed(1)}%</div>
+                    <div>Date: ${filtered.displayDates[dateIndex]}</div>
                 `);
 
                 // Position tooltip
@@ -243,7 +264,7 @@ ChartFactory.radarChart = function(container, data) {
             .attr('y', height/2 - 30)
             .style('font-size', '12px')
             .style('fill', 'rgba(255,255,255,0.7)')
-            .text(`Date: ${data.displayDates[latestIndex]}`);
+            .text(`Date: ${filtered.displayDates[dateIndex]}`);
     }
 
     // Add legend with interactive toggle functionality
@@ -309,13 +330,13 @@ ChartFactory.radarChart = function(container, data) {
 
             // Instead of redrawing the entire chart, update the existing chart
             // Get selected metrics for the chart based on updated selection
-            const updatedMetrics = Object.keys(data.series).filter(column => {
+            const updatedMetrics = Object.keys(filtered.series).filter(column => {
                 // Check if this column is selected
                 const isSelected = currentState[column] !== false;
 
                 // Only include selected columns with valid data
                 if (isSelected) {
-                    const value = data.series[column][latestIndex];
+                    const value = filtered.series[column][0];
                     return value !== null && value !== undefined && value > 0;
                 }
                 return false;
@@ -336,30 +357,30 @@ ChartFactory.radarChart = function(container, data) {
                 existingError.remove();
             }
 
-            // Get values for each metric
+            // Get normalized values for each metric
             const updatedValues = updatedMetrics.map(metric => ({
                 metric: metric,
-                value: data.series[metric][latestIndex]
+                value: filtered.series[metric][0] / (metricMax[metric] || 1) // Avoid division by zero
             }));
 
             // Calculate angles for each metric
             const angleStep = (Math.PI * 2) / updatedMetrics.length;
 
-            // Scale for data values
-            const maxValue = d3.max(updatedValues, d => d.value) * 1.1; // 10% padding
+            // Scale for normalized data values [0, 1]
             const rScale = d3.scaleLinear()
-                .domain([0, maxValue])
+                .domain([0, 1])
                 .range([0, radius]);
 
-            // Create radar path points
+            // Create radar path points (normalized)
             const updatedRadarPoints = updatedValues.map((d, i) => {
                 const angle = i * angleStep - Math.PI / 2;
-                const radius = rScale(d.value);
+                const r = rScale(d.value);
                 return {
-                    x: radius * Math.cos(angle),
-                    y: radius * Math.sin(angle),
+                    x: r * Math.cos(angle),
+                    y: r * Math.sin(angle),
                     value: d.value,
-                    metric: d.metric
+                    metric: d.metric,
+                    originalValue: filtered.series[d.metric][0]
                 };
             });
 
@@ -407,7 +428,7 @@ ChartFactory.radarChart = function(container, data) {
 
             // Redraw circular grid lines
             const levels = 5;
-            const levelStep = maxValue / levels;
+            const levelStep = 1 / levels;
 
             // Draw circular grid lines
             for (let level = 1; level <= levels; level++) {
@@ -423,13 +444,13 @@ ChartFactory.radarChart = function(container, data) {
                     .attr('stroke', 'rgba(255,255,255,0.1)')
                     .attr('stroke-dasharray', '3,3');
 
-                // Add value label to the right side
+                // Add value label to the right side (show as percentage)
                 svg.append('text')
                     .attr('x', 5)
                     .attr('y', -levelRadius + 4)
                     .style('font-size', '10px')
                     .style('fill', 'rgba(255,255,255,0.6)')
-                    .text(ChartFactory.formatValue(levelValue));
+                    .text(`${Math.round(levelValue * 100)}%`);
             }
 
             // Draw axes and labels
@@ -497,8 +518,9 @@ ChartFactory.radarChart = function(container, data) {
 
                     tooltip.html(`
                         <div><strong>${d.metric}</strong></div>
-                        <div>Value: ${ChartFactory.formatValue(d.value)}</div>
-                        <div>Date: ${data.displayDates[latestIndex]}</div>
+                        <div>Value: ${ChartFactory.formatValue(d.originalValue)}</div>
+                        <div>Normalized: ${(d.value * 100).toFixed(1)}%</div>
+                        <div>Date: ${filtered.displayDates[dateIndex]}</div>
                     `);
 
                     // Position tooltip
@@ -530,7 +552,7 @@ ChartFactory.radarChart = function(container, data) {
                 .attr('y', height/2 - 30)
                 .style('font-size', '12px')
                 .style('fill', 'rgba(255,255,255,0.7)')
-                .text(`Date: ${data.displayDates[latestIndex]}`);
+                .text(`Date: ${filtered.displayDates[dateIndex]}`);
         });
     });
 };
