@@ -65,7 +65,8 @@ const ChartFactory = {
         }
 
         // Apply settings to filter data
-        const filteredData = this.applySettings(data, settings);
+        // Pass vizType to applySettings
+        const filteredData = this.applySettings(data, settings, vizType);
 
         // Clear loading indicator
         container.innerHTML = '';
@@ -90,7 +91,7 @@ const ChartFactory = {
     },
 
     // Apply user settings to filter data
-    applySettings(data, settings) {
+    applySettings(data, settings, vizType) { 
         // Create a copy of the data to avoid modifying the original
         const result = {
             ...data,
@@ -104,6 +105,12 @@ const ChartFactory = {
 
         // Add selection state to the result for rendering
         result.columnSelectionState = settings.selectedColumns || {};
+
+        // For radar chart, always include all dates
+        if (vizType === 'radar') {
+            // Do not filter dates or series, just return the full data
+            return result;
+        }
 
         // Apply date filtering
         if (settings.dateMode === 'single') {
