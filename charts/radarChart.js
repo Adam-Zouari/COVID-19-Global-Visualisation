@@ -261,10 +261,10 @@ ChartFactory.radarChart = function(container, data) {
             .attr('class', 'date-info')
             .attr('text-anchor', 'middle')
             .attr('x', 0)
-            .attr('y', height/2 - 30)
-            .style('font-size', '12px')
+            .attr('y', height/2 - 10) // Lower the date text a bit
+            .style('font-size', '13px')
             .style('fill', 'rgba(255,255,255,0.7)')
-            .text(`Date: ${filtered.displayDates[dateIndex]}`);
+            .text(`Date: ${filtered.displayDates && filtered.displayDates[0] ? filtered.displayDates[0] : ''}`);
     }
 
     // Add legend with interactive toggle functionality
@@ -549,10 +549,10 @@ ChartFactory.radarChart = function(container, data) {
                 .attr('class', 'date-info')
                 .attr('text-anchor', 'middle')
                 .attr('x', 0)
-                .attr('y', height/2 - 30)
-                .style('font-size', '12px')
+                .attr('y', height/2 - 10) // Lower the date text a bit
+                .style('font-size', '13px')
                 .style('fill', 'rgba(255,255,255,0.7)')
-                .text(`Date: ${filtered.displayDates[dateIndex]}`);
+                .text(`Date: ${filtered.displayDates && filtered.displayDates[0] ? filtered.displayDates[0] : ''}`);
         });
     });
 };
