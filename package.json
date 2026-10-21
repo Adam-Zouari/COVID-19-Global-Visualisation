@@ -1,0 +1,31 @@
+{
+  "name": "covid-19-global-visualisation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Interactive globe and country charts for Google COVID-19 Open Data",
+  "type": "module",
+  "engines": {
+    "node": "^22.13.0 || >=24.0.0"
+  },
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js",
+    "test": "node --test tests/*.test.*",
+    "test:e2e": "playwright test",
+    "download-data": "node scripts/download-data.js",
+    "prepare-data": "node scripts/prepare-data.js",
+    "check": "node scripts/check.js"
+  },
+  "dependencies": {
+    "csv-parse": "7.0.3",
+    "csv-stringify": "6.9.0",
+    "d3": "7.9.0",
+    "express": "5.3.0",
+    "topojson-client": "3.1.0",
+    "world-atlas": "2.0.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "jsdom": "29.1.1"
+  }
+}

@@ -1,3 +1,11 @@
 node_modules/
-package.json
-package-lock.json
+data/*.csv
+data/prepare-report.json
+*.part
+datasets/
+Covid19_Datasets/
+.env
+coverage/
+test-results/
+playwright-report/
+*.log

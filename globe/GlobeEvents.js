@@ -1,456 +1,443 @@
-// Globe Event Handling Methods
 GlobeVis.prototype.setupEventListeners = function() {
-    // Handle data type selector change
-    document.getElementById('dataSelector').addEventListener('change', (event) => {
-        dataService.changeColumn(event.target.value);
+    const options = { signal: this.listeners.signal };
+    document.getElementById('dataSelector')?.addEventListener('change', event => {
+        if (window.atlasActions?.setMetric) {
+            window.atlasActions.setMetric(event.target.value);
+            return;
+        }
+        this.dataService.changeColumn(event.target.value);
+        this.setupDateSlider();
         this.updateGlobeColors();
-    });
-
-    // Handle reset button click
-    document.getElementById('resetBtn').addEventListener('click', () => {
-        this.resetView();
-    });
-
-    // Handle wheel event for stopping rotation when zooming
-    this.svg.on('wheel', () => {
-        this.stopAutoRotation();
-    });
-
-    // Handle window resize
-    window.addEventListener('resize', () => {
-        this.resize();
-    });
+        this.refreshSelectedCountry();
+        this.dispatchStateEvent('atlas-data-updated');
+    }, options);
+    document.getElementById('resetBtn')?.addEventListener('click', () => this.resetView(), options);
+    document.getElementById('closeCountryBtn')?.addEventListener('click', () => this.clearCountrySelection(), options);
+    for (const [id, multiplier] of [['zoomInBtn', 1.25], ['zoomOutBtn', 0.8]]) {
+        document.getElementById(id)?.addEventListener('click', () => {
+            this.svg.call(this.zoom.scaleBy, multiplier);
+        }, options);
+    }
+    if (typeof ResizeObserver !== 'undefined') {
+        this.resizeObserver = new ResizeObserver(() => this.resize());
+        this.resizeObserver.observe(document.getElementById('globe'));
+    } else {
+        window.addEventListener('resize', () => this.resize(), options);
+    }
+    document.addEventListener('data-loaded', () => this.recoverAfterDataLoad(), options);
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            // Preserve the user's rotation preference while suspending background work.
+            const shouldResume = this.autoRotate;
+            this.stopAutoRotation();
+            this.autoRotate = shouldResume;
+        } else {
+            this.startAutoRotation();
+        }
+    }, options);
 };
 
 GlobeVis.prototype.dragstarted = function(event) {
     this.stopAutoRotation();
-    this.drag.initialRotation = [...this.currentRotation];
-    this.drag.startPos = [event.x, event.y];
+    this.cancelRotationAnimation();
+    this.tooltip.style('opacity', 0);
+    this.dragRotation = [...this.currentRotation];
+    this.dragStart = [event.x, event.y];
 };
 
 GlobeVis.prototype.dragged = function(event) {
-    if (!this.drag.initialRotation) this.drag.initialRotation = [...this.currentRotation];
-
-    const dx = event.x - this.drag.startPos[0];
-    const dy = event.y - this.drag.startPos[1];
-
-    this.currentRotation[0] = this.drag.initialRotation[0] + dx / this.sensitivity;
-    this.currentRotation[1] = Math.max(-90, Math.min(90, this.drag.initialRotation[1] - dy / this.sensitivity));
-
+    if (!this.dragStart) return;
+    const dx = event.x - this.dragStart[0];
+    const dy = event.y - this.dragStart[1];
+    this.currentRotation[0] = this.dragRotation[0] + dx / this.sensitivity;
+    this.currentRotation[1] = Math.max(-90, Math.min(90, this.dragRotation[1] - dy / this.sensitivity));
     this.projection.rotate(this.currentRotation);
-
-    requestAnimationFrame(() => {
-        this.globeGroup.selectAll('path')
-            .attr('d', this.path);
-
-        // If we're in transparent mode, update the depth-based rendering
-        if (this.projection.clipAngle() > 90) {
-            this.renderCountriesByDepth();
-        } else {
-            // In standard mode, maintain full opacity and interactivity
-            this.globeGroup.selectAll('.country')
-                .attr('fill-opacity', 1.0)
-                .style('pointer-events', 'auto');
-        }
-    });
+    this.render();
 };
 
-GlobeVis.prototype.dragended = function(event) {
-    this.drag.initialRotation = undefined;
-    this.drag.startPos = undefined;
+GlobeVis.prototype.dragended = function() {
+    this.dragRotation = null;
+    this.dragStart = null;
 };
 
 GlobeVis.prototype.zoomed = function(event) {
     this.stopAutoRotation();
+    this.cancelRotationAnimation();
+    this.projection.scale(this.radius * event.transform.k);
+    this.render();
+};
 
-    const scale = event.transform.k;
-    const adjustedRadius = this.radius * scale;
+GlobeVis.prototype.createCountryHeader = function(countryCode, countryName) {
+    const header = document.createElement('span');
+    header.className = 'country-header tooltip-header';
+    if (/^[a-z]{2}$/i.test(countryCode || '')) {
+        const flag = document.createElement('img');
+        flag.className = 'country-flag';
+        flag.src = `https://flagcdn.com/${countryCode.toLowerCase()}.svg`;
+        flag.alt = '';
+        flag.addEventListener('error', () => flag.remove(), { once: true });
+        header.appendChild(flag);
+    }
+    const name = document.createElement('span');
+    name.textContent = countryName;
+    header.appendChild(name);
+    return header;
+};
 
-    this.projection.scale(adjustedRadius);
+GlobeVis.prototype.positionTooltip = function(event) {
+    const tooltip = this.tooltip.node();
+    const x = Math.min(event.clientX + 12, window.innerWidth - tooltip.offsetWidth - 8);
+    const y = Math.min(event.clientY + 12, window.innerHeight - tooltip.offsetHeight - 8);
+    this.tooltip.style('left', `${Math.max(8, x)}px`)
+        .style('top', `${Math.max(8, y)}px`);
+};
 
-    this.globeGroup.selectAll('path')
-        .attr('d', this.path);
+GlobeVis.prototype.handleMouseOver = function(event, feature) {
+    d3.select(event.currentTarget).attr('stroke', '#f3f7fe').attr('stroke-width', 1.2);
+    const code = this.getCountryCode(feature);
+    const record = code ? this.dataService.getCountryData(code) : null;
+    const tooltip = this.tooltip.node();
+    tooltip.replaceChildren(this.createCountryHeader(code,
+        record?.countryName || feature.properties?.name || 'Unknown country'));
+    const body = document.createElement('div');
+    body.className = 'tooltip-body';
+    const value = code ? this.displayValue(code) : null;
+    const metric = document.createElement('div');
+    metric.className = 'tooltip-metric';
+    metric.textContent = this.metricLabel();
+    const number = document.createElement('strong');
+    number.className = 'tooltip-value';
+    number.textContent = this.unavailableReason(code) ? 'Unavailable' : this.formatMetricValue(value);
+    const unit = document.createElement('div');
+    unit.className = 'tooltip-unit';
+    unit.textContent = this.unavailableReason(code) || (value === null ? 'Not reported on selected day' : this.unitLabel());
+    const date = document.createElement('div');
+    date.className = 'tooltip-date';
+    date.textContent = this.dataService.formatDate(this.dataService.currentDate);
+    body.append(metric, number, unit, date);
+    if (value !== null && value < 0) {
+        const correction = document.createElement('div');
+        correction.className = 'reporting-correction';
+        correction.textContent = 'Reporting correction';
+        body.appendChild(correction);
+    }
+    tooltip.appendChild(body);
+    this.tooltip.style('opacity', 1);
+    this.positionTooltip(event);
+};
 
-    this.globeGroup.select('.ocean')
-        .attr('r', adjustedRadius)
-        .attr('stroke-width', (0.5 / scale) + 'px');
+GlobeVis.prototype.handleMouseOut = function(event, feature) {
+    const selected = this.selectedCountry === feature.id;
+    d3.select(event.currentTarget).attr('stroke', selected ? '#f3f7fe' : '#17283b')
+        .attr('stroke-width', selected ? 1.8 : 0.45);
+    this.tooltip.style('opacity', 0);
+};
 
-    this.globeGroup.select('.ocean-depth')
-        .attr('r', adjustedRadius);
-
-    this.svg.select('.globe-backdrop')
-        .attr('r', adjustedRadius + 5);
-
+GlobeVis.prototype.selectCountry = function(feature) {
+    this.clearCountrySelection();
+    this.selectedCountry = feature.id;
+    this.selectedCountryCode = this.getCountryCode(feature);
     this.globeGroup.selectAll('.country')
-        .attr('stroke-width', (0.5 / scale) + 'px');
-
-    // If there's a selected country, make sure its stroke is thicker and visible
-    if (this.selectedCountry) {
-        d3.select(`#country-${this.selectedCountry}`)
-            .attr('stroke', '#ffffff')
-            .attr('stroke-width', (1.5 / scale) + 'px');
-    }
-
-    this.globeGroup.select('.graticule')
-        .attr('stroke-width', (0.5 / scale) + 'px');
-};
-
-GlobeVis.prototype.handleMouseOver = function(event, d) {
-    // Highlight the country with visible white stroke
-    d3.select(event.currentTarget)
-        .attr('stroke', '#ffffff')
-        .attr('stroke-width', '1px');
-
-    // Get country code and data
-    const countryCode = this.getCountryCode(d);
-    const countryData = dataService.getCountryData(countryCode);
-
-    // Show tooltip with flag and data
-    if (countryData) {
-        // Create tooltip content with flag and data
-        let tooltipContent = `
-            <div class="tooltip-header">
-                <img class="country-flag" src="https://flagcdn.com/${countryCode.toLowerCase()}.svg"
-                     onerror="this.src='https://via.placeholder.com/30x20/ddd/aaa?text=?'">
-                <strong>${countryData.countryName}</strong>
-            </div>
-            <div class="tooltip-body">
-                <div class="tooltip-date">Date: ${dataService.formatDate(countryData.date)}</div>
-        `;
-
-        // Add all available metrics for current dataset
-        for (const key of dataService.availableColumns[dataService.currentDataset]) {
-            if (key in countryData) {
-                const value = countryData[key];
-                const formattedValue = dataService.formatNumber(value);
-                tooltipContent += `<div class="data-row"><span class="data-label">${key}:</span> <span class="data-value">${formattedValue}</span></div>`;
-            }
-        }
-
-        tooltipContent += '</div>';
-
-        this.tooltip
-            .style('opacity', 1)
-            .html(tooltipContent)
-            .style('left', (event.pageX + 10) + 'px')
-            .style('top', (event.pageY - 20) + 'px');
-    } else if (countryCode) {
-        // If we have a country code but no data
-        this.tooltip
-            .style('opacity', 1)
-            .html(`
-                <div class="tooltip-header">
-                    <img class="country-flag" src="https://flagcdn.com/${countryCode.toLowerCase()}.svg"
-                         onerror="this.src='https://via.placeholder.com/30x20/ddd/aaa?text=?'">
-                    <strong>${dataService.getCountryName(countryCode)}</strong>
-                </div>
-                <div class="tooltip-body">No data available</div>
-            `)
-            .style('left', (event.pageX + 10) + 'px')
-            .style('top', (event.pageY - 20) + 'px');
-    } else if (d.properties && d.properties.name) {
-        // If we only have the country name
-        this.tooltip
-            .style('opacity', 1)
-            .html(`
-                <div class="tooltip-header">
-                    <strong>${d.properties.name}</strong>
-                </div>
-                <div class="tooltip-body">No data available</div>
-            `)
-            .style('left', (event.pageX + 10) + 'px')
-            .style('top', (event.pageY - 20) + 'px');
-    }
-};
-
-GlobeVis.prototype.handleMouseOut = function(event, d) {
-    // Remove highlight unless it's the selected country
-    if (!this.selectedCountry || this.selectedCountry !== d.id) {
-        d3.select(event.currentTarget)
-            .attr('stroke', 'rgba(255,255,255,0.0)')
-            .attr('stroke-width', '0.5px');
-    }
-
-    // Hide tooltip
-    this.tooltip
-        .style('opacity', 0);
-};
-
-GlobeVis.prototype.handleCountryClick = function(event, d) {
-    const countryCode = this.getCountryCode(d);
-    const countryData = dataService.getCountryData(countryCode);
-
-    // Reset previous selection
-    if (this.selectedCountry) {
-        d3.select(`#country-${this.selectedCountry}`)
-            .attr('stroke', 'rgba(255,255,255,0.0)')
-            .attr('stroke-width', '0.5px')
-            .classed('selected-country', false);
-    }
-
-    // Set new selection with visible stroke
-    this.selectedCountry = d.id;
-    d3.select(event.currentTarget)
-        .attr('stroke', '#ffffff')
-        .attr('stroke-width', '1.5px')
+        .filter(country => country.id === feature.id)
+        .attr('stroke', '#f3f7fe').attr('stroke-width', 1.8)
         .classed('selected-country', true);
-
-    // Update the country info panel
-    this.updateCountryInfoPanel(countryData);
+    this.refreshSelectedCountry();
+    this.dispatchStateEvent('country-selected');
 };
 
-GlobeVis.prototype.updateCountryInfoPanel = function(countryData) {
-    const countryNameEl = document.getElementById('countryName');
-    const countryStatsEl = document.getElementById('countryStats');
-    const countryInfoPanel = document.getElementById('countryInfo');
-    const seeMoreBtn = document.getElementById('seeMoreBtn');
+GlobeVis.prototype.handleCountryClick = function(event, feature) {
+    this.stopAutoRotation();
+    this.cancelRotationAnimation();
+    this.selectCountry(feature);
+};
 
-    if (countryData) {
-        // Create header with flag and country name
-        const countryCode = countryData.countryKey ? countryData.countryKey.toLowerCase() : '';
+GlobeVis.prototype.refreshSelectedCountry = function() {
+    const feature = this.countryFeatures.find(country => country.id === this.selectedCountry);
+    const code = this.selectedCountryCode || (feature ? this.getCountryCode(feature) : null);
+    const displayFeature = feature || (code ? {
+        properties: { name: this.dataService.getCountryName(code) }, countryCode: code
+    } : null);
+    this.updateCountryInfoPanel(code ? this.dataService.getCountryData(code) : null, displayFeature);
+};
 
-        // Update header with flag + name
-        countryNameEl.innerHTML = `
-            <div class="country-header">
-                <img class="country-flag" src="https://flagcdn.com/${countryCode}.svg"
-                     onerror="this.src='https://via.placeholder.com/30x20/ddd/aaa?text=?'">
-                <span>${countryData.countryName}</span>
-            </div>
-        `;
+GlobeVis.prototype.metricLabel = function(column = this.dataService.currentColumn) {
+    return this.dataService.getMetricMetadata?.(column)?.label ||
+        (column ? column.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase()) : 'No metric');
+};
 
-        // Clear existing stats
-        countryStatsEl.innerHTML = '';
+GlobeVis.prototype.categoryLabel = function() {
+    return { epidem: 'Epidemiology', hospitalizations: 'Hospitalizations', vaccinations: 'Vaccinations' }[this.dataService.currentDataset] || 'Country observations';
+};
 
-        // Add all available metrics for this country
-        for (const key of dataService.availableColumns[dataService.currentDataset]) {
-            if (key in countryData) {
-                const statItem = document.createElement('div');
-                statItem.className = 'stat-item';
+GlobeVis.prototype.unitLabel = function(column = this.dataService.currentColumn, unit = this.dataService.displayUnit || 'count') {
+    return this.dataService.getUnitLabel?.(column, unit) ||
+        { count: 'Count', per100k: 'Per 100,000 people', percent: '% of population', per100: 'Doses per 100 people' }[unit] || 'Count';
+};
 
-                const statLabel = document.createElement('div');
-                statLabel.className = 'stat-label';
-                statLabel.textContent = key + ':';
+GlobeVis.prototype.displayValue = function(code) {
+    if (this.dataService.getDisplayValue) return this.dataService.getDisplayValue(code);
+    const value = this.dataService.getCountryData(code)?.[this.dataService.currentColumn];
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+};
 
-                const statValue = document.createElement('div');
-                statValue.className = 'stat-value';
-                statValue.textContent = dataService.formatNumber(countryData[key]);
+GlobeVis.prototype.populationRequired = function(code) {
+    if (!code || !this.dataService.displayUnit || this.dataService.displayUnit === 'count') return false;
+    const raw = this.dataService.getCountryData(code)?.[this.dataService.currentColumn];
+    const population = this.dataService.getPopulation?.(code);
+    return typeof raw === 'number' && Number.isFinite(raw) && !(typeof population === 'number' && population > 0);
+};
 
-                statItem.appendChild(statLabel);
-                statItem.appendChild(statValue);
-                countryStatsEl.appendChild(statItem);
-            }
-        }
-
-        // Show the country info panel and See More button
-        countryInfoPanel.style.display = 'block';
-        seeMoreBtn.style.display = 'block';
-    } else {
-        countryNameEl.innerHTML = 'Select a country';
-        countryStatsEl.innerHTML = `
-            <div class="stat-item">
-                <div class="stat-label">Select a country</div>
-                <div class="stat-value">to see stats</div>
-            </div>
-        `;
-
-        // Hide the panel and See More button when no country is selected
-        countryInfoPanel.style.display = 'none';
-        seeMoreBtn.style.display = 'none';
+GlobeVis.prototype.unavailableReason = function(code) {
+    if (this.populationRequired(code)) return 'Population unavailable for this unit';
+    const raw = this.dataService.getCountryData(code)?.[this.dataService.currentColumn];
+    if (this.dataService.smoothing === '7day' && typeof raw === 'number' && Number.isFinite(raw) && this.displayValue(code) === null) {
+        return 'Not enough reports for a 7-day average';
     }
+    return '';
+};
+
+GlobeVis.prototype.formatMetricValue = function(value, unit = this.dataService.displayUnit || 'count') {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Not reported';
+    return new Intl.NumberFormat('en-US', { maximumFractionDigits: unit === 'count' && this.dataService.smoothing !== '7day' ? 0 : 1 }).format(value);
+};
+
+GlobeVis.prototype.renderCountryTrend = function(series) {
+    const container = document.getElementById('countryTrend');
+    if (!container) return;
+    container.replaceChildren();
+    const points = series.filter(point => point.date <= this.dataService.currentDate).slice(-90);
+    const available = points.filter(point => typeof point.value === 'number' && Number.isFinite(point.value));
+    const heading = document.createElement('div');
+    heading.className = 'country-trend-label';
+    heading.textContent = 'Recent trend';
+    container.appendChild(heading);
+    if (available.length < 2) {
+        const empty = document.createElement('p');
+        empty.className = 'country-trend-note';
+        empty.textContent = 'Not enough reported observations to draw a trend.';
+        container.appendChild(empty);
+        return;
+    }
+    const namespace = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(namespace, 'svg');
+    const width = 260, height = 64, margin = 4;
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('class', 'country-sparkline');
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', `${this.metricLabel()}, ${this.unitLabel()}, from ${this.dataService.formatDate(points[0].date)} to ${this.dataService.formatDate(points.at(-1).date)}. Missing observations leave gaps.`);
+    const values = available.map(point => point.value);
+    const minimum = Math.min(0, ...values), maximum = Math.max(0, ...values);
+    const firstTime = Date.parse(`${points[0].date}T00:00:00Z`);
+    const timeSpan = Date.parse(`${points.at(-1).date}T00:00:00Z`) - firstTime || 1;
+    const x = point => margin + (Date.parse(`${point.date}T00:00:00Z`) - firstTime) / timeSpan * (width - margin * 2);
+    const y = value => height - margin - (value - minimum) / (maximum - minimum || 1) * (height - margin * 2);
+    const baseline = document.createElementNS(namespace, 'line');
+    baseline.setAttribute('x1', margin);
+    baseline.setAttribute('x2', width - margin);
+    baseline.setAttribute('y1', y(0));
+    baseline.setAttribute('y2', y(0));
+    baseline.setAttribute('stroke', '#334155');
+    svg.appendChild(baseline);
+    let drawing = false, commands = '';
+    for (const point of points) {
+        if (typeof point.value !== 'number' || !Number.isFinite(point.value)) { drawing = false; continue; }
+        commands += `${drawing ? 'L' : 'M'}${x(point).toFixed(2)},${y(point.value).toFixed(2)} `;
+        drawing = true;
+    }
+    const path = document.createElementNS(namespace, 'path');
+    path.setAttribute('d', commands.trim());
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', 'var(--accent, #ff8a7d)');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(path);
+    const caption = document.createElement('div');
+    caption.className = 'country-trend-note';
+    caption.textContent = `${this.dataService.formatDate(points[0].date)} – ${this.dataService.formatDate(points.at(-1).date)}${this.dataService.smoothing === '7day' ? ' · 7-day average' : ' · Raw observations'}`;
+    container.append(svg, caption);
+};
+
+GlobeVis.prototype.updateCountryInfoPanel = function(record, feature) {
+    const name = document.getElementById('countryName');
+    const stats = document.getElementById('countryStats');
+    const panel = document.getElementById('countryInfo');
+    const more = document.getElementById('seeMoreBtn');
+    if (!name || !stats || !panel) return;
+    stats.replaceChildren();
+    if (!record && !feature) {
+        name.textContent = 'Select a country';
+        panel.style.display = 'none';
+        panel.hidden = true;
+        document.getElementById('exploreWorkspace')?.classList.remove('has-selection');
+        if (more) more.style.display = 'none';
+        return;
+    }
+    const code = record?.countryKey || feature?.countryCode || this.getCountryCode(feature);
+    name.replaceChildren(this.createCountryHeader(code, record?.countryName || feature?.properties?.name || 'Unknown country'));
+    const columns = this.dataService.availableColumns[this.dataService.currentDataset] || [];
+    const primary = document.getElementById('countryPrimary');
+    if (primary) {
+        primary.replaceChildren();
+        const label = document.createElement('div');
+        label.className = 'primary-metric-label';
+        label.textContent = this.metricLabel();
+        const value = document.createElement('div');
+        value.className = 'primary-metric-value';
+        const selectedValue = this.displayValue(code);
+        value.textContent = this.unavailableReason(code) ? 'Unavailable' : this.formatMetricValue(selectedValue);
+        const unit = document.createElement('div');
+        unit.className = 'primary-metric-unit';
+        unit.textContent = this.unavailableReason(code) || (selectedValue === null ? 'Not reported on selected day' :
+            `${this.unitLabel()}${selectedValue < 0 ? ' · Reporting correction' : ''}${this.dataService.smoothing === '7day' ? ' · 7-day average' : ''}`);
+        primary.append(label, value, unit);
+    }
+    const context = document.getElementById('countryContext');
+    if (context) context.textContent = `${this.categoryLabel()} · ${this.dataService.formatDate(this.dataService.currentDate)}`;
+    const preferred = {
+        epidem: ['cumulative_confirmed', 'cumulative_deceased', 'new_confirmed', 'new_deceased'],
+        hospitalizations: ['current_hospitalized_patients', 'current_intensive_care_patients', 'new_hospitalized_patients', 'cumulative_hospitalized_patients'],
+        vaccinations: ['cumulative_persons_vaccinated', 'cumulative_persons_fully_vaccinated', 'cumulative_vaccine_doses_administered']
+    };
+    const supporting = [...new Set([...(preferred[this.dataService.currentDataset] || []), ...columns])]
+        .filter(key => key !== this.dataService.currentColumn && columns.includes(key)).slice(0, 3);
+    if (supporting.length) {
+        for (const key of supporting) {
+            const row = document.createElement('div');
+            row.className = 'stat-item';
+            const label = document.createElement('div');
+            label.className = 'stat-label';
+            label.textContent = this.metricLabel(key);
+            const value = document.createElement('div');
+            value.className = 'stat-value';
+            value.textContent = this.formatMetricValue(record?.[key], 'count');
+            row.append(label, value);
+            stats.appendChild(row);
+        }
+    } else {
+        stats.textContent = 'No supporting indicators reported.';
+    }
+    const population = this.dataService.getPopulation?.(code);
+    const populationText = document.getElementById('countryPopulation');
+    if (populationText) populationText.textContent = typeof population === 'number' && Number.isFinite(population)
+        ? `Population · ${this.dataService.formatNumber(population)}${this.dataService.dataSource === 'sample' ? ' (fictional)' : ''}`
+        : 'Population unavailable';
+    const series = this.dataService.getCountrySeries?.(code) || [];
+    const rawSeries = this.dataService.getCountrySeries?.(code, { unit: 'count', smoothing: 'raw' }) || series;
+    const reported = rawSeries.filter(point => point.date <= this.dataService.currentDate && point.reported !== false && typeof point.rawValue === 'number' && Number.isFinite(point.rawValue));
+    const last = document.getElementById('countryLastReported');
+    if (last) last.textContent = reported.length
+        ? `Last reported by selected date · ${this.dataService.formatDate(reported.at(-1).date)}`
+        : 'No observation by selected date';
+    this.renderCountryTrend(series);
+    panel.hidden = false;
+    panel.style.display = window.CompareMode?.state.active ? 'none' : 'block';
+    document.getElementById('exploreWorkspace')?.classList.add('has-selection');
+    // History remains useful when the currently selected date has no record.
+    if (more) more.style.display = code ? 'block' : 'none';
 };
 
 GlobeVis.prototype.updateDataSelector = function() {
-    const dataSelector = document.getElementById('dataSelector');
-    dataSelector.innerHTML = ''; // Clear existing options
-
-    // Add options based on available columns in current dataset
-    const columns = dataService.availableColumns[dataService.currentDataset];
-    columns.forEach(column => {
+    const selector = document.getElementById('dataSelector');
+    if (!selector) return;
+    selector.replaceChildren();
+    const columns = this.dataService.availableColumns[this.dataService.currentDataset] || [];
+    for (const column of columns) {
         const option = document.createElement('option');
         option.value = column;
-        option.textContent = column;
-        dataSelector.appendChild(option);
-    });
-
-    // Set currently selected column
-    if (dataService.currentColumn) {
-        dataSelector.value = dataService.currentColumn;
+        option.textContent = this.metricLabel(column);
+        selector.appendChild(option);
     }
+    selector.value = this.dataService.currentColumn || '';
+    selector.disabled = columns.length === 0;
+};
+
+GlobeVis.prototype.syncDateControls = function() {
+    const slider = document.getElementById('dateSlider');
+    const current = document.getElementById('currentDate');
+    const previous = document.getElementById('prevDateBtn');
+    const next = document.getElementById('nextDateBtn');
+    const dates = this.dataService.getAvailableDates?.() || this.dataService.availableDates || [];
+    if (!slider || !current) return;
+    const index = Number(slider.value);
+    slider.disabled = dates.length === 0;
+    if (previous) previous.disabled = dates.length === 0 || index <= 0;
+    if (next) next.disabled = dates.length === 0 || index >= dates.length - 1;
+    current.textContent = dates.length ? this.dataService.formatDate(dates[index]) : 'No dates with data';
+    const start = document.getElementById('timelineStart');
+    const end = document.getElementById('timelineEnd');
+    if (start) start.textContent = dates.length ? this.dataService.formatDate(dates[0]) : '—';
+    if (end) end.textContent = dates.length ? this.dataService.formatDate(dates.at(-1)) : '—';
 };
 
 GlobeVis.prototype.setupDateSlider = function() {
-    const dateSlider = document.getElementById('dateSlider');
-    const currentDateEl = document.getElementById('currentDate');
-    const prevDateBtn = document.getElementById('prevDateBtn');
-    const nextDateBtn = document.getElementById('nextDateBtn');
+    this.dateListeners?.abort();
+    this.dateListeners = new AbortController();
+    clearTimeout(this.dateUpdateTimeout);
+    const slider = document.getElementById('dateSlider');
+    if (!slider) return;
+    const dates = this.dataService.getAvailableDates?.() || this.dataService.availableDates || [];
+    let index = dates.indexOf(this.dataService.currentDate);
+    if (index < 0) index = Math.max(0, dates.length - 1);
+    slider.min = 0;
+    slider.max = Math.max(0, dates.length - 1);
+    slider.step = 1;
+    slider.value = index;
+    if (dates.length) this.dataService.changeDate(dates[index]);
+    this.syncDateControls();
 
-    // Set slider range based on available dates with data
-    if (dataService.availableDates && dataService.availableDates.length > 0) {
-        dateSlider.min = 0;
-        dateSlider.max = dataService.availableDates.length - 1;
+    const update = () => {
+        const selectedIndex = Number(slider.value);
+        const availableDates = this.dataService.getAvailableDates?.() || this.dataService.availableDates || [];
+        const date = availableDates[selectedIndex];
+        if (!date) return;
+        // Keep date, colors and country details in the same state. One redraw
+        // per input is cheap for this 110m map and avoids stale debounce work.
+        this.dataService.changeDate(date);
+        this.syncDateControls();
+        this.updateGlobeColors();
+        this.refreshSelectedCountry();
+        this.dispatchStateEvent('atlas-data-updated');
+    };
+    const options = { signal: this.dateListeners.signal };
+    slider.addEventListener('input', update, options);
+    document.getElementById('prevDateBtn')?.addEventListener('click', () => {
+        if (Number(slider.value) > 0) {
+            slider.value = Number(slider.value) - 1;
+            update();
+        }
+    }, options);
+    document.getElementById('nextDateBtn')?.addEventListener('click', () => {
+        if (Number(slider.value) < Number(slider.max)) {
+            slider.value = Number(slider.value) + 1;
+            update();
+        }
+    }, options);
+};
 
-        // If we have few dates, use them all
-        const availableDatesCount = dataService.availableDates.length;
-        this.log(`Setting up date slider with ${availableDatesCount} dates`);
-
-        // Start at latest useful date
-        const latestDateIndex = availableDatesCount > 0 ? availableDatesCount - 1 : 0;
-        dateSlider.value = latestDateIndex;
-
-        // Set current date to the selected index
-        dataService.currentDate = dataService.availableDates[latestDateIndex];
-
-        // Update current date display
-        currentDateEl.textContent = dataService.formatDate(dataService.currentDate);
-    } else {
-        // No dates with data
-        this.log("No dates with data available");
-        currentDateEl.textContent = "No dates with data";
-        dateSlider.disabled = true;
-        prevDateBtn.disabled = true;
-        nextDateBtn.disabled = true;
+GlobeVis.prototype.refreshData = function() {
+    if (this.destroyed || !this.worldData) return;
+    this.buildCountryFeatureMap();
+    if (!this.globeCreated) {
+        this.createGlobe();
+        this.globeCreated = true;
     }
-
-    // Handle slider input - use direct mapping to available dates array
-    // Use debouncing to prevent excessive updates when sliding quickly
-    let updateTimeout = null;
-
-    dateSlider.addEventListener('input', () => {
-        const index = parseInt(dateSlider.value);
-        // Ensure the index is valid
-        if (index >= 0 && index < dataService.availableDates.length) {
-            const newDate = dataService.availableDates[index];
-
-            // Update date display immediately for responsive feel
-            currentDateEl.textContent = dataService.formatDate(newDate);
-
-            // Debounce the actual data update
-            if (updateTimeout) clearTimeout(updateTimeout);
-            updateTimeout = setTimeout(() => {
-                dataService.changeDate(newDate);
-                this.updateGlobeColors();
-
-                // Update country info if needed
-                if (this.selectedCountry) {
-                    const countryEl = document.getElementById(`country-${this.selectedCountry}`);
-                    if (countryEl) {
-                        const countryCode = countryEl.getAttribute('data-country-code');
-                        const countryData = dataService.getCountryData(countryCode);
-                        this.updateCountryInfoPanel(countryData);
-                    }
-                }
-            }, 50); // Small delay to improve performance during sliding
-        }
-    });
-
-    // Previous date button
-    prevDateBtn.addEventListener('click', () => {
-        const currentIndex = parseInt(dateSlider.value);
-        if (currentIndex > 0) {
-            dateSlider.value = currentIndex - 1;
-            dateSlider.dispatchEvent(new Event('input'));
-        }
-    });
-
-    // Next date button
-    nextDateBtn.addEventListener('click', () => {
-        const currentIndex = parseInt(dateSlider.value);
-        if (currentIndex < dateSlider.max) {
-            dateSlider.value = currentIndex + 1;
-            dateSlider.dispatchEvent(new Event('input'));
-        }
-    });
+    this.svg.style('display', null);
+    document.querySelectorAll('#globe .globe-error').forEach(element => element.remove());
+    this.globeGroup.selectAll('.country').attr('data-country-code', feature => this.getCountryCode(feature));
+    this.updateDataSelector();
+    this.setupDateSlider();
+    this.updateGlobeColors();
+    this.refreshSelectedCountry();
+    this.setControlsDisabled(false);
+    this.dispatchStateEvent('atlas-data-updated');
 };
 
 GlobeVis.prototype.changeDataset = function(dataset) {
-    // Update the dataset indicator in the UI
-    const datasetDisplayNames = {
-        'epidem': 'Epidemiology',
-        'hospitalizations': 'Hospitalizations',
-        'vaccinations': 'Vaccinations'
-    };
-
-    const currentDatasetEl = document.getElementById('currentDataset');
-    if (currentDatasetEl) {
-        currentDatasetEl.textContent = datasetDisplayNames[dataset] || dataset;
-    }
-
-    // Change dataset in data service
-    const result = dataService.changeDataset(dataset);
-
-    // Update data selector with new columns
-    this.updateDataSelector();
-
-    // Update globe colors
-    this.updateGlobeColors();
-
-    // Direct implementation of background and button color updates
-    // Define color gradients for each dataset
-    const backgroundGradients = {
-        'epidem': 'radial-gradient(#4a0000, #000)',         // Red theme for epidemiology
-        'hospitalizations': 'radial-gradient(#1a315a, #000)', // Blue theme for hospitalizations
-        'vaccinations': 'radial-gradient(#004d40, #000)'      // Green theme for vaccinations
-    };
-
-    // Apply the background gradient to the body
-    document.body.style.background = backgroundGradients[dataset] || backgroundGradients['epidem'];
-
-    // Update the reset button color
-    const resetBtn = document.getElementById('resetBtn');
-    if (resetBtn) {
-        const buttonColors = {
-            'epidem': '#8b0000',         // Dark red for epidemiology
-            'hospitalizations': '#1a315a', // Dark blue for hospitalizations
-            'vaccinations': '#004d40'      // Dark green for vaccinations
-        };
-        resetBtn.style.backgroundColor = buttonColors[dataset] || buttonColors['epidem'];
-
-        // Update hover styles
-        const hoverColors = {
-            'epidem': '#a00000',         // Lighter red for hover
-            'hospitalizations': '#2a4570', // Lighter blue for hover
-            'vaccinations': '#00695c'      // Lighter green for hover
-        };
-
-        const styleId = 'reset-button-style';
-        let styleEl = document.getElementById(styleId);
-
-        // Remove existing style element if it exists
-        if (styleEl) {
-            styleEl.remove();
-        }
-
-        // Create new style element with updated hover color
-        styleEl = document.createElement('style');
-        styleEl.id = styleId;
-        styleEl.textContent = `
-            #resetBtn:hover {
-                background-color: ${hoverColors[dataset] || hoverColors['epidem']} !important;
-            }
-        `;
-
-        // Add the style element to the document head
-        document.head.appendChild(styleEl);
-    }
-
-    this.log(`Updated colors for dataset: ${dataset}`);
-
-    // If a country is selected, update its info
-    if (this.selectedCountry) {
-        const countryEl = document.getElementById(`country-${this.selectedCountry}`);
-        if (countryEl) {
-            const countryCode = countryEl.getAttribute('data-country-code');
-            const countryData = dataService.getCountryData(countryCode);
-            this.updateCountryInfoPanel(countryData);
-        }
-    }
-
-    // Update the miniglobe if it exists
-    const minimizedGlobe = document.getElementById('minimizedGlobe');
-    if (minimizedGlobe && minimizedGlobe.style.display !== 'none') {
-        // Recreate the miniglobe with updated colors
-        this.miniGlobe.recreate();
-        
-        this.log(`Updated miniglobe colors for dataset: ${dataset}`);
-    }
+    if (!Object.hasOwn(this.dataService.availableColumns, dataset)) return;
+    this.dataService.changeDataset(dataset);
+    this.refreshData();
+    const names = { epidem: 'Epidemiology', hospitalizations: 'Hospitalizations', vaccinations: 'Vaccinations' };
+    const display = document.getElementById('currentDataset');
+    if (display) display.textContent = names[dataset] || dataset;
 };

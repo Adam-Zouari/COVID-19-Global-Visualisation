@@ -1,207 +1,358 @@
 <!DOCTYPE html>
-
-<head>
-    <title>COVID-19 Visualizer</title>
-    <!-- Meta -->
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-    <!-- CSS / Favicon -->
-    <link href="styles.css" rel="stylesheet" />
-    <link href="styles/compare.css" rel="stylesheet" />
-
-    <!-- Core JavaScript Libraries -->
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://d3js.org/topojson.v3.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
-
-    <!-- Core Application Files -->
-    <script src="dataService.js" defer></script>
-    <script src="dataServiceExtension.js" defer></script>
-
-    <!-- Globe Modules -->
-    <script src="globe/MiniGlobe.js" defer></script>
-    <script src="globe/GlobeVis.js" defer></script>
-    <script src="globe/GlobeEvents.js" defer></script>
-    <script src="globe/GlobeRendering.js" defer></script>
-    <script src="globe/GlobeCountries.js" defer></script>
-    <script src="globe/GlobeAnimation.js" defer></script>
-    <script src="globe/main.js" defer></script>
-
-    <!-- Modular Components -->
-    <script src="uiUtils.js" defer></script>
-    <script src="search.js" defer></script>
-    <script src="visualizations.js" defer></script>
-    <script src="chartFactory.js" defer></script>
-
-    <!-- Chart Controls -->
-    <script src="chartControls.js" defer></script>
-
-    <!-- Chart Implementations -->
-    <script src="charts/barChart.js" defer></script>
-    <script src="charts/lineChart.js" defer></script>
-    <script src="charts/pieChart.js" defer></script>
-    <script src="charts/radarChart.js" defer></script>
-    <script src="charts/compareCharts.js" defer></script>
-
-    <!-- Compare Mode -->
-    <script src="compare.js" defer></script>
-    <script src="compareUI.js" defer></script>
-</head>
-
-<body>
-    <!-- Main containers -->
-    <div id="particles"></div>
-    <div id="globe" class="centered-globe"></div>
-
-    <!-- Header -->
-    <div id="header">
-        <div id="search">
-            <img src="assets/icons/search.svg" onclick="openSearch()">
-        </div>
-
-        <!-- Dataset buttons -->
-        <div class="dataset-buttons">
-            <button id="epidemBtn" class="dataset-btn active" onclick="changeDataset('epidem')" title="Epidemiology">
-                <img src="assets/icons/virus.svg" class="dataset-icon" alt="Epidemiology">
-            </button>
-            <button id="hospBtn" class="dataset-btn" onclick="changeDataset('hospitalizations')" title="Hospitalizations">
-                <img src="assets/icons/hospital.svg" class="dataset-icon" alt="Hospitalizations">
-            </button>
-            <button id="vaccBtn" class="dataset-btn" onclick="changeDataset('vaccinations')" title="Vaccinations">
-                <img src="assets/icons/syringe.svg" class="dataset-icon" alt="Vaccinations">
-            </button>
-        </div>
-
-        <h1>COVID-19</h1>
-    </div>
-
-    <!-- Search Modal Overlay -->
-    <div id="searchModal" class="search-modal">
-        <div class="search-container">
-            <div class="search-header">
-                <h3>Search Countries</h3>
-                <button class="close-search" onclick="closeSearch()">×</button>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="description" content="Explore historical COVID-19 observations across countries and time with an interactive globe.">
+        <title>COVID-19 Atlas — A world of perspective</title>
+        <link rel="icon" href="assets/icons/atlas.svg" type="image/svg+xml">
+        <link rel="stylesheet" href="styles.css">
+        <link rel="stylesheet" href="styles/compare.css">
+        <script src="vendor/d3.min.js" defer></script>
+        <script src="vendor/topojson-client.min.js" defer></script>
+        <script src="app.js" type="module"></script>
+        <script src="globe/GlobeVis.js" defer></script>
+        <script src="globe/GlobeEvents.js" defer></script>
+        <script src="globe/GlobeRendering.js" defer></script>
+        <script src="globe/GlobeCountries.js" defer></script>
+        <script src="globe/GlobeAnimation.js" defer></script>
+        <script src="globe/main.js" defer></script>
+        <script src="ui/uiUtils.js" defer></script>
+        <script src="ui/search.js" defer></script>
+        <script src="ui/visualizations.js" defer></script>
+        <script src="charts/chartFactory.js" defer></script>
+        <script src="charts/chartControls.js" defer></script>
+        <script src="charts/compareCharts.js" defer></script>
+        <script src="ui/compare.js" defer></script>
+        <script src="ui/compareUI.js" defer></script>
+    </head>
+    <body>
+        <a class="skip-link" href="#dataSelector">Skip to explorer</a>
+        <header class="app-header" id="header">
+            <a class="brand" href="/" aria-label="COVID-19 Atlas home"><img src="assets/icons/atlas.svg" width="38" height="38" alt=""><span><strong>COVID-19 <span class="brand-light">ATLAS</span></strong><small>A world of perspective</small></span></a>
+            <nav class="primary-nav" aria-label="Main navigation">
+                <button id="navExplore" class="nav-link active" onclick="atlasActions.setView('explore')" aria-current="page">Explore</button>
+                <button id="navCompare" class="nav-link" onclick="atlasActions.setView('compare')">Compare <span id="compareCount" class="nav-count" hidden>0</span></button>
+            </nav>
+            <div class="header-actions">
+                <span class="archive-badge"><span></span> Historical explorer</span>
+                <button id="search" class="search-trigger" onclick="openSearch()" aria-label="Search countries" aria-haspopup="dialog" aria-controls="searchModal"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span>Find a country</span><kbd>/</kbd></button>
+                <button class="icon-btn methodology-trigger" onclick="openMethodology()" aria-label="About the data">?</button>
             </div>
-            <input type="text" id="countrySearchInput" placeholder="Type country name..." autocomplete="off">
-            <div id="countryList" class="country-list"></div>
-        </div>
-    </div>
-
-    <!-- Country Info Panel -->
-    <div id="countryInfo">
-        <h3 id="countryName">Select a country</h3>
-        <div id="countryStats"></div>
-        <!-- Add the See More button -->
-        <button id="seeMoreBtn" onclick="showVisualizations()">See More Visualizations</button>
-    </div>
-
-    <!-- Controls Panel -->
-    <div class="control-panel">
-        <div class="dataset-indicator">
-            <span id="currentDataset">Epidemiology</span>
-        </div>
-
-        <div class="data-selector-container">
-            <label for="dataSelector">Data Type: </label>
-            <select id="dataSelector"></select>
-        </div>
-
-        <div class="date-controls">
-            <button id="prevDateBtn">&lt;</button>
-            <span id="currentDate">Loading...</span>
-            <button id="nextDateBtn">&gt;</button>
-        </div>
-
-        <input type="range" id="dateSlider" min="0" max="100" value="0">
-
-        <button id="resetBtn" class="control-btn">Reset View</button>
-        <button id="compareBtn" class="control-btn" onclick="CompareMode.enter()">Compare</button>
-    </div>
-
-    <!-- Loading indicator -->
-    <div id="loader"></div>
-    <div id="dataStatus">Loading data...</div>
-
-    <!-- Error display for data loading issues -->
-    <div id="errorDisplay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; color: white; padding: 20px; flex-direction: column; align-items: center; justify-content: center;">
-        <h2>Data Loading Error</h2>
-        <div id="errorMessage"></div>
-        <button id="errorClose" style="margin-top: 20px; padding: 8px 16px;">Close</button>
-    </div>
-
-    <!-- Visualization Panel -->
-    <div id="visualizationPanel">
-        <div class="viz-header">
-            <div class="viz-title">
-                <img id="viz-flag" src="" alt="Country Flag">
-                <h2 id="viz-country-name">Country Data</h2>
-            </div>
-            <div class="viz-controls">
-                <select id="vizTypeSelector" class="viz-selector" onchange="changeVisualization()">
-                    <option value="bar">Bar Chart</option>
-                    <option value="line">Line Chart</option>
-                    <option value="pie">Pie Chart</option>
-                    <option value="radar">Radar Chart</option>
-                </select>
-            </div>
-        </div>
-        <div class="viz-content">
-            <div id="chartContainer" class="chart-container"></div>
-        </div>
-    </div>
-
-    <!-- Minimized Globe Container -->
-    <div id="minimizedGlobe" class="globe-minimized" style="display:none" onclick="restoreGlobe()"></div>
-
-    <!-- Compare Panel -->
-    <div id="comparePanel" class="compare-panel">
-        <div class="compare-header">
-            <div class="header-countries" id="headerCountriesList">
-                <!-- Country items will be added here -->
-            </div>
-            <button id="exitCompareBtn" class="exit-compare-btn" onclick="CompareMode.exit()">Exit Compare Mode</button>
-        </div>
-
-        <div class="compare-options">
-            <div class="controls-row">
-                <div class="display-mode-selector">
-                    <label>Display Mode:</label>
-                    <div class="display-mode-buttons">
-                        <button id="separateChartsBtn" class="display-mode-btn active" onclick="CompareMode.changeDisplayMode('separate')">Separate Charts</button>
-                        <button id="combinedChartBtn" class="display-mode-btn" onclick="CompareMode.changeDisplayMode('combined')">Combined Chart</button>
-                    </div>
+        </header>
+        <main class="app-main">
+            <div class="page-intro">
+                <div>
+                    <p class="eyebrow">THE PANDEMIC, IN PERSPECTIVE</p>
+                    <h1 id="pageTitle">Explore the world<span class="accent-period">.</span></h1>
+                    <p id="pageSubtitle">Follow the data across countries and time.</p>
                 </div>
-
-                <div class="chart-type-selector">
-                    <label>Chart Type:</label>
-                    <select id="compareChartType" onchange="CompareMode.changeChartType(this.value)">
-                        <option value="bar">Bar Chart</option>
-                        <option value="line">Line Chart</option>
-                        <option value="pie">Pie Chart</option>
-                        <option value="radar">Radar Chart</option>
-                    </select>
+                <div class="archive-period">
+                    <span class="eyebrow">AVAILABLE OBSERVATIONS</span>
+                    <strong id="availablePeriod">Loading archive</strong>
+                    <span id="availableCountries">Country-level data</span>
                 </div>
-
-                <div class="date-selection-panel">
-                    <label>Date Range:</label>
-                    <div class="date-range-slider-container">
-                        <div class="date-range-labels">
-                            <span id="startDateLabel">Start Date</span>
-                            <span id="endDateLabel">End Date</span>
+            </div>
+            <div class="category-bar">
+                <div class="dataset-buttons" role="group" aria-label="Data category">
+                    <button id="epidemBtn" class="dataset-btn active" aria-pressed="true" onclick="changeDataset('epidem')"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 13h4l3-7 4 12 3-7h4"/></svg>Cases &amp; deaths</button>
+                    <button id="hospBtn" class="dataset-btn" aria-pressed="false" onclick="changeDataset('hospitalizations')"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 21V5h14v16M2 21h20M9 10h6m-3-3v6M9 21v-5h6v5"/></svg>Hospitalizations</button>
+                    <button id="vaccBtn" class="dataset-btn" aria-pressed="false" onclick="changeDataset('vaccinations')"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m14 3 7 7m-5-5-4 4m5 0-8 8-4 2 2-4 8-8M4 20l-2 2M9 8l7 7"/></svg>Vaccinations</button>
+                </div>
+                <button class="text-btn source-link" onclick="openMethodology()">Source &amp; methodology <span aria-hidden="true">↗</span></button>
+            </div>
+            <aside id="sourceNotice" class="source-notice archive-notice" aria-label="Data source notice">
+                <span class="notice-icon" aria-hidden="true">i</span>
+                <div>
+                    <strong id="sourceTitle">Loading data source</strong>
+                    <p id="sourceDescription">Preparing country observations and reporting coverage.</p>
+                </div>
+                <a id="sourceSwitch" class="notice-action" href="?data=sample">Explore the demo <span aria-hidden="true">↗</span></a>
+            </aside>
+            <div id="exploreView">
+                <section class="explore-workspace" id="exploreWorkspace" aria-label="Interactive country explorer" tabindex="-1">
+                    <aside class="control-panel panel">
+                        <div class="panel-label">
+                            <span class="section-number">01</span>
+                            <span>EXPLORER SETTINGS</span>
+                            <button id="filtersToggle" class="icon-btn" aria-label="Toggle filters" aria-expanded="false">⌄</button>
                         </div>
-                        <div id="dateRangeSlider"></div>
+                        <div class="filter-content" id="filterContent">
+                            <div class="control-group">
+                                <label for="dataSelector">Metric</label>
+                                <select id="dataSelector" aria-label="Map metric"></select>
+                                <p id="metricDescription" class="control-description">Select a measure to explore.</p>
+                            </div>
+                            <div class="control-group">
+                                <label for="unitSelector">Display values as</label>
+                                <select id="unitSelector" onchange="atlasActions.setUnit(this.value)">
+                                    <option value="count">Absolute count</option>
+                                </select>
+                                <p id="populationNote" class="control-description"></p>
+                            </div>
+                            <fieldset class="control-group smoothing-group">
+                                <legend>Daily observations</legend>
+                                <div class="segmented-control">
+                                    <button id="rawBtn" onclick="atlasActions.setSmoothing('raw')" aria-pressed="false">Daily</button>
+                                    <button id="averageBtn" class="active" onclick="atlasActions.setSmoothing('7day')" aria-pressed="true">7-day average</button>
+                                </div>
+                                <p id="smoothingNote" class="control-description">Smooth the daily reporting pattern.</p>
+                            </fieldset>
+                            <div class="legend-block">
+                                <div class="label-row">
+                                    <span class="input-label">MAP LEGEND</span>
+                                    <span id="legendScaleLabel" class="subtle-label">Fixed scale</span>
+                                </div>
+                                <div id="globeLegend" class="globe-legend"></div>
+                            </div>
+                            <div class="coverage-summary">
+                                <span class="coverage-dot"></span>
+                                <div>
+                                    <strong id="coverageCount">Loading coverage</strong>
+                                    <span>with a reported value on this date</span>
+                                </div>
+                            </div>
+                            <button id="compareBtn" class="secondary-btn full-width" onclick="CompareMode.enter()"><span>Compare countries</span><span aria-hidden="true">↗</span></button>
+                        </div>
+                    </aside>
+                    <div class="globe-stage panel">
+                        <div class="stage-topline">
+                            <div>
+                                <span class="eyebrow">GLOBAL VIEW</span>
+                                <h2 id="mapMetricLabel">New confirmed cases</h2>
+                                <p id="mapUnitsLabel">Absolute count · 7-day average</p>
+                            </div>
+                            <span class="view-label"><span></span>3D GLOBE</span>
+                        </div>
+                        <div id="globe" aria-label="Interactive COVID-19 data globe"></div>
+                        <div id="loader" class="loading-state" role="status">
+                            <span class="loading-ring"></span>
+                            <span>Preparing your atlas</span>
+                        </div>
+                        <div class="stage-bottomline">
+                            <p class="globe-hint"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 10V6a2 2 0 0 1 4 0v7-3a2 2 0 0 1 4 0v4l1-1a2 2 0 0 1 3 2l-3 6H9l-5-7a2 2 0 0 1 3-2l1 1"/></svg><span>Drag to rotate <span class="hint-divider">·</span> Scroll to zoom</span></p>
+                            <div class="globe-controls" aria-label="Globe controls">
+                                <button id="zoomOutBtn" class="icon-btn" aria-label="Zoom out">−</button>
+                                <button id="zoomInBtn" class="icon-btn" aria-label="Zoom in">+</button>
+                                <button id="resetBtn" class="icon-btn" aria-label="Reset globe view" title="Reset globe view"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 7M4 4v6h6"/></svg></button>
+                            </div>
+                        </div>
                     </div>
+                    <aside id="countryInfo" class="country-details panel" aria-label="Selected country" hidden>
+                        <div class="country-topline">
+                            <span class="eyebrow">COUNTRY SNAPSHOT</span>
+                            <button id="closeCountryBtn" class="icon-btn" aria-label="Close country details">×</button>
+                        </div>
+                        <h2 id="countryName">Select a country</h2>
+                        <p id="countryContext" class="country-context"></p>
+                        <div id="countryPrimary" class="primary-stat"></div>
+                        <button id="countryExpandBtn" class="text-btn country-expand" aria-expanded="false">More details <span aria-hidden="true">⌄</span></button>
+                        <div class="country-expanded-content">
+                            <div id="countryStats" class="supporting-stats"></div>
+                            <div id="countryTrend" class="country-trend"></div>
+                            <div class="country-metadata">
+                                <p id="countryPopulation"></p>
+                                <p id="countryLastReported"></p>
+                            </div>
+                        </div>
+                        <div class="country-actions">
+                            <button id="seeMoreBtn" class="primary-btn full-width" onclick="showVisualizations()">Explore country data <span aria-hidden="true">↓</span></button>
+                            <button id="addToCompareBtn" class="secondary-btn full-width">Add to comparison <span aria-hidden="true">+</span></button>
+                        </div>
+                    </aside>
+                </section>
+                <section class="historical-timeline panel" aria-label="Historical timeline">
+                    <div class="timeline-selected">
+                        <span class="eyebrow">TRAVEL THROUGH TIME</span>
+                        <div class="timeline-day">
+                            <strong id="currentDate">Loading…</strong>
+                            <span id="timelineMeasure">Observation date</span>
+                        </div>
+                    </div>
+                    <div class="timeline-track">
+                        <div class="timeline-controls">
+                            <button id="playTimelineBtn" class="icon-btn timeline-play" aria-label="Play timeline" aria-pressed="false">▶</button>
+                            <button id="prevDateBtn" class="icon-btn" aria-label="Previous date">‹</button>
+                            <input type="range" id="dateSlider" min="0" max="100" value="100" aria-label="Reporting date">
+                            <button id="nextDateBtn" class="icon-btn" aria-label="Next date">›</button>
+                        </div>
+                        <div class="timeline-endpoints">
+                            <span id="timelineStart">Start</span>
+                            <div id="timelineYears" aria-hidden="true"></div>
+                            <span id="timelineEnd">End</span>
+                        </div>
+                    </div>
+                    <span class="historical-label"><span class="history-symbol" aria-hidden="true">◷</span> Historical observations</span>
+                </section>
+                <section id="visualizationPanel" class="country-analysis panel" aria-label="Country analysis" hidden>
+                    <div class="analysis-header">
+                        <div>
+                            <p class="eyebrow">A CLOSER LOOK</p>
+                            <div class="viz-title">
+                                <img id="viz-flag" alt="">
+                                <h2 id="viz-country-name">Country analysis</h2>
+                            </div>
+                            <p id="analysisMetricLabel">Selected metric over time</p>
+                        </div>
+                        <div class="viz-controls">
+                            <button id="analysisCloseBtn" class="text-btn" onclick="restoreGlobe()">↑ Back to globe</button>
+                            <label class="sr-only" for="vizTypeSelector">Visualization type</label>
+                            <select id="vizTypeSelector" aria-label="Visualization type" onchange="changeVisualization()">
+                                <option value="line">Trend line</option>
+                                <option value="bar">Daily bars</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p id="analysisUnits" class="chart-description"></p>
+                    <div class="viz-content">
+                        <div id="chartContainer" class="chart-container"></div>
+                    </div>
+                </section>
+            </div>
+            <section id="comparePanel" class="compare-panel" aria-label="Compare countries" hidden>
+                <div class="compare-heading">
+                    <div>
+                        <p class="eyebrow">PUT THE NUMBERS IN CONTEXT</p>
+                        <h2>Compare countries</h2>
+                        <p>The same metric. The same dates. A clearer perspective.</p>
+                    </div>
+                    <button id="exitCompareBtn" class="secondary-btn" onclick="CompareMode.exit()">← Explore on globe</button>
+                </div>
+                <div class="compare-country-row panel">
+                    <div id="headerCountriesList" class="header-countries"></div>
+                    <span class="comparison-limit">Up to 4 countries</span>
+                </div>
+                <div class="compare-options panel">
+                    <div class="controls-row">
+                        <div class="control-group">
+                            <label for="compareMetricSelector">Metric</label>
+                            <select id="compareMetricSelector"></select>
+                        </div>
+                        <div class="control-group">
+                            <label for="compareUnitSelector">Display values as</label>
+                            <select id="compareUnitSelector"></select>
+                        </div>
+                        <div class="control-group">
+                            <label for="compareSmoothingSelector">Daily observations</label>
+                            <select id="compareSmoothingSelector">
+                                <option value="7day">7-day average</option>
+                                <option value="raw">Daily values</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="compare-display-row">
+                        <div class="display-mode-buttons segmented-control">
+                            <button id="combinedChartBtn" class="active" onclick="CompareMode.changeDisplayMode('combined')">Combined</button>
+                            <button id="separateChartsBtn" onclick="CompareMode.changeDisplayMode('separate')">Separate charts</button>
+                        </div>
+                        <div class="compare-presentation">
+                            <label for="compareChartType" class="sr-only">Comparison chart type</label>
+                            <select id="compareChartType" aria-label="Comparison chart type" onchange="CompareMode.changeChartType(this.value)">
+                                <option value="line">Trend lines</option>
+                                <option value="bar">Daily bars</option>
+                            </select>
+                            <label for="compareScaleSelector" class="sr-only">Chart scales</label>
+                            <select id="compareScaleSelector" aria-label="Chart scales">
+                                <option value="shared">Shared scale</option>
+                                <option value="independent">Independent scales</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="date-selection-panel">
+                        <span id="compareDateModeLabel">Date range</span>
+                        <div class="date-range-slider-container">
+                            <div class="date-range-labels">
+                                <span id="startDateLabel">Start date</span>
+                                <span id="endDateLabel">End date</span>
+                            </div>
+                            <div id="dateRangeSlider"></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="compareMessage" class="inline-message" role="status" aria-live="polite"></div>
+                <div id="compareChartContainer" class="compare-chart-container panel"></div>
+            </section>
+            <footer class="app-footer">
+                <div>
+                    <span class="footer-dot"></span>
+                    <span id="dataStatus" role="status" aria-live="polite">Loading observations</span>
+                </div>
+                <div>
+                    <a href="https://github.com/GoogleCloudPlatform/covid-19-open-data" target="_blank" rel="noopener noreferrer">Google COVID-19 Open Data ↗</a>
+                    <button class="text-btn" onclick="openMethodology()">Methodology</button>
+                </div>
+            </footer>
+        </main>
+        <div id="searchModal" class="search-modal" role="dialog" aria-modal="true" aria-labelledby="searchTitle" hidden>
+            <div class="search-container">
+                <div class="search-header">
+                    <div>
+                        <h2 id="searchTitle">Find a country</h2>
+                        <p>A new perspective starts somewhere.</p>
+                    </div>
+                    <button class="icon-btn" onclick="closeSearch()" aria-label="Close search">×</button>
+                </div>
+                <div class="search-input-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+                    <input type="search" id="countrySearchInput" aria-label="Country name" placeholder="Search countries…" autocomplete="off">
+                    <kbd>ESC</kbd>
+                </div>
+                <div class="search-list-label">COUNTRIES <span id="searchResultCount"></span></div>
+                <div id="countryList" class="country-list"></div>
+                <div class="search-footer">Select a country to explore its observations.</div>
+            </div>
+        </div>
+        <dialog id="methodologyDialog" class="methodology-dialog" aria-labelledby="methodologyTitle">
+            <div class="dialog-topline">
+                <p class="eyebrow">BEHIND THE ATLAS</p>
+                <button class="icon-btn" onclick="closeMethodology()" aria-label="Close methodology">×</button>
+            </div>
+            <h2 id="methodologyTitle">Understand the data.</h2>
+            <p class="dialog-intro">An atlas of recorded observations, with their limitations kept in view.</p>
+            <div class="methodology-grid">
+                <section>
+                    <h3>Historical, not live</h3>
+                    <p>Google ended real-time updates on 15 September 2022. Dates in the explorer refer to recorded observations, not current conditions. Each country’s reporting coverage may differ. The initial date is the latest with at least 80% of peak reporting coverage; all reported dates remain available.</p>
+                </section>
+                <section>
+                    <h3>Demo and archive</h3>
+                    <p>The demo uses fictional observations and illustrative populations. The historical archive uses your locally prepared Google CSVs. The notice above the globe always identifies the active source.</p>
+                </section>
+                <section>
+                    <h3>Missing is not zero</h3>
+                    <p>“Not reported” means there is no observation for that country, metric, and date. Zero is a reported value. Negative daily counts can reflect reporting corrections.</p>
+                </section>
+                <section>
+                    <h3>Seven-day averages</h3>
+                    <p>A trailing seven-calendar-day mean needs at least five reported days in a complete seven-day window. Missing days do not count as zero, and the selected day must have a report. Averages are calculated before the selected chart range is applied.</p>
+                </section>
+                <section>
+                    <h3>Population-adjusted values</h3>
+                    <p>Per 100,000 values divide a count by the available population estimate. Vaccination coverage uses people vaccinated; doses per 100 people can exceed 100. Missing population produces no calculated value.</p>
+                </section>
+                <section>
+                    <h3>Reading the map</h3>
+                    <p>Six ordered color bands stay fixed across the loaded period for the selected metric, unit, and smoothing. Counts and rates use a logarithmic scale to reveal smaller values; vaccination percentages use a linear scale. Gray means no displayable value: a report, sufficient averaging history, or population may be missing. Amber identifies negative corrections.</p>
+                </section>
+            </div>
+            <p id="dataQualityNote" class="quality-note" hidden></p>
+            <div class="methodology-source">
+                <span>Source datasets</span>
+                <p>Epidemiology · Hospitalizations · Vaccinations · Country index · Demographics</p>
+                <a href="https://github.com/GoogleCloudPlatform/covid-19-open-data" target="_blank" rel="noopener noreferrer">Read the source documentation ↗</a>
+            </div>
+        </dialog>
+        <div id="errorDisplay" class="error-overlay" role="dialog" aria-modal="true" aria-labelledby="errorTitle" style="display:none">
+            <div class="error-card">
+                <span class="eyebrow">LET’S GET BACK ON TRACK</span>
+                <h2 id="errorTitle">The archive couldn’t load.</h2>
+                <div id="errorMessage"></div>
+                <div class="error-actions">
+                    <a class="secondary-btn" href="/?data=sample">Explore the demo</a>
+                    <button id="errorRetry" class="primary-btn" onclick="location.reload()">Try again</button>
+                    <button id="errorClose" class="text-btn">Close</button>
                 </div>
             </div>
         </div>
-
-        <!-- Countries are now only shown in the header -->
-
-        <div id="compareChartContainer" class="compare-chart-container">
-            <!-- Charts will be rendered here -->
-        </div>
-    </div>
-</body>
-
+    </body>
 </html>

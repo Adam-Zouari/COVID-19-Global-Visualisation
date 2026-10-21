@@ -1,0 +1,52 @@
+function selectedVisualizationCountry() {
+    const instance = window.globeInstance;
+    return instance?.selectedCountryCode || (instance?.selectedCountry ? document.getElementById(`country-${instance.selectedCountry}`)?.getAttribute('data-country-code') : null);
+}
+
+function showVisualizations() {
+    const countryCode = selectedVisualizationCountry();
+    if (!countryCode) return;
+    const panel = document.getElementById('visualizationPanel');
+    if (!panel) return;
+    const name = window.globeInstance.dataService.getCountryName(countryCode);
+    const flag = document.getElementById('viz-flag');
+    if (flag) { flag.src = `https://flagcdn.com/${countryCode.toLowerCase()}.svg`; flag.alt = ''; }
+    document.getElementById('viz-country-name').textContent = name;
+    panel.hidden = false;
+    changeVisualization();
+    panel.scrollIntoView?.({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+    window.syncAtlasState?.();
+}
+
+function restoreGlobe() {
+    const panel = document.getElementById('visualizationPanel');
+    if (panel) panel.hidden = true;
+    ChartControls.clearContext();
+    document.getElementById('globe')?.scrollIntoView?.({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'center' });
+    document.getElementById('seeMoreBtn')?.focus({ preventScroll: true });
+    window.syncAtlasState?.();
+}
+
+function changeVisualization() {
+    const container = document.getElementById('chartContainer');
+    if (!container) return;
+    const code = selectedVisualizationCountry();
+    if (!code) { ChartControls.clearContext(); container.replaceChildren(); ChartFactory.showError(container, 'Select a country to explore its history.'); return; }
+    const name = window.globeInstance.dataService.getCountryName(code);
+    const title = document.getElementById('viz-country-name');
+    if (title) title.textContent = name;
+    const flag = document.getElementById('viz-flag');
+    if (flag) { flag.src = `https://flagcdn.com/${code.toLowerCase()}.svg`; flag.alt = ''; }
+    try { ChartFactory.createChart(container, code, document.getElementById('vizTypeSelector')?.value || 'line'); }
+    catch (error) { console.error('Error creating visualization:', error); container.replaceChildren(); ChartFactory.showError(container, 'Unable to create this visualization.'); }
+}
+
+let visualizationResizeFrame = null;
+window.addEventListener('resize', () => {
+    if (visualizationResizeFrame !== null) cancelAnimationFrame(visualizationResizeFrame);
+    visualizationResizeFrame = requestAnimationFrame(() => {
+        visualizationResizeFrame = null;
+        if (window.CompareMode?.state.active) CompareMode.updateComparisonView();
+        else if (!document.getElementById('visualizationPanel')?.hidden) changeVisualization();
+    });
+});

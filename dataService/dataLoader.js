@@ -1,295 +1,150 @@
-// Data loading functionality
+﻿import { setStatus } from './utils.js';
+
+function parseCSVText(text, name) {
+    if (!globalThis.d3?.csvParse) throw new Error('The CSV library did not load.');
+    const csv = text.replace(/^\uFEFF/, '');
+    if (!csv.trim()) throw new Error(`${name} is empty.`);
+    const parsed = globalThis.d3.csvParse(csv);
+    if (new Set(parsed.columns).size !== parsed.columns.length) {
+        throw new Error(`${name} contains duplicate column headers.`);
+    }
+    return parsed;
+}
+
+async function readCSVEndpoint(url, optional = false) {
+    const response = await fetch(url);
+    if (optional && response.status === 404) return [];
+    if (!response.ok) throw new Error(`Unable to load ${url}: HTTP ${response.status}.`);
+    return parseCSVText(await response.text(), url);
+}
+
+function result(service) {
+    return {
+        epidemData: service.epidemData,
+        hospitalizationsData: service.hospitalizationsData,
+        vaccinationsData: service.vaccinationsData,
+        countryIndex: service.countryIndex,
+        demographicsData: service.demographicsData,
+        availableDates: service.availableDates,
+        availableColumns: service.availableColumns
+    };
+}
+
+async function prepareData(service, data, source) {
+    // A rejected upload/load leaves the existing usable data and caches intact.
+    const candidate = new service.constructor({
+        useSampleData: source === 'sample', debug: service.debug, apiEndpoints: service.apiEndpoints
+    });
+    Object.assign(candidate, data);
+    candidate.currentDataset = service.currentDataset;
+    candidate.currentDate = service.currentDate;
+    candidate.displayUnit = service.displayUnit;
+    candidate.smoothing = service.smoothing;
+    candidate.dataSource = source;
+    candidate.validateDataStructure();
+    candidate.buildCountryCodeMap();
+    candidate.processData();
+    candidate.setDefaultValues();
+    await candidate.indexAllData();
+    await candidate.precalculateColors();
+    Object.assign(service, candidate);
+    setStatus(source === 'sample' ? 'Sample data · fictional demonstration' :
+        source === 'upload' ? 'Ready · uploaded CSV data' : 'Ready · CSV data');
+    return result(service);
+}
 
 export async function loadData() {
+    setStatus('Loading data…');
     try {
-        this.log("Starting data loading process");
-        document.getElementById('dataStatus').textContent = "Loading data...";
-
         if (this.useSampleData) {
-            this.log("Using sample data for testing");
-            document.getElementById('dataStatus').textContent = "Generating sample data...";
-
-            // Generate sample data
-            this.epidemData = this.generateSampleEpidemData();
-            this.hospitalizationsData = this.generateSampleHospitalizationsData();
-            this.vaccinationsData = this.generateSampleVaccinationsData();
-            this.countryIndex = this.generateSampleCountryIndex();
-
-            // Log sample data for debugging
-            console.log("Epidem data sample (first 2 records):", this.epidemData.slice(0, 2));
-            console.log("Hospitalization data sample (first 2 records):", this.hospitalizationsData.slice(0, 2));
-            console.log("Vaccination data sample (first 2 records):", this.vaccinationsData.slice(0, 2));
-            console.log("Country index sample (first 5 records):", this.countryIndex.slice(0, 5));
-
-            document.getElementById('dataStatus').textContent = "Sample data generated!";
-
-            this.log(`Generated ${this.epidemData.length} epidem records`);
-            this.log(`Generated ${this.hospitalizationsData.length} hospitalization records`);
-            this.log(`Generated ${this.vaccinationsData.length} vaccination records`);
-            this.log(`Generated ${this.countryIndex.length} country index records`);
-
-            // Check data structure to ensure required fields exist
-            this.validateDataStructure();
-
-            // Build a lookup table for country codes
-            this.buildCountryCodeMap();
-
-            // Process the data
-            this.processData();
-
-            // Set defaults
-            this.setDefaultValues();
-
-            // Index the data for faster lookups
-            document.getElementById('dataStatus').textContent = "Indexing data for performance...";
-            await this.indexAllData();
-
-            // Pre-calculate colors for better performance
-            document.getElementById('dataStatus').textContent = "Pre-calculating colors...";
-            await this.precalculateColors();
-
-            document.getElementById('dataStatus').textContent = "Ready!";
-
-            // Success - return the data
-            return {
-                epidemData: this.epidemData,
-                hospitalizationsData: this.hospitalizationsData,
-                vaccinationsData: this.vaccinationsData,
-                countryIndex: this.countryIndex,
-                availableDates: this.availableDates,
-                availableColumns: this.availableColumns
-            };
-        } else {
-            try {
-                // Load data from API endpoints
-                this.log("Loading data from API endpoints");
-
-                console.log("API endpoints being accessed:", this.apiEndpoints);
-
-                // Load all datasets in parallel
-                const [epidemData, hospitalizationsData, vaccinationsData, countryIndex] = await Promise.all([
-                    d3.csv(this.apiEndpoints.epidem),
-                    d3.csv(this.apiEndpoints.hospitalizations),
-                    d3.csv(this.apiEndpoints.vaccinations),
-                    d3.csv(this.apiEndpoints.countryIndex)
-                ]);
-
-                // Log raw data for debugging
-                console.log("Epidem data sample (first 2 records):", epidemData.slice(0, 2));
-                console.log("Hospitalization data sample (first 2 records):", hospitalizationsData.slice(0, 2));
-                console.log("Vaccination data sample (first 2 records):", vaccinationsData.slice(0, 2));
-                console.log("Country index sample (first 5 records):", countryIndex.slice(0, 5));
-
-                if (epidemData && epidemData.length &&
-                    hospitalizationsData && hospitalizationsData.length &&
-                    vaccinationsData && vaccinationsData.length &&
-                    countryIndex && countryIndex.length) {
-
-                    this.log("Successfully loaded data from API endpoints");
-                    document.getElementById('dataStatus').textContent = "Data loaded successfully!";
-
-                    this.epidemData = epidemData;
-                    this.hospitalizationsData = hospitalizationsData;
-                    this.vaccinationsData = vaccinationsData;
-                    this.countryIndex = countryIndex;
-
-                    this.log(`Loaded ${this.epidemData.length} epidem records`);
-                    this.log(`Loaded ${this.hospitalizationsData.length} hospitalization records`);
-                    this.log(`Loaded ${this.vaccinationsData.length} vaccination records`);
-                    this.log(`Loaded ${this.countryIndex.length} country index records`);
-
-                    // Check data structure to ensure required fields exist
-                    this.validateDataStructure();
-
-                    // Build a lookup table for country codes
-                    this.buildCountryCodeMap();
-
-                    // Process the data
-                    this.processData();
-
-                    // Set defaults
-                    this.setDefaultValues();
-
-                    // Index the data for faster lookups
-                    document.getElementById('dataStatus').textContent = "Indexing data for performance...";
-                    await this.indexAllData();
-
-                    // Pre-calculate colors for better performance
-                    document.getElementById('dataStatus').textContent = "Pre-calculating colors...";
-                    await this.precalculateColors();
-
-                    document.getElementById('dataStatus').textContent = "Ready!";
-
-                    // Success - return the data
-                    return {
-                        epidemData: this.epidemData,
-                        hospitalizationsData: this.hospitalizationsData,
-                        vaccinationsData: this.vaccinationsData,
-                        countryIndex: this.countryIndex,
-                        availableDates: this.availableDates,
-                        availableColumns: this.availableColumns
-                    };
-                } else {
-                    throw new Error("One or more datasets are empty or invalid");
-                }
-            } catch (error) {
-                this.log(`API endpoints failed: ${error.message}`);
-                document.getElementById('dataStatus').textContent = "Server connection failed";
-                // Show error message and file upload option
-                this.showDataFileError(`Server error: ${error.message}<br><br>Is the Express server running? Try running <code>node server.js</code> in the command line.`);
-                throw error; // Propagate the error
-            }
+            return await prepareData(this, {
+                epidemData: this.generateSampleEpidemData(),
+                hospitalizationsData: this.generateSampleHospitalizationsData(),
+                vaccinationsData: this.generateSampleVaccinationsData(),
+                countryIndex: this.generateSampleCountryIndex(),
+                demographicsData: this.generateSampleDemographicsData()
+            }, 'sample');
         }
+        if (!globalThis.d3?.csvParse) throw new Error('The CSV library did not load. Check the connection and reload.');
+        const [epidemData, hospitalizationsData, vaccinationsData, countryIndex, demographicsData] = await Promise.all([
+            readCSVEndpoint(this.apiEndpoints.epidem),
+            readCSVEndpoint(this.apiEndpoints.hospitalizations),
+            readCSVEndpoint(this.apiEndpoints.vaccinations),
+            readCSVEndpoint(this.apiEndpoints.countryIndex),
+            readCSVEndpoint(this.apiEndpoints.demographics, true)
+        ]);
+        return await prepareData(this, { epidemData, hospitalizationsData, vaccinationsData, countryIndex, demographicsData }, 'csv');
     } catch (error) {
-        console.error('Error loading data:', error);
-        document.getElementById('dataStatus').textContent = "Error loading data";
+        setStatus('Error loading data');
         this.showDataFileError(error.message);
-        throw error; // Make sure the error propagates
+        throw error;
     }
 }
 
-export function showDataFileError(errorDetails = null) {
-    const errorDisplay = document.getElementById('errorDisplay');
-    const errorMessage = document.getElementById('errorMessage');
-
-    let message = `
-        <p>Unable to load the required data files. Please try the following:</p>
-        <ol>
-            <li>Make sure the Express server is running: <code>cd server && node server.js</code></li>
-            <li>Ensure you have a folder named <code>Covid19_Datasets/Google_Datasets</code> with the CSV files.</li>
-            <li>Files needed: <code>country_level_epidem.csv</code>, <code>country_level_hopitalizations.csv</code>, <code>country_level_vaccinations.csv</code>, and <code>small_index.csv</code></li>
-        </ol>
-        <p>You can also upload the files directly:</p>
+export function showDataFileError(errorDetails = '') {
+    if (typeof document === 'undefined') return;
+    const display = document.getElementById('errorDisplay');
+    const message = document.getElementById('errorMessage');
+    if (!display || !message) return;
+    // The template is static; CSV contents and exception messages are assigned as text.
+    message.innerHTML = `
+        <p>Unable to load the CSV data. Start the app with <code>npm start</code> and put
+        the Google files in the configured data directory, or upload all four files below.</p>
+        <p>Use epidemiology.csv, hospitalizations.csv, vaccinations.csv and index.csv
+        (the existing country_level filenames and small_index.csv also work on the server).</p>
         <div class="file-upload-controls">
-            <div class="file-upload">
-                <label>Epidemiology Data: <input type="file" id="epidemUpload" accept=".csv"></label>
-            </div>
-            <div class="file-upload">
-                <label>Hospital Data: <input type="file" id="hospitalUpload" accept=".csv"></label>
-            </div>
-            <div class="file-upload">
-                <label>Vaccination Data: <input type="file" id="vaccinationUpload" accept=".csv"></label>
-            </div>
-            <div class="file-upload">
-                <label>Country Index: <input type="file" id="indexUpload" accept=".csv"></label>
-            </div>
-            <button id="processUploads">Process Uploaded Files</button>
+            <label>Epidemiology <input type="file" id="epidemUpload" accept=".csv,text/csv"></label>
+            <label>Hospitalizations <input type="file" id="hospitalUpload" accept=".csv,text/csv"></label>
+            <label>Vaccinations <input type="file" id="vaccinationUpload" accept=".csv,text/csv"></label>
+            <label>Country index <input type="file" id="indexUpload" accept=".csv,text/csv"></label>
+            <label>Population (optional) <input type="file" id="demographicsUpload" accept=".csv,text/csv"></label>
+            <button type="button" id="processUploads">Load uploaded CSV files</button>
         </div>
-    `;
-
-    if (errorDetails) {
-        message += `<p>Error details: ${errorDetails}</p>`;
-    }
-
-    errorMessage.innerHTML = message;
-    errorDisplay.style.display = 'flex';
-
-    // Set up file upload event listeners
-    setTimeout(() => {
-        document.getElementById('errorClose').addEventListener('click', () => {
-            errorDisplay.style.display = 'none';
-        });
-
-        document.getElementById('processUploads').addEventListener('click', async () => {
-            const epidemFile = document.getElementById('epidemUpload').files[0];
-            const hospitalFile = document.getElementById('hospitalUpload').files[0];
-            const vaccinationFile = document.getElementById('vaccinationUpload').files[0];
-            const indexFile = document.getElementById('indexUpload').files[0];
-
-            if (epidemFile && hospitalFile && vaccinationFile && indexFile) {
-                try {
-                    await this.processUploadedFiles(epidemFile, hospitalFile, vaccinationFile, indexFile);
-                    errorDisplay.style.display = 'none';
-                } catch (error) {
-                    alert(`Error processing files: ${error.message}`);
-                }
-            } else {
-                alert('Please select all four required files');
-            }
-        });
-    }, 100);
+        <p id="uploadErrorDetails" role="status"></p>`;
+    const details = document.getElementById('uploadErrorDetails');
+    details.textContent = errorDetails;
+    display.style.display = 'flex';
+    const close = document.getElementById('errorClose');
+    if (close) close.onclick = () => { display.style.display = 'none'; };
+    const button = document.getElementById('processUploads');
+    button.onclick = async () => {
+        const files = ['epidemUpload', 'hospitalUpload', 'vaccinationUpload', 'indexUpload']
+            .map(id => document.getElementById(id).files[0]);
+        if (files.some(file => !file)) {
+            details.textContent = 'Please select all four CSV files.';
+            return;
+        }
+        button.disabled = true;
+        try {
+            await this.processUploadedFiles(...files, document.getElementById('demographicsUpload').files[0]);
+            display.style.display = 'none';
+        } catch (error) {
+            details.textContent = error.message;
+        } finally {
+            button.disabled = false;
+        }
+    };
 }
 
-export async function processUploadedFiles(epidemFile, hospitalFile, vaccinationFile, indexFile) {
-    document.getElementById('dataStatus').textContent = "Processing uploaded files...";
-
+export async function processUploadedFiles(epidemFile, hospitalFile, vaccinationFile, indexFile, demographicsFile) {
+    setStatus('Processing uploaded files…');
     try {
-        // Read and parse the CSV files
-        this.epidemData = await this.readCSVFile(epidemFile);
-        this.hospitalizationsData = await this.readCSVFile(hospitalFile);
-        this.vaccinationsData = await this.readCSVFile(vaccinationFile);
-        this.countryIndex = await this.readCSVFile(indexFile);
-
-        if (!this.epidemData.length || !this.hospitalizationsData.length || !this.vaccinationsData.length || !this.countryIndex.length) {
-            throw new Error('One or more files are empty or invalid');
+        const [epidemData, hospitalizationsData, vaccinationsData, countryIndex] = await Promise.all(
+            [epidemFile, hospitalFile, vaccinationFile, indexFile].map(file => this.readCSVFile(file))
+        );
+        const demographicsData = demographicsFile ? await this.readCSVFile(demographicsFile) : [];
+        const loaded = await prepareData(this, { epidemData, hospitalizationsData, vaccinationsData, countryIndex, demographicsData }, 'upload');
+        if (typeof document !== 'undefined') {
+            document.dispatchEvent(new CustomEvent('data-loaded', { detail: { dataSource: 'upload' } }));
         }
-
-        this.log(`Loaded ${this.epidemData.length} epidem records from upload`);
-        this.log(`Loaded ${this.hospitalizationsData.length} hospitalization records from upload`);
-        this.log(`Loaded ${this.vaccinationsData.length} vaccination records from upload`);
-        this.log(`Loaded ${this.countryIndex.length} country index records from upload`);
-
-        document.getElementById('dataStatus').textContent = "Processing uploaded data...";
-
-        // Build a lookup table for country codes
-        this.buildCountryCodeMap();
-
-        // Process the data
-        this.processData();
-
-        // Set defaults
-        this.setDefaultValues();
-
-        // Index the data for faster lookups
-        document.getElementById('dataStatus').textContent = "Indexing uploaded data...";
-        await this.indexAllData();
-
-        // Pre-calculate colors for better performance
-        document.getElementById('dataStatus').textContent = "Calculating colors...";
-        await this.precalculateColors();
-
-        document.getElementById('dataStatus').textContent = "Ready (using uploaded data)";
-
-        // Refresh the visualization
-        const globe = window.globeInstance;
-        if (globe) {
-            globe.updateDataSelector();
-            globe.setupDateSlider();
-            globe.updateGlobeColors();
-            globe.updateCountryInfoPanel(null);
-        }
-
-        return {
-            epidemData: this.epidemData,
-            hospitalizationsData: this.hospitalizationsData,
-            vaccinationsData: this.vaccinationsData,
-            countryIndex: this.countryIndex,
-            availableDates: this.availableDates,
-            availableColumns: this.availableColumns
-        };
+        return loaded;
     } catch (error) {
-        console.error('Error processing uploaded files:', error);
-        document.getElementById('dataStatus').textContent = "Error processing uploads";
+        setStatus('Upload rejected · previous data preserved');
         throw error;
     }
 }
 
 export async function readCSVFile(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-
-        reader.onload = (event) => {
-            try {
-                const csvData = event.target.result;
-                const parsedData = d3.csvParse(csvData);
-                resolve(parsedData);
-            } catch (error) {
-                reject(error);
-            }
-        };
-
-        reader.onerror = (error) => reject(error);
-
-        reader.readAsText(file);
-    });
+    if (!file || typeof file.text !== 'function') throw new Error('Select a valid CSV file.');
+    return parseCSVText(await file.text(), file.name || 'CSV file');
 }

@@ -1,40 +1,26 @@
-// Sample data generation functionality
+﻿// Fixed, deterministic fictional observations; never imply a current live feed.
+const START = Date.UTC(2020, 0, 1);
+const END = Date.UTC(2022, 11, 31);
+const DAY = 86_400_000;
 
 export function generateSampleCountryIndex() {
-    const countries = [
-        { location_key: 'us', country_name: 'United States' },
-        { location_key: 'gb', country_name: 'United Kingdom' },
-        { location_key: 'fr', country_name: 'France' },
-        { location_key: 'de', country_name: 'Germany' },
-        { location_key: 'it', country_name: 'Italy' },
-        { location_key: 'es', country_name: 'Spain' },
-        { location_key: 'jp', country_name: 'Japan' },
-        { location_key: 'cn', country_name: 'China' },
-        { location_key: 'in', country_name: 'India' },
-        { location_key: 'br', country_name: 'Brazil' },
-        { location_key: 'ca', country_name: 'Canada' },
-        { location_key: 'au', country_name: 'Australia' },
-        { location_key: 'ru', country_name: 'Russia' },
-        { location_key: 'kr', country_name: 'South Korea' },
-        { location_key: 'za', country_name: 'South Africa' },
-        { location_key: 'mx', country_name: 'Mexico' },
-        { location_key: 'se', country_name: 'Sweden' },
-        { location_key: 'no', country_name: 'Norway' },
-        { location_key: 'fi', country_name: 'Finland' },
-        { location_key: 'dk', country_name: 'Denmark' },
-        { location_key: 'pl', country_name: 'Poland' },
-        { location_key: 'nl', country_name: 'Netherlands' },
-        { location_key: 'be', country_name: 'Belgium' },
-        { location_key: 'ch', country_name: 'Switzerland' },
-        { location_key: 'at', country_name: 'Austria' },
-        { location_key: 'pt', country_name: 'Portugal' },
-        { location_key: 'gr', country_name: 'Greece' },
-        { location_key: 'ie', country_name: 'Ireland' },
-        { location_key: 'nz', country_name: 'New Zealand' },
-        { location_key: 'sg', country_name: 'Singapore' }
-    ];
+    return [
+        ['us', 'United States'], ['gb', 'United Kingdom'], ['fr', 'France'], ['de', 'Germany'],
+        ['it', 'Italy'], ['es', 'Spain'], ['jp', 'Japan'], ['cn', 'China'], ['in', 'India'],
+        ['br', 'Brazil'], ['ca', 'Canada'], ['au', 'Australia'], ['ru', 'Russia'],
+        ['kr', 'South Korea'], ['za', 'South Africa'], ['mx', 'Mexico'], ['se', 'Sweden'],
+        ['no', 'Norway'], ['fi', 'Finland'], ['dk', 'Denmark'], ['pl', 'Poland'],
+        ['nl', 'Netherlands'], ['be', 'Belgium'], ['ch', 'Switzerland'], ['at', 'Austria'],
+        ['pt', 'Portugal'], ['gr', 'Greece'], ['ie', 'Ireland'], ['nz', 'New Zealand'],
+        ['sg', 'Singapore'], ['tn', 'Tunisia']
+    ].map(([location_key, country_name]) => ({ location_key, country_name }));
+}
 
-    return countries;
+/** Deliberately fictional denominators, never estimates of actual national populations. */
+export function generateSampleDemographicsData() {
+    return this.generateSampleCountryIndex().map(({ location_key }, index) => ({
+        location_key, population: 8_000_000 + ((index * 17 + 11) % 73) * 1_000_000
+    }));
 }
 
 export function generateSampleEpidemData() {
@@ -50,59 +36,53 @@ export function generateSampleVaccinationsData() {
 }
 
 export function generateSampleDataset(datasetType) {
-    const data = [];
-    const countries = this.generateSampleCountryIndex();
-
-    // Generate data for the last 30 days
-    const today = new Date();
-    const dates = [];
-    for (let i = 30; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(today.getDate() - i);
-        const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD format
-        dates.push(dateString);
+    if (!['epidem', 'hospitalizations', 'vaccinations'].includes(datasetType)) {
+        throw new RangeError(`Unknown sample dataset: ${datasetType}`);
     }
-
-    // Define columns based on dataset type
-    let columns = {};
-    if (datasetType === 'epidem') {
-        columns = {
-            new_confirmed: (country, date, index) => Math.floor(Math.random() * 10000 * (1 + Math.sin(index/3))),
-            new_deceased: (country, date, index) => Math.floor(Math.random() * 500 * (1 + Math.sin(index/3))),
-            cumulative_confirmed: (country, date, index) => Math.floor(100000 + Math.random() * 1000000 * (index/30)),
-            cumulative_deceased: (country, date, index) => Math.floor(1000 + Math.random() * 50000 * (index/30))
-        };
-    } else if (datasetType === 'hospitalizations') {
-        columns = {
-            new_hospitalized: (country, date, index) => Math.floor(Math.random() * 1000 * (1 + Math.sin(index/3))),
-            current_hospitalized: (country, date, index) => Math.floor(Math.random() * 10000 * (1 + Math.sin(index/5))),
-            current_intensive_care: (country, date, index) => Math.floor(Math.random() * 1000 * (1 + Math.sin(index/4)))
-        };
-    } else if (datasetType === 'vaccinations') {
-        columns = {
-            new_persons_vaccinated: (country, date, index) => Math.floor(Math.random() * 100000 * (1 + Math.sin(index/3))),
-            cumulative_persons_vaccinated: (country, date, index) => Math.floor(1000000 * index/30 * (1 + Math.random()*0.5)),
-            cumulative_persons_fully_vaccinated: (country, date, index) => Math.floor(800000 * index/30 * (1 + Math.random()*0.5)),
-            cumulative_vaccine_doses_administered: (country, date, index) => Math.floor(2000000 * index/30 * (1 + Math.random()*0.5))
-        };
-    }
-
-    // Generate data for each country and date
-    countries.forEach(country => {
-        dates.forEach((date, dateIndex) => {
-            const record = {
-                country_key: country.location_key,
-                date: date
+    const records = [];
+    for (const [countryIndex, country] of this.generateSampleCountryIndex().entries()) {
+        // Reproducible variation, separate from the wall clock and Math.random().
+        const weight = 0.3 + ((countryIndex * 13 + 7) % 31) / 12;
+        const offset = countryIndex % 35;
+        let confirmed = 0, deceased = 0, hospitalized = 0, vaccinated = 0, fullyVaccinated = 0;
+        let doses = 0;
+        const firstDoses = [];
+        for (let time = START, day = 0; time <= END; time += DAY, day++) {
+            const gaussian = (peak, width, height) => height * Math.exp(-0.5 * ((day - peak - offset) / width) ** 2);
+            const wave = gaussian(100, 28, 220) + gaussian(325, 50, 650) +
+                gaussian(570, 45, 800) + gaussian(760, 35, 1800) + gaussian(950, 60, 400);
+            const dailyConfirmed = Math.max(0, Math.round(weight * wave * (0.9 + 0.1 * Math.sin(day * 1.7 + countryIndex))));
+            const dailyDeceased = Math.round(dailyConfirmed * (day < 366 ? 0.02 : 0.008));
+            const dailyHospitalized = Math.round(dailyConfirmed * 0.06);
+            confirmed += dailyConfirmed;
+            deceased += dailyDeceased;
+            hospitalized += dailyHospitalized;
+            // First doses start in December 2020; full vaccination follows by 28 days.
+            const dailyVaccinated = day < 335 ? 0 : Math.round(weight * (
+                gaussian(495, 70, 3500) + gaussian(660, 90, 1800) + gaussian(880, 100, 300)));
+            firstDoses.push(dailyVaccinated);
+            const dailyFullyVaccinated = day >= 28 ? Math.floor(firstDoses[day - 28] * 0.88) : 0;
+            vaccinated += dailyVaccinated;
+            fullyVaccinated += dailyFullyVaccinated;
+            doses += dailyVaccinated + dailyFullyVaccinated;
+            const metrics = datasetType === 'epidem' ? {
+                new_confirmed: dailyConfirmed, new_deceased: dailyDeceased,
+                cumulative_confirmed: confirmed, cumulative_deceased: deceased
+            } : datasetType === 'hospitalizations' ? {
+                new_hospitalized_patients: dailyHospitalized,
+                current_hospitalized_patients: dailyHospitalized * 7,
+                current_intensive_care_patients: Math.round(dailyHospitalized * 1.4),
+                cumulative_hospitalized_patients: hospitalized
+            } : {
+                new_persons_vaccinated: dailyVaccinated,
+                new_persons_fully_vaccinated: dailyFullyVaccinated,
+                new_vaccine_doses_administered: dailyVaccinated + dailyFullyVaccinated,
+                cumulative_persons_vaccinated: vaccinated,
+                cumulative_persons_fully_vaccinated: fullyVaccinated,
+                cumulative_vaccine_doses_administered: doses
             };
-
-            // Add values for each column
-            Object.keys(columns).forEach(column => {
-                record[column] = columns[column](country.location_key, date, dateIndex);
-            });
-
-            data.push(record);
-        });
-    });
-
-    return data;
+            records.push({ country_key: country.location_key, date: new Date(time).toISOString().slice(0, 10), ...metrics });
+        }
+    }
+    return records;
 }

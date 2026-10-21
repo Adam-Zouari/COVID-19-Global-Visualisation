@@ -55,6 +55,7 @@ GlobeVis.prototype.buildCountryFeatureMap = function() {
         "Sierra Leone": "sl",
         "Somalia": "so",
         "Somaliland": "so",
+        "South Africa": "za",
         "S. Sudan": "ss",
         "South Sudan": "ss",
         "Sudan": "sd",
@@ -216,7 +217,21 @@ GlobeVis.prototype.buildCountryFeatureMap = function() {
     };
 
     // Extract all countries from the GeoJSON
-    const countries = topojson.feature(this.worldData, this.worldData.objects.countries).features;
+    if (!this.countryFeatures.length) {
+        this.countryFeatures = topojson.feature(this.worldData, this.worldData.objects.countries).features;
+        const usedIds = new Set();
+        this.countryFeatures.forEach((feature, index) => {
+            // Disputed regions in world-atlas lack numeric IDs. Give each one
+            // a stable local key so joins, DOM IDs and country lookup stay unique.
+            const original = feature.id;
+            if (original === undefined || original === null || usedIds.has(String(original))) {
+                feature.id = `region-${index}`;
+            }
+            usedIds.add(String(feature.id));
+        });
+    }
+    const countries = this.countryFeatures;
+    this.featuresByCode = new Map();
 
     // For each country in GeoJSON, try to find a matching country key
     countries.forEach(country => {
@@ -233,7 +248,7 @@ GlobeVis.prototype.buildCountryFeatureMap = function() {
 
         // If that fails, try the data service mapping
         if (!countryKey) {
-            countryKey = dataService.getCountryKeyFromName(countryName);
+            countryKey = this.dataService.getCountryKeyFromName(countryName);
         }
 
         // If still no match, try using the numeric ID (used in some datasets)
@@ -265,11 +280,18 @@ GlobeVis.prototype.buildCountryFeatureMap = function() {
         }
 
         if (countryKey) {
-            this.countryFeatureMap.set(country.id, {
+            countryKey = countryKey.toLowerCase();
+            this.countryFeatureMap.set(String(country.id), {
                 id: country.id,
                 countryKey: countryKey,
                 name: countryName
             });
+            const previous = this.featuresByCode.get(countryKey);
+            // Several map features can share a country code (for example Cyprus).
+            // Center search results on the main feature instead of a small region.
+            if (!previous || d3.geoArea(country) > d3.geoArea(previous)) {
+                this.featuresByCode.set(countryKey, country);
+            }
             this.log(`Mapped ${countryName} (${country.id}) to ${countryKey}`);
         } else {
             // Only log major countries to reduce console spam
@@ -284,47 +306,37 @@ GlobeVis.prototype.buildCountryFeatureMap = function() {
 };
 
 GlobeVis.prototype.getCountryCode = function(d) {
-    if (!d || !d.id) return null;
+    if (!d) return null;
 
     // Use our prepared mapping table
-    if (this.countryFeatureMap && this.countryFeatureMap.has(d.id)) {
-        return this.countryFeatureMap.get(d.id).countryKey;
+    if (this.countryFeatureMap && this.countryFeatureMap.has(String(d.id))) {
+        return this.countryFeatureMap.get(String(d.id)).countryKey;
     }
 
     // Fallback to the old method
     if (d.properties && d.properties.name) {
-        return dataService.getCountryKeyFromName(d.properties.name);
+        return this.dataService.getCountryKeyFromName(d.properties.name)?.toLowerCase() || null;
     }
 
     return null;
 };
 
 GlobeVis.prototype.getCountryFeatureByCode = function(countryCode) {
-    if (!this.worldData) return null;
-
-    const countryFeatures = topojson.feature(this.worldData, this.worldData.objects.countries).features;
-
-    // Find the country feature with matching code
-    for (const feature of countryFeatures) {
-        const featureCode = this.getCountryCode(feature);
-        if (featureCode && featureCode.toLowerCase() === countryCode.toLowerCase()) {
-            return feature;
-        }
-    }
-
-    return null;
+    if (typeof countryCode !== 'string') return null;
+    return this.featuresByCode?.get(countryCode.toLowerCase()) || null;
 };
 
 GlobeVis.prototype.goToCountry = function(countryCode) {
     this.log(`Going to country: ${countryCode}`);
 
-    // Stop auto-rotation
-    this.stopAutoRotation();
-
     // Get the country feature
     const countryFeature = this.getCountryFeatureByCode(countryCode);
 
     if (countryFeature) {
+        this.stopAutoRotation();
+        // Selection is immediate; navigation must survive a cancelled rotation
+        // (for example, when Compare is opened before the animation finishes).
+        this.selectCountry(countryFeature);
         // Calculate the centroid of the country
         const centroid = d3.geoCentroid(countryFeature);
 
@@ -333,33 +345,17 @@ GlobeVis.prototype.goToCountry = function(countryCode) {
         const targetRotation = [-centroid[0], -centroid[1], 0];
 
         // Animate the rotation to the country
-        this.animateToRotation(targetRotation, () => {
-            // After reaching the country, select it and show its data
-            const countryCode = this.getCountryCode(countryFeature);
-            const countryData = dataService.getCountryData(countryCode);
-
-            // Reset previous selection if any
-            if (this.selectedCountry) {
-                d3.select(`#country-${this.selectedCountry}`)
-                    .attr('stroke', 'rgba(255,255,255,0.0)')
-                    .attr('stroke-width', '0.5px')
-                    .classed('selected-country', false);
-            }
-
-            // Select the new country
-            this.selectedCountry = countryFeature.id;
-
-            // Find the country element and apply selection styling
-            const countryElement = d3.select(`#country-${countryFeature.id}`);
-            countryElement
-                .attr('stroke', '#ffffff')
-                .attr('stroke-width', '1.5px')
-                .classed('selected-country', true);
-
-            // Update the country info panel with the data
-            this.updateCountryInfoPanel(countryData);
-        });
+        this.animateToRotation(targetRotation);
     } else {
-        this.log(`Country not found: ${countryCode}`);
+        // Small countries and territories can be absent from the 110m map.
+        // Keep their statistics and charts accessible through country search.
+        const normalized = typeof countryCode === 'string' ? countryCode.toLowerCase() : '';
+        if (!normalized || !this.dataService.getAllCountries().some(country => country.countryCode.toLowerCase() === normalized)) return;
+        this.stopAutoRotation();
+        this.cancelRotationAnimation();
+        this.clearCountrySelection();
+        this.selectedCountryCode = normalized;
+        this.refreshSelectedCountry();
+        this.dispatchStateEvent('country-selected');
     }
 };
