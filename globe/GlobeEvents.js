@@ -25,6 +25,7 @@ GlobeVis.prototype.setupEventListeners = function() {
         window.addEventListener('resize', () => this.resize(), options);
     }
     document.addEventListener('data-loaded', () => this.recoverAfterDataLoad(), options);
+    document.addEventListener('atlas:themechange', () => this.refreshGlobeAppearance(), options);
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
             // Preserve the user's rotation preference while suspending background work.
@@ -93,7 +94,11 @@ GlobeVis.prototype.positionTooltip = function(event) {
 };
 
 GlobeVis.prototype.handleMouseOver = function(event, feature) {
-    d3.select(event.currentTarget).attr('stroke', '#f3f7fe').attr('stroke-width', 1.2);
+    this.hoveredCountry = feature.id;
+    const palette = this.getGlobePalette();
+    const selected = this.selectedCountry === feature.id;
+    d3.select(event.currentTarget).attr('stroke', selected ? palette.selection : palette.hover)
+        .attr('stroke-width', selected ? 1.8 : 1.2);
     const code = this.getCountryCode(feature);
     const record = code ? this.dataService.getCountryData(code) : null;
     const tooltip = this.tooltip.node();
@@ -127,8 +132,10 @@ GlobeVis.prototype.handleMouseOver = function(event, feature) {
 };
 
 GlobeVis.prototype.handleMouseOut = function(event, feature) {
+    this.hoveredCountry = null;
+    const palette = this.getGlobePalette();
     const selected = this.selectedCountry === feature.id;
-    d3.select(event.currentTarget).attr('stroke', selected ? '#f3f7fe' : '#17283b')
+    d3.select(event.currentTarget).attr('stroke', selected ? palette.selection : palette.border)
         .attr('stroke-width', selected ? 1.8 : 0.45);
     this.tooltip.style('opacity', 0);
 };
@@ -139,7 +146,7 @@ GlobeVis.prototype.selectCountry = function(feature) {
     this.selectedCountryCode = this.getCountryCode(feature);
     this.globeGroup.selectAll('.country')
         .filter(country => country.id === feature.id)
-        .attr('stroke', '#f3f7fe').attr('stroke-width', 1.8)
+        .attr('stroke', this.getGlobePalette().selection).attr('stroke-width', 1.8)
         .classed('selected-country', true);
     this.refreshSelectedCountry();
     this.dispatchStateEvent('country-selected');
@@ -171,7 +178,7 @@ GlobeVis.prototype.categoryLabel = function() {
 
 GlobeVis.prototype.unitLabel = function(column = this.dataService.currentColumn, unit = this.dataService.displayUnit || 'count') {
     return this.dataService.getUnitLabel?.(column, unit) ||
-        { count: 'Count', per100k: 'Per 100,000 people', percent: '% of population', per100: 'Doses per 100 people' }[unit] || 'Count';
+        { count: 'Count', per100k: 'Per 100,000 people', per1m: 'Per 1,000,000 people', percent: '% of population', per100: 'Doses per 100 people' }[unit] || 'Count';
 };
 
 GlobeVis.prototype.displayValue = function(code) {
@@ -199,6 +206,19 @@ GlobeVis.prototype.unavailableReason = function(code) {
 GlobeVis.prototype.formatMetricValue = function(value, unit = this.dataService.displayUnit || 'count') {
     if (typeof value !== 'number' || !Number.isFinite(value)) return 'Not reported';
     return new Intl.NumberFormat('en-US', { maximumFractionDigits: unit === 'count' && this.dataService.smoothing !== '7day' ? 0 : 1 }).format(value);
+};
+
+GlobeVis.prototype.normalizationExplanation = function(code, value) {
+    const unit = this.dataService.displayUnit || 'count';
+    const factor = window.MetricRegistry?.UNIT_DEFINITIONS?.[unit]?.factor;
+    const population = this.dataService.getPopulation?.(code);
+    if (unit === 'count' || !(factor > 0) || !(population > 0) || !Number.isFinite(value)) return '';
+    // Explain a smoothed rate using its averaged count, not that day's raw count.
+    const count = this.dataService.getDisplayValue?.(code, { unit: 'count' });
+    if (!Number.isFinite(count)) return '';
+    const format = number => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(number);
+    const basis = this.dataService.smoothing === '7day' ? '7-day average count' : 'Raw count';
+    return `${basis} ÷ population × ${format(factor)}: ${format(count)} ÷ ${format(population)} × ${format(factor)} ≈ ${this.formatMetricValue(value)} ${this.unitLabel()}.`;
 };
 
 GlobeVis.prototype.renderCountryTrend = function(series) {
@@ -236,7 +256,7 @@ GlobeVis.prototype.renderCountryTrend = function(series) {
     baseline.setAttribute('x2', width - margin);
     baseline.setAttribute('y1', y(0));
     baseline.setAttribute('y2', y(0));
-    baseline.setAttribute('stroke', '#334155');
+    baseline.setAttribute('stroke', 'var(--chart-grid, var(--border-color, #334155))');
     svg.appendChild(baseline);
     let drawing = false, commands = '';
     for (const point of points) {
@@ -291,6 +311,13 @@ GlobeVis.prototype.updateCountryInfoPanel = function(record, feature) {
         unit.textContent = this.unavailableReason(code) || (selectedValue === null ? 'Not reported on selected day' :
             `${this.unitLabel()}${selectedValue < 0 ? ' · Reporting correction' : ''}${this.dataService.smoothing === '7day' ? ' · 7-day average' : ''}`);
         primary.append(label, value, unit);
+        const explanation = this.normalizationExplanation(code, selectedValue);
+        if (explanation) {
+            const calculation = document.createElement('p');
+            calculation.className = 'normalization-explanation';
+            calculation.textContent = explanation;
+            primary.appendChild(calculation);
+        }
     }
     const context = document.getElementById('countryContext');
     if (context) context.textContent = `${this.categoryLabel()} · ${this.dataService.formatDate(this.dataService.currentDate)}`;

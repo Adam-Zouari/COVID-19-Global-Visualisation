@@ -20,12 +20,25 @@ function closeSearch() {
 
 function populateCountryList() {
     const list = document.getElementById('countryList'); list.replaceChildren();
-    const countries = window.globeInstance?.dataService.getAllCountries() || [];
+    const service = window.globeInstance?.dataService;
+    const countries = service?.getAllCountries() || [];
     for (const country of countries.sort((a, b) => a.countryName.localeCompare(b.countryName))) {
         const item = document.createElement('button'); item.type = 'button'; item.className = 'country-item';
         item.classList.toggle('selected', window.globeInstance.selectedCountryCode === country.countryCode);
-        appendCountryLabel(item, country.countryCode, country.countryName, 'country-flag');
+        const identity = document.createElement('span'); identity.className = 'country-search-label';
+        appendCountryLabel(identity, country.countryCode, country.countryName, 'country-flag');
+        item.appendChild(identity);
         const code = document.createElement('span'); code.className = 'country-code'; code.textContent = country.countryCode.toUpperCase(); code.setAttribute('aria-hidden', 'true'); item.appendChild(code);
+        const availability = service.getCountryAvailability?.(country.countryCode);
+        if (availability) {
+            const status = document.createElement('span'); status.className = 'country-availability';
+            status.id = `search-availability-${list.childElementCount}`;
+            status.dataset.availability = availability.status;
+            status.textContent = availability.label;
+            status.title = availability.description;
+            item.appendChild(status); item.setAttribute('aria-describedby', status.id);
+        }
+        item.dataset.searchText = `${country.countryName} ${country.countryCode}`;
         item.setAttribute('aria-label', country.countryName);
         item.addEventListener('click', () => {
             if (window.CompareMode?.state.active) CompareMode.addCountry(country.countryCode);
@@ -45,7 +58,7 @@ function filterCountries() {
     const filter = normalize(document.getElementById('countrySearchInput').value.trim());
     let matches = 0;
     document.querySelectorAll('#countryList .country-item').forEach(item => {
-        item.hidden = !normalize(item.textContent).includes(filter);
+        item.hidden = !normalize(item.dataset.searchText).includes(filter);
         if (!item.hidden) matches++;
     });
     const empty = document.getElementById('searchEmpty'); if (empty) empty.hidden = matches > 0;

@@ -6,6 +6,7 @@
         <meta name="description" content="Explore historical COVID-19 observations across countries and time with an interactive globe.">
         <title>COVID-19 Atlas — A world of perspective</title>
         <link rel="icon" href="assets/icons/atlas.svg" type="image/svg+xml">
+        <script src="ui/theme.js"></script>
         <link rel="stylesheet" href="styles.css">
         <link rel="stylesheet" href="styles/compare.css">
         <script src="vendor/d3.min.js" defer></script>
@@ -21,6 +22,7 @@
         <script src="ui/search.js" defer></script>
         <script src="ui/visualizations.js" defer></script>
         <script src="charts/chartFactory.js" defer></script>
+        <script src="ui/dateRange.js" defer></script>
         <script src="charts/chartControls.js" defer></script>
         <script src="charts/compareCharts.js" defer></script>
         <script src="ui/compare.js" defer></script>
@@ -35,20 +37,32 @@
                 <button id="navCompare" class="nav-link" onclick="atlasActions.setView('compare')">Compare <span id="compareCount" class="nav-count" hidden>0</span></button>
             </nav>
             <div class="header-actions">
-                <span class="archive-badge"><span></span> Historical explorer</span>
+                <select id="dataSourceSelector" class="data-source-select" aria-label="Data source">
+                    <option value="csv">Google data</option>
+                    <option value="sample">Fictional demo</option>
+                    <option value="upload" disabled hidden>Uploaded data</option>
+                </select>
                 <button id="search" class="search-trigger" onclick="openSearch()" aria-label="Search countries" aria-haspopup="dialog" aria-controls="searchModal"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span>Find a country</span><kbd>/</kbd></button>
-                <button class="icon-btn methodology-trigger" onclick="openMethodology()" aria-label="About the data">?</button>
+                <div class="appearance-control">
+                    <button id="appearanceButton" class="icon-btn appearance-trigger" type="button" aria-label="Appearance: Dark" aria-haspopup="menu" aria-controls="appearanceMenu" aria-expanded="false" title="Appearance: Dark">
+                        <svg data-appearance-icon="dark" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20.5 14A8.5 8.5 0 0 1 10 3.5 8.5 8.5 0 1 0 20.5 14Z"/></svg>
+                        <svg data-appearance-icon="light" viewBox="0 0 24 24" fill="none" aria-hidden="true" hidden><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>
+                        <svg data-appearance-icon="system" viewBox="0 0 24 24" fill="none" aria-hidden="true" hidden><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
+                    </button>
+                    <div id="appearanceMenu" class="appearance-menu" role="menu" aria-label="Appearance" hidden>
+                        <button type="button" role="menuitemradio" aria-checked="false" tabindex="-1" data-appearance="light"><span>Light</span><span class="appearance-check" aria-hidden="true">✓</span></button>
+                        <button type="button" role="menuitemradio" aria-checked="true" tabindex="-1" data-appearance="dark"><span>Dark</span><span class="appearance-check" aria-hidden="true">✓</span></button>
+                        <button type="button" role="menuitemradio" aria-checked="false" tabindex="-1" data-appearance="system"><span>System</span><span class="appearance-check" aria-hidden="true">✓</span></button>
+                    </div>
+                </div>
             </div>
         </header>
         <main class="app-main">
             <div class="page-intro">
                 <div>
-                    <p class="eyebrow">THE PANDEMIC, IN PERSPECTIVE</p>
                     <h1 id="pageTitle">Explore the world<span class="accent-period">.</span></h1>
-                    <p id="pageSubtitle">Follow the data across countries and time.</p>
                 </div>
                 <div class="archive-period">
-                    <span class="eyebrow">AVAILABLE OBSERVATIONS</span>
                     <strong id="availablePeriod">Loading archive</strong>
                     <span id="availableCountries">Country-level data</span>
                 </div>
@@ -61,15 +75,35 @@
                 </div>
                 <button class="text-btn source-link" onclick="openMethodology()">Source &amp; methodology <span aria-hidden="true">↗</span></button>
             </div>
-            <aside id="sourceNotice" class="source-notice archive-notice" aria-label="Data source notice">
-                <span class="notice-icon" aria-hidden="true">i</span>
-                <div>
-                    <strong id="sourceTitle">Loading data source</strong>
-                    <p id="sourceDescription">Preparing country observations and reporting coverage.</p>
-                </div>
-                <a id="sourceSwitch" class="notice-action" href="?data=sample">Explore the demo <span aria-hidden="true">↗</span></a>
-            </aside>
             <div id="exploreView">
+                <section class="historical-timeline panel" aria-label="Historical timeline">
+                    <div class="timeline-selected">
+                        <span class="eyebrow">TRAVEL THROUGH TIME</span>
+                        <div class="timeline-day">
+                            <strong id="currentDate">Loading…</strong>
+                            <span id="timelineMeasure">Observation date</span>
+                        </div>
+                    </div>
+                    <div class="timeline-track">
+                        <div class="timeline-controls">
+                            <button id="playTimelineBtn" class="icon-btn timeline-play" aria-label="Play timeline" aria-pressed="false">▶</button>
+                            <select id="timelineSpeed" class="timeline-speed" aria-label="Timeline playback speed" title="Playback speed">
+                                <option value="0.5">0.5×</option>
+                                <option value="1" selected>1×</option>
+                                <option value="2">2×</option>
+                                <option value="4">4×</option>
+                            </select>
+                            <button id="prevDateBtn" class="icon-btn" aria-label="Previous date">‹</button>
+                            <input type="range" id="dateSlider" min="0" max="100" value="100" aria-label="Reporting date">
+                            <button id="nextDateBtn" class="icon-btn" aria-label="Next date">›</button>
+                        </div>
+                        <div class="timeline-endpoints">
+                            <span id="timelineStart">Start</span>
+                            <div id="timelineYears" aria-hidden="true"></div>
+                            <span id="timelineEnd">End</span>
+                        </div>
+                    </div>
+                </section>
                 <section class="explore-workspace" id="exploreWorkspace" aria-label="Interactive country explorer" tabindex="-1">
                     <aside class="control-panel panel">
                         <div class="panel-label">
@@ -78,25 +112,23 @@
                             <button id="filtersToggle" class="icon-btn" aria-label="Toggle filters" aria-expanded="false">⌄</button>
                         </div>
                         <div class="filter-content" id="filterContent">
-                            <div class="control-group">
+                            <div class="control-group metric-control">
                                 <label for="dataSelector">Metric</label>
                                 <select id="dataSelector" aria-label="Map metric"></select>
-                                <p id="metricDescription" class="control-description">Select a measure to explore.</p>
+                                <p id="selectedMetricName" class="selected-metric-name" hidden></p>
                             </div>
                             <div class="control-group">
                                 <label for="unitSelector">Display values as</label>
                                 <select id="unitSelector" onchange="atlasActions.setUnit(this.value)">
                                     <option value="count">Absolute count</option>
                                 </select>
-                                <p id="populationNote" class="control-description"></p>
                             </div>
                             <fieldset class="control-group smoothing-group">
-                                <legend>Daily observations</legend>
+                                <legend>Reporting</legend>
                                 <div class="segmented-control">
                                     <button id="rawBtn" onclick="atlasActions.setSmoothing('raw')" aria-pressed="false">Daily</button>
-                                    <button id="averageBtn" class="active" onclick="atlasActions.setSmoothing('7day')" aria-pressed="true">7-day average</button>
+                                    <button id="averageBtn" class="active" aria-describedby="smoothingNote" title="Average of recent daily reports to make the trend easier to see" onclick="atlasActions.setSmoothing('7day')" aria-pressed="true">7-day average</button>
                                 </div>
-                                <p id="smoothingNote" class="control-description">Smooth the daily reporting pattern.</p>
                             </fieldset>
                             <div class="legend-block">
                                 <div class="label-row">
@@ -105,14 +137,14 @@
                                 </div>
                                 <div id="globeLegend" class="globe-legend"></div>
                             </div>
-                            <div class="coverage-summary">
-                                <span class="coverage-dot"></span>
-                                <div>
-                                    <strong id="coverageCount">Loading coverage</strong>
-                                    <span>with a reported value on this date</span>
+                            <details class="measurement-help">
+                                <summary>About these values</summary>
+                                <div class="measurement-help-content">
+                                    <p id="metricDescription" class="control-description">Select a measure to explore.</p>
+                                    <p id="populationNote" class="control-description"></p>
+                                    <p id="smoothingNote" class="control-description"></p>
                                 </div>
-                            </div>
-                            <button id="compareBtn" class="secondary-btn full-width" onclick="CompareMode.enter()"><span>Compare countries</span><span aria-hidden="true">↗</span></button>
+                            </details>
                         </div>
                     </aside>
                     <div class="globe-stage panel">
@@ -122,7 +154,7 @@
                                 <h2 id="mapMetricLabel">New confirmed cases</h2>
                                 <p id="mapUnitsLabel">Absolute count · 7-day average</p>
                             </div>
-                            <span class="view-label"><span></span>3D GLOBE</span>
+                            <span class="coverage-status" title="Countries with a displayed value for the selected metric and date"><span class="coverage-dot" aria-hidden="true"></span><span id="coverageCount">Loading coverage</span></span>
                         </div>
                         <div id="globe" aria-label="Interactive COVID-19 data globe"></div>
                         <div id="loader" class="loading-state" role="status">
@@ -161,29 +193,6 @@
                         </div>
                     </aside>
                 </section>
-                <section class="historical-timeline panel" aria-label="Historical timeline">
-                    <div class="timeline-selected">
-                        <span class="eyebrow">TRAVEL THROUGH TIME</span>
-                        <div class="timeline-day">
-                            <strong id="currentDate">Loading…</strong>
-                            <span id="timelineMeasure">Observation date</span>
-                        </div>
-                    </div>
-                    <div class="timeline-track">
-                        <div class="timeline-controls">
-                            <button id="playTimelineBtn" class="icon-btn timeline-play" aria-label="Play timeline" aria-pressed="false">▶</button>
-                            <button id="prevDateBtn" class="icon-btn" aria-label="Previous date">‹</button>
-                            <input type="range" id="dateSlider" min="0" max="100" value="100" aria-label="Reporting date">
-                            <button id="nextDateBtn" class="icon-btn" aria-label="Next date">›</button>
-                        </div>
-                        <div class="timeline-endpoints">
-                            <span id="timelineStart">Start</span>
-                            <div id="timelineYears" aria-hidden="true"></div>
-                            <span id="timelineEnd">End</span>
-                        </div>
-                    </div>
-                    <span class="historical-label"><span class="history-symbol" aria-hidden="true">◷</span> Historical observations</span>
-                </section>
                 <section id="visualizationPanel" class="country-analysis panel" aria-label="Country analysis" hidden>
                     <div class="analysis-header">
                         <div>
@@ -199,7 +208,7 @@
                             <label class="sr-only" for="vizTypeSelector">Visualization type</label>
                             <select id="vizTypeSelector" aria-label="Visualization type" onchange="changeVisualization()">
                                 <option value="line">Trend line</option>
-                                <option value="bar">Daily bars</option>
+                                <option value="bar">Bars</option>
                             </select>
                         </div>
                     </div>
@@ -212,15 +221,13 @@
             <section id="comparePanel" class="compare-panel" aria-label="Compare countries" hidden>
                 <div class="compare-heading">
                     <div>
-                        <p class="eyebrow">PUT THE NUMBERS IN CONTEXT</p>
                         <h2>Compare countries</h2>
-                        <p>The same metric. The same dates. A clearer perspective.</p>
+                        <p>Shared metrics, dates, and units · Up to four countries</p>
                     </div>
                     <button id="exitCompareBtn" class="secondary-btn" onclick="CompareMode.exit()">← Explore on globe</button>
                 </div>
                 <div class="compare-country-row panel">
                     <div id="headerCountriesList" class="header-countries"></div>
-                    <span class="comparison-limit">Up to 4 countries</span>
                 </div>
                 <div class="compare-options panel">
                     <div class="controls-row">
@@ -249,7 +256,7 @@
                             <label for="compareChartType" class="sr-only">Comparison chart type</label>
                             <select id="compareChartType" aria-label="Comparison chart type" onchange="CompareMode.changeChartType(this.value)">
                                 <option value="line">Trend lines</option>
-                                <option value="bar">Daily bars</option>
+                                <option value="bar">Bars</option>
                             </select>
                             <label for="compareScaleSelector" class="sr-only">Chart scales</label>
                             <select id="compareScaleSelector" aria-label="Chart scales">
@@ -258,16 +265,7 @@
                             </select>
                         </div>
                     </div>
-                    <div class="date-selection-panel">
-                        <span id="compareDateModeLabel">Date range</span>
-                        <div class="date-range-slider-container">
-                            <div class="date-range-labels">
-                                <span id="startDateLabel">Start date</span>
-                                <span id="endDateLabel">End date</span>
-                            </div>
-                            <div id="dateRangeSlider"></div>
-                        </div>
-                    </div>
+                    <div class="date-selection-panel"><div id="dateRangeSlider"></div></div>
                 </div>
                 <div id="compareMessage" class="inline-message" role="status" aria-live="polite"></div>
                 <div id="compareChartContainer" class="compare-chart-container panel"></div>
@@ -278,7 +276,6 @@
                     <span id="dataStatus" role="status" aria-live="polite">Loading observations</span>
                 </div>
                 <div>
-                    <a href="https://github.com/GoogleCloudPlatform/covid-19-open-data" target="_blank" rel="noopener noreferrer">Google COVID-19 Open Data ↗</a>
                     <button class="text-btn" onclick="openMethodology()">Methodology</button>
                 </div>
             </footer>
@@ -288,7 +285,7 @@
                 <div class="search-header">
                     <div>
                         <h2 id="searchTitle">Find a country</h2>
-                        <p>A new perspective starts somewhere.</p>
+                        <p>Reporting availability for the selected metric</p>
                     </div>
                     <button class="icon-btn" onclick="closeSearch()" aria-label="Close search">×</button>
                 </div>
@@ -316,7 +313,7 @@
                 </section>
                 <section>
                     <h3>Demo and archive</h3>
-                    <p>The demo uses fictional observations and illustrative populations. The historical archive uses your locally prepared Google CSVs. The notice above the globe always identifies the active source.</p>
+                    <p>The demo uses fictional observations and illustrative populations. The historical archive uses your locally prepared Google CSVs. The data source menu in the header identifies the active source and switches between them.</p>
                 </section>
                 <section>
                     <h3>Missing is not zero</h3>
@@ -324,7 +321,7 @@
                 </section>
                 <section>
                     <h3>Seven-day averages</h3>
-                    <p>A trailing seven-calendar-day mean needs at least five reported days in a complete seven-day window. Missing days do not count as zero, and the selected day must have a report. Averages are calculated before the selected chart range is applied.</p>
+                    <p>The selected day and previous six days are averaged to reduce day-to-day reporting swings and show the recent trend. With seven daily additions totaling 700, the average is 100 per day. For current hospital, ICU, or ventilation counts, the average describes daily occupancy snapshots, not new admissions or unique patients. The app requires a full seven-day window, at least five reports, and a report on the selected day; missing days are omitted, never treated as zero. Averaging cannot establish why a spike occurred and is not applied to cumulative totals.</p>
                 </section>
                 <section>
                     <h3>Population-adjusted values</h3>

@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
 async function ready(page, path = '/?data=sample') {
     await page.goto(path);
     await expect(page.locator('#loader')).toBeHidden();
-    await expect(page.locator('#compareBtn')).toBeEnabled();
+    await expect(page.locator('#dataSelector')).toBeEnabled();
     await expect(page.locator('#mapUnitsLabel')).not.toBeEmpty();
 }
 
@@ -21,14 +21,134 @@ async function selectCountry(page, name) {
 }
 
 async function screenshot(page, name) {
+    await page.addStyleTag({ content: 'html { scroll-behavior: auto !important; }' });
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
     await page.screenshot({ path: `test-results/${name}.png`, fullPage: true });
 }
 
+test('laptop exploration exposes the globe immediately and comparisons keep results close to their controls', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await ready(page);
+    await expect(page.locator('.source-notice')).toHaveCount(0);
+    await expect(page.locator('#dataSourceSelector')).toBeVisible();
+    const globe = await page.locator('.globe-stage').boundingBox();
+    expect(globe.y).toBeLessThan(330);
+    const timeline = await page.locator('.historical-timeline').boundingBox();
+    expect(timeline.y + timeline.height).toBeLessThan(globe.y);
+    expect(globe.y + globe.height).toBeLessThanOrEqual(768);
+    await page.locator('#hospBtn').click();
+    await expect(page.locator('.smoothing-group')).toBeVisible();
+    await expect(page.locator('#averageBtn')).toBeEnabled();
+    await expect(page.locator('#mapMetricLabel')).toHaveText('Currently hospitalized patients');
+    await expect(page.locator('.legend-note')).toContainText('Logarithmic');
+    await page.locator('#globeLegend summary').click();
+    await expect(page.locator('.legend-band')).toHaveCount(6);
+    await selectCountry(page, 'Tunisia');
+    await page.locator('#seeMoreBtn').click();
+    const headerColors = await page.locator('.app-header').evaluate(node => {
+        const probe = document.createElement('span'); probe.style.color = 'var(--surface-header)'; node.appendChild(probe);
+        const opaqueColor = getComputedStyle(probe).color; probe.remove();
+        return { actual: getComputedStyle(node).backgroundColor, expected: opaqueColor };
+    });
+    expect(headerColors.actual).toBe(headerColors.expected);
+    await page.locator('#navCompare').click();
+    await expect(page.locator('#compareChartContainer .chart-heading-title')).toContainText('Currently hospitalized patients');
+    await page.locator('#addCountryBtn').click();
+    await page.locator('#countrySearchInput').fill('France');
+    await expect(page.getByRole('button', { name: 'France', exact: true }).locator('.country-availability')).toHaveText('Data available');
+    await page.getByRole('button', { name: 'France', exact: true }).click();
+    await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));
+    const chart = await page.locator('#compareChartContainer .combined-chart-container > svg').boundingBox();
+    expect(chart.y).toBeLessThan(580);
+    const handles = await page.locator('#dateRangeSlider input[type="range"]').evaluateAll(nodes => nodes.map(node => ({ left: node.getBoundingClientRect().left, width: node.getBoundingClientRect().width })));
+    expect(handles[0]).toEqual(handles[1]);
+    await page.locator('#startDateSlider').focus();
+    await page.keyboard.press('ArrowRight');
+    expect(await page.evaluate(() => CompareMode.state.dateRange.start)).toBeGreaterThan(0);
+    await page.locator('#compare-date-range-start-input').fill('2021-06-01');
+    await page.locator('#compare-date-range-start-input').press('Tab');
+    await expect(page.locator('#dateRangeSlider .date-range-selection')).toContainText('Jun 1, 2021');
+    await expect(page.locator('#compareChartContainer .chart-subtitle')).toContainText('Jun 1, 2021');
+    await screenshot(page, 'atlas-compact-comparison');
+    for (const name of ['Tunisia', 'France']) await page.getByRole('button', { name: `Remove ${name}`, exact: true }).click();
+    await expect(page.locator('.compare-options')).toBeHidden();
+    await expect(page.locator('#compareMessage')).toBeHidden();
+    expect((await page.locator('.no-countries-message').boundingBox()).height).toBeLessThan(130);
+});
+
+test('weekly comparisons visibly distinguish missing weeks, partial reporting and true zero', async ({ page }) => {
+    const rows = ['date,location_key,new_confirmed'];
+    for (let day = 0; day < 140; day++) {
+        const date = new Date(Date.UTC(2020, 0, day + 1)).toISOString().slice(0, 10);
+        if (!(day >= 5 && day <= 11) && day !== 14) rows.push(`${date},TN,${day >= 19 && day <= 25 ? 0 : 10}`);
+        rows.push(`${date},US,20`);
+    }
+    const files = {
+        epidem: rows.join('\n'),
+        hospitalizations: 'date,location_key,current_hospitalized_patients\n2020-01-01,TN,0\n',
+        vaccinations: 'date,location_key,new_persons_vaccinated\n2020-01-01,TN,0\n',
+        'country-index': 'location_key,country_name\nTN,Tunisia\nUS,United States\n',
+        demographics: 'location_key,population\nTN,1000000\nUS,2000000\n'
+    };
+    await page.route('**/api/*', route => {
+        const name = new URL(route.request().url()).pathname.split('/').at(-1);
+        return route.fulfill({ status: files[name] ? 200 : 404, contentType: 'text/csv', body: files[name] || '' });
+    });
+    await ready(page, '/?view=compare&compare=tn,us&chart=bar&smooth=raw');
+    await expect(page.locator('.chart-subtitle')).toContainText('Weekly totals');
+    expect(await page.locator('.missing-bar-marker').count()).toBeGreaterThan(0);
+    expect(await page.locator('.incomplete-bar').count()).toBeGreaterThan(0);
+    expect(await page.locator('.reported-zero-marker').count()).toBeGreaterThan(0);
+    await page.locator('.incomplete-bar').first().focus();
+    await expect(page.locator('.chart-tooltip')).toContainText('Partial');
+    await expect(page.locator('.chart-tooltip')).toContainText('Reported days');
+    await page.locator('.missing-bar-marker').first().focus();
+    await expect(page.locator('.chart-tooltip')).toContainText('No observation');
+    await screenshot(page, 'atlas-weekly-reporting');
+});
+
+test('population units preserve compact axes and the timeline stays above the globe', async ({ page }) => {
+    const files = {
+        epidem: 'date,location_key,new_confirmed,cumulative_deceased\n2020-01-01,TN,0,1000000\n2020-01-02,TN,0,2000000\n2020-01-01,US,0,1000000\n2020-01-02,US,0,2000000\n',
+        hospitalizations: 'date,location_key,current_hospitalized_patients\n2020-01-01,TN,0\n',
+        vaccinations: 'date,location_key,new_persons_vaccinated\n2020-01-01,TN,0\n',
+        'country-index': 'location_key,country_name\nTN,Tunisia\nUS,United States\n',
+        demographics: 'location_key,population\nTN,100000000\nUS,200000000\n'
+    };
+    await page.route('**/api/*', route => {
+        const name = new URL(route.request().url()).pathname.split('/').at(-1);
+        return route.fulfill({ status: files[name] ? 200 : 404, contentType: 'text/csv', body: files[name] || '' });
+    });
+    await ready(page, '/?metric=cumulative_deceased&country=tn&smooth=raw&unit=per100k');
+    const timeline = await page.locator('.historical-timeline').boundingBox();
+    const globe = await page.locator('.globe-stage').boundingBox();
+    expect(timeline.y + timeline.height).toBeLessThan(globe.y);
+    await expect(page.locator('.normalization-explanation')).toContainText('2,000,000');
+    await expect(page.locator('.normalization-explanation')).toContainText('100,000,000');
+    await page.locator('#seeMoreBtn').click();
+    await expect(page.locator('#chartContainer .axis-unit-label')).toHaveText('Deaths per 100,000 people');
+    await expect(page.locator('#chartContainer .y-axis')).toContainText('2.0k');
+    expect(await page.locator('#chartContainer .data-line').evaluate(node => node.__data__.at(-1).value)).toBe(2000);
+    await page.locator('#unitSelector').selectOption('per1m');
+    await expect(page.locator('#chartContainer .axis-unit-label')).toHaveText('Deaths per 1,000,000 people');
+    expect(await page.locator('#chartContainer .data-line').evaluate(node => node.__data__.at(-1).value)).toBe(20000);
+    await page.locator('#addToCompareBtn').click();
+    await expect(page.locator('#compareUnitSelector')).toHaveValue('per1m');
+    await page.locator('#addCountryBtn').click();
+    await page.locator('#countrySearchInput').fill('United States');
+    await page.getByRole('button', { name: 'United States', exact: true }).click();
+    await page.locator('#separateChartsBtn').click();
+    await expect(page.locator('.country-chart-container .axis-unit-label')).toHaveText(['Deaths per 1,000,000 people', 'Deaths per 1,000,000 people']);
+    await page.locator('#compareUnitSelector').selectOption('per100k');
+    await expect(page.locator('.country-chart-container .axis-unit-label')).toHaveText(['Deaths per 100,000 people', 'Deaths per 100,000 people']);
+    await page.reload();
+    await expect(page.locator('#compareUnitSelector')).toHaveValue('per100k');
+});
+
 test('desktop exploration keeps the still globe and communicates metric, source, timeline and country context', async ({ page }) => {
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await ready(page);
-    await expect(page.locator('#sourceTitle')).toContainText('Fictional');
+    await expect(page.locator('#dataSourceSelector')).toHaveValue('sample');
     await expect(page.locator('#mapMetricLabel')).toHaveText('New confirmed cases');
     await expect(page.locator('#mapUnitsLabel')).toContainText('7-day average');
     expect(await page.locator('#globe .country').count()).toBeGreaterThan(150);
@@ -99,7 +219,7 @@ test('comparison uses shared controls, stable colors, readable small multiples a
     await page.locator('#addCountryBtn').click();
     await expect(page.locator('#compareMessage')).toContainText('4 countries');
     await page.locator('#compareUnitSelector').selectOption('per100k');
-    await expect(page.locator('#compareChartContainer svg')).toHaveCount(1);
+    await expect(page.locator('#compareChartContainer .combined-chart-container > svg')).toHaveCount(1);
     await screenshot(page, 'atlas-compare-desktop');
     await page.locator('#separateChartsBtn').click();
     await expect(page.locator('.country-chart-container')).toHaveCount(4);
@@ -111,7 +231,7 @@ test('comparison uses shared controls, stable colors, readable small multiples a
     await expect(page.locator('.country-chart-container')).toHaveCount(3);
     await page.locator('#hospBtn').click();
     await expect(page.locator('#compareMetricSelector')).toHaveValue('current_hospitalized_patients');
-    await expect(page.locator('#compareSmoothingSelector')).toBeDisabled();
+    await expect(page.locator('#compareSmoothingSelector')).toBeEnabled();
     await page.locator('#epidemBtn').click();
     await page.locator('#exitCompareBtn').click();
     await expect(page.locator('#exploreView')).toBeVisible();
@@ -134,6 +254,8 @@ test('shared URLs restore country, category, metric, units and comparison layout
 test('mobile explorer, expandable details, keyboard search and charts fit the viewport', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await ready(page);
+    await expect(page.locator('#dataSourceSelector')).toBeVisible();
+    await expect(page.locator('#dataSourceSelector option:checked')).toHaveText('Fictional demo');
     await page.locator('#filtersToggle').click();
     await expect(page.locator('#unitSelector')).toBeVisible();
     await page.locator('#filtersToggle').click();
@@ -147,12 +269,12 @@ test('mobile explorer, expandable details, keyboard search and charts fit the vi
     await expect(page.locator('#countryStats')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const layout = await page.evaluate(() => ({
-        globe: document.getElementById('globe').getBoundingClientRect().bottom,
+        globe: document.getElementById('globe').getBoundingClientRect(),
         timeline: document.querySelector('.historical-timeline').getBoundingClientRect(),
         country: document.getElementById('countryInfo').getBoundingClientRect().top
     }));
-    expect(layout.timeline.top).toBeGreaterThan(layout.globe);
-    expect(layout.country).toBeGreaterThan(layout.timeline.bottom);
+    expect(layout.timeline.bottom).toBeLessThan(layout.globe.top);
+    expect(layout.country).toBeGreaterThan(layout.globe.bottom);
     await screenshot(page, 'atlas-mobile');
     await page.locator('#seeMoreBtn').click();
     await expect(page.locator('#chartContainer svg')).toBeVisible();
@@ -171,9 +293,12 @@ test('tablet exploration and mobile comparison fit their layouts without clipped
     await expect(page.locator('.country-chart-container svg')).toHaveCount(4);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.locator('#combinedChartBtn').click();
-    await expect(page.locator('#compareChartContainer svg')).toHaveCount(1);
+    await expect(page.locator('#compareChartContainer .combined-chart-container > svg')).toHaveCount(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await screenshot(page, 'atlas-compare-mobile');
+    await page.setViewportSize({ width: 320, height: 740 });
+    await expect(page.locator('#dataSourceSelector')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('failed CSV loading recovers from uploads and reports missing population honestly', async ({ page }) => {
@@ -190,8 +315,8 @@ test('failed CSV loading recovers from uploads and reports missing population ho
     for (const [id, csv] of Object.entries(files)) await page.locator(`#${id}`).setInputFiles({ name: `${id}.csv`, mimeType: 'text/csv', buffer: Buffer.from(csv) });
     await page.locator('#processUploads').click();
     await expect(page.locator('#errorDisplay')).toBeHidden();
-    await expect(page.locator('#compareBtn')).toBeEnabled();
-    await expect(page.locator('#sourceTitle')).toContainText('Uploaded');
+    await expect(page.locator('#dataSelector')).toBeEnabled();
+    await expect(page.locator('#dataSourceSelector')).toHaveValue('upload');
     await expect(page.locator('#dataQualityNote')).toBeHidden();
     await selectCountry(page, 'Tunisia');
     await expect(page.locator('#countryPopulation')).toContainText('unavailable');
@@ -203,7 +328,7 @@ test('original archive loads by default and source switching explicitly selects 
     test.skip(!existsSync('data/country_level_demographics.csv'), 'Local Google datasets have not been prepared.');
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await ready(page, '/');
-    await expect(page.locator('#sourceTitle')).toContainText('Historical archive');
+    await expect(page.locator('#dataSourceSelector')).toHaveValue('csv');
     expect(await page.evaluate(() => window.dataService.dataSource)).toBe('csv');
     expect(await page.evaluate(() => window.dataService.getAllCountries().length)).toBeGreaterThan(200);
     expect(await page.evaluate(() => window.dataService.getPopulation('tn'))).toBeGreaterThan(1000000);
@@ -219,14 +344,20 @@ test('original archive loads by default and source switching explicitly selects 
         if (excluded) await expect(page.locator('#dataQualityNote')).toContainText(String(excluded));
     }
     await page.keyboard.press('Escape');
-    await page.locator('#sourceSwitch').click();
+    await Promise.all([
+        page.waitForURL(url => url.searchParams.get('data') === 'sample', { waitUntil: 'domcontentloaded' }),
+        page.locator('#dataSourceSelector').selectOption('sample')
+    ]);
     await expect(page.locator('#loader')).toBeHidden({ timeout: 15000 });
-    await expect(page.locator('#sourceTitle')).toContainText('Fictional');
+    await expect(page.locator('#dataSourceSelector')).toHaveValue('sample');
     expect(await page.evaluate(() => window.dataService.dataSource)).toBe('sample');
     expect(new URL(page.url()).searchParams.get('data')).toBe('sample');
-    await page.locator('#sourceSwitch').click();
+    await Promise.all([
+        page.waitForURL(url => !url.searchParams.has('data'), { waitUntil: 'domcontentloaded' }),
+        page.locator('#dataSourceSelector').selectOption('csv')
+    ]);
     await expect(page.locator('#loader')).toBeHidden({ timeout: 15000 });
-    await expect(page.locator('#sourceTitle')).toContainText('Historical archive');
+    await expect(page.locator('#dataSourceSelector')).toHaveValue('csv');
     expect(await page.evaluate(() => window.dataService.dataSource)).toBe('csv');
     expect(new URL(page.url()).searchParams.has('data')).toBe(false);
     expect(errors).toEqual([]);

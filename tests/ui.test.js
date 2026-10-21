@@ -30,7 +30,7 @@ function harness(t) {
     const globe = { dataService: service, selectedCountry: null, selectedCountryCode: null,
         stopAutoRotation() {}, cancelRotationAnimation() {}, resetView() { resetCount++; }, goToCountry: code => navigations.push(code) };
     context.window.dataService = service; context.window.globeInstance = globe;
-    for (const file of ['ui/uiUtils.js', 'ui/search.js', 'ui/compare.js', 'ui/compareUI.js', 'charts/chartFactory.js', 'charts/compareCharts.js'])
+    for (const file of ['ui/uiUtils.js', 'ui/search.js', 'ui/dateRange.js', 'ui/compare.js', 'ui/compareUI.js', 'charts/chartFactory.js', 'charts/compareCharts.js'])
         vm.runInContext(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), context, { filename: file });
     context.window.syncAtlasState = () => {};
     context.window.stopTimeline = () => { stopCount++; };
@@ -75,9 +75,24 @@ test('comparison sliders reach every active metric date and labels agree with fi
     assert.equal(start.max, '100'); assert.equal(start.step, '1');
     start.value = '7'; end.value = '91'; start.dispatchEvent(new window.Event('input')); end.dispatchEvent(new window.Event('change'));
     const prepared = comparison.prepare(['us', 'tn'], { dateRange: compare.state.dateRange, selectedColumn: 'new_confirmed' });
-    assert.equal(document.getElementById('startDateLabel').textContent, prepared[0].dates[0]);
-    assert.equal(document.getElementById('endDateLabel').textContent, prepared[0].dates.at(-1));
+    assert.equal(document.getElementById('compare-date-range-start-input').value, prepared[0].dates[0]);
+    assert.equal(document.getElementById('compare-date-range-end-input').value, prepared[0].dates.at(-1));
     assert.equal(prepared[0].dates[0], service.availableDates[107]); assert.equal(prepared[1].dates[0], prepared[0].dates[0]);
+});
+
+test('comparison period shares a highlighted track and touch date fields preserve exact chart bounds', t => {
+    const { window, document, service, compare, comparison } = harness(t);
+    service.metricDates = [service.availableDates[100], service.availableDates[102], service.availableDates[109]];
+    window.CompareUI.initializeDateRangeSlider();
+    assert.equal(document.querySelectorAll('#dateRangeSlider .date-range-track').length, 1);
+    assert.equal(document.querySelectorAll('#dateRangeSlider .date-range-track input[type="range"]').length, 2);
+    const from = document.getElementById('compare-date-range-start-input');
+    from.value = service.availableDates[102]; from.dispatchEvent(new window.Event('change'));
+    const prepared = comparison.prepare(['us', 'tn'], { dateRange: compare.state.dateRange, selectedColumn: 'new_confirmed' });
+    assert.equal(prepared[0].dates[0], from.value);
+    assert.equal(document.getElementById('startDateSlider').getAttribute('aria-valuetext'), from.value);
+    assert.equal(document.querySelector('#dateRangeSlider .date-range-highlight').style.left, '50%');
+    assert.equal(document.querySelector('#dateRangeSlider .date-range-selection').textContent, `${from.value} – ${service.availableDates[109]}`);
 });
 
 test('comparison preserves selected country, date and analysis context when exiting', t => {
@@ -105,6 +120,27 @@ test('comparison limits selection to four countries, ignores duplicates and expl
     assert.equal(document.getElementById('compareMessage').hidden, true);
 });
 
+test('comparison country chips retain four distinct identities after browsing, reordering and replacing selections', t => {
+    const { document, compare, factory } = harness(t);
+    for (let index = 0; index < 25; index++) factory.countryColor(`viewed-${index}`);
+    compare.enter();
+    for (const code of ['us', 'tn', 'sg', 'fr']) compare.addCountry(code);
+    const chipColors = () => Object.fromEntries([...document.querySelectorAll('#headerCountriesList .header-country-item')]
+        .map(item => [item.dataset.countryCode, item.querySelector('.country-color').style.backgroundColor]));
+    const original = chipColors();
+    assert.equal(new Set(Object.values(original)).size, 4);
+    compare.reorderCountries('fr', 'us');
+    assert.deepEqual(chipColors(), original);
+    compare.removeCountry('tn'); compare.addCountry('de');
+    const replacement = chipColors();
+    for (const code of ['us', 'sg', 'fr']) assert.equal(replacement[code], original[code]);
+    assert.equal(replacement.de, original.tn);
+    assert.equal(new Set(Object.values(replacement)).size, 4);
+    const lines = [...document.querySelectorAll('#compareChartContainer .data-line')];
+    for (const [index, code] of compare.state.countries.entries())
+        assert.equal(d3.color(lines[index].getAttribute('stroke')).formatRgb(), replacement[code]);
+});
+
 test('separate country charts use one shared metric and common scale by default', t => {
     const { document, compare, service } = harness(t);
     compare.state.countries = ['tn', 'fr']; compare.enter(); compare.changeDisplayMode('separate');
@@ -125,10 +161,21 @@ test('population-adjusted options are disabled with a clear reason when populati
     assert.equal(selector.querySelector('[value="per100k"]').disabled, false);
 });
 
-test('empty comparison offers a country picker and raw smoothing remains a valid selected option', t => {
+test('empty comparison points to the existing picker and one-country charts keep a compact invitation', t => {
     const { document, compare } = harness(t);
     compare.enter();
-    assert.ok(document.querySelector('.no-countries-message .primary-btn'));
+    assert.match(document.querySelector('.no-countries-message').textContent, /Add country above/);
+    assert.equal(document.querySelector('.no-countries-message button'), null);
+    assert.ok(document.getElementById('addCountryBtn'));
+    assert.equal(document.querySelector('.compare-options').hidden, true);
     assert.equal(document.getElementById('compareSmoothingSelector').value, 'raw');
     assert.equal(document.getElementById('compareScaleSelector').disabled, true);
+    compare.addCountry('tn');
+    assert.equal(document.querySelector('.no-countries-message'), null);
+    assert.match(document.getElementById('compareMessage').textContent, /Add another country/);
+    assert.equal(document.querySelector('.compare-options').hidden, false);
+    assert.ok(document.querySelector('#compareChartContainer svg'));
+    compare.addCountry('us');
+    assert.equal(document.querySelector('.no-countries-message'), null);
+    assert.ok(document.querySelector('#compareChartContainer svg'));
 });

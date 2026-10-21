@@ -42,11 +42,19 @@ function changeVisualization() {
 }
 
 let visualizationResizeFrame = null;
-window.addEventListener('resize', () => {
-    if (visualizationResizeFrame !== null) cancelAnimationFrame(visualizationResizeFrame);
+function scheduleVisualizationRefresh() {
+    // Resize and appearance events can occur together. Draw the visible view
+    // once per frame; datasets and country palette assignments stay intact.
+    if (visualizationResizeFrame !== null) return;
     visualizationResizeFrame = requestAnimationFrame(() => {
         visualizationResizeFrame = null;
+        window.CompareUI?.updateCountryColors();
         if (window.CompareMode?.state.active) CompareMode.updateComparisonView();
-        else if (!document.getElementById('visualizationPanel')?.hidden) changeVisualization();
+        else {
+            const panel = document.getElementById('visualizationPanel');
+            if (panel && !panel.hidden) changeVisualization();
+        }
     });
-});
+}
+window.addEventListener('resize', scheduleVisualizationRefresh);
+document.addEventListener('atlas:themechange', scheduleVisualizationRefresh);

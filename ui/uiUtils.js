@@ -1,16 +1,10 @@
 const datasetNames = { epidem: 'Cases & deaths', hospitalizations: 'Hospitalizations', vaccinations: 'Vaccinations' };
-const datasetThemes = {
-    epidem: ['#ff8b7d', '#ffa99e', '255,139,125'],
-    hospitalizations: ['#b6a2f2', '#c7b7ff', '182,162,242'],
-    vaccinations: ['#69d9bd', '#95e8d3', '105,217,189']
-};
 let timelineTimer = null;
+let timelineSpeed = 1;
+const timelineSpeeds = [0.5, 1, 2, 4];
 
 function applyDatasetTheme(dataset) {
-    const theme = datasetThemes[dataset] || datasetThemes.epidem;
-    for (const [name, value] of [['--dataset-color', theme[0]], ['--accent', theme[0]], ['--dataset-hover', theme[1]], ['--accent-rgb', theme[2]]]) {
-        document.documentElement.style.setProperty(name, value);
-    }
+    document.documentElement.dataset.category = dataset;
     document.body.dataset.category = dataset;
     const ids = { epidem: 'epidemBtn', hospitalizations: 'hospBtn', vaccinations: 'vaccBtn' };
     document.querySelectorAll('.dataset-btn').forEach(button => {
@@ -53,8 +47,8 @@ function changeDataset(dataset) {
     if (!globe?.dataService.availableDates.length || !Object.hasOwn(datasetNames, dataset)) return;
     stopTimeline();
     globe.dataService.changeDataset(dataset);
-    // Preserve smoothing when meaningful; cumulative and occupancy observations
-    // always retain their raw source meaning.
+    // Preserve smoothing for daily additions and occupancy snapshots. Cumulative
+    // totals always retain their raw source meaning.
     validateDisplaySettings();
     applyDatasetTheme(dataset);
     refreshAtlasViews();
@@ -97,8 +91,13 @@ function updateAtlasPresentation() {
     const unit = service.getUnitLabel?.() || 'Count';
     const unitText = unit === 'Count' ? 'Absolute count' : unit;
     setText('mapMetricLabel', metric.label);
+    const metricSelector = document.getElementById('dataSelector');
+    if (metricSelector) metricSelector.title = metric.label;
+    const metricName = document.getElementById('selectedMetricName');
+    if (metricName) { metricName.textContent = metric.label; metricName.hidden = metric.label.length < 33; }
     setText('mapUnitsLabel', `${unitText}${service.smoothing === '7day' ? ' · 7-day average' : ''}`);
-    setText('metricDescription', metric.kind === 'daily' ? 'New observations reported each day.' : metric.kind === 'occupancy' ? 'Patients receiving care on the selected day.' : 'Reported total up to the selected day.');
+    setText('metricDescription', metric.kind === 'daily' ? 'New observations reported each day.' : metric.kind === 'occupancy' ?
+        service.smoothing === '7day' ? 'Average reported daily number of patients in care over the selected seven-day window.' : 'Reported number of patients receiving care on the selected day.' : 'Reported total up to the selected day.');
     setText('timelineMeasure', service.smoothing === '7day' ? 'Trailing 7-day average' : 'Observation date');
     const units = document.getElementById('unitSelector');
     if (units) {
@@ -119,11 +118,16 @@ function updateAtlasPresentation() {
         button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active));
         button.disabled = value === '7day' && !metric.smoothingAllowed;
     }
-    setText('smoothingNote', metric.smoothingAllowed ? 'A trailing mean with at least 5 reported days out of 7.' : 'This metric uses its reported value; averaging is not applied.');
+    setText('smoothingNote', metric.smoothingAllowed ?
+        'The selected day and previous six days are averaged. A full seven-day window, at least five reports, and a report on the selected day are required; missing days are never zero. Daily shows the original report.' +
+        (metric.kind === 'occupancy' ? ' This averages daily patient snapshots, not new admissions or unique patients.' : '') :
+        'This metric uses its reported value; averaging is not applied.');
+    const smoothingGroup = document.querySelector('.smoothing-group');
+    if (smoothingGroup) smoothingGroup.hidden = !metric.smoothingAllowed;
     if (dates.length) {
         const firstYear = Number(dates[0].slice(0, 4)), lastYear = Number(dates.at(-1).slice(0, 4));
         setText('availablePeriod', firstYear === lastYear ? String(firstYear) : `${firstYear} — ${lastYear}`);
-        setText('availableCountries', `${service.getAllCountries().length} countries · Varying coverage`);
+        setText('availableCountries', `${service.getAllCountries().length} countries / territories`);
         const years = document.getElementById('timelineYears');
         if (years && years.dataset.period !== `${firstYear}-${lastYear}`) {
             years.replaceChildren(); years.dataset.period = `${firstYear}-${lastYear}`;
@@ -135,27 +139,21 @@ function updateAtlasPresentation() {
             const value = typeof service.getDisplayValue === 'function' ? service.getDisplayValue(country.countryCode) : service.getDataValue?.(country.countryCode);
             return typeof value === 'number' && Number.isFinite(value);
         }).length;
-        setText('coverageCount', `${count} ${count === 1 ? 'country' : 'countries'}`);
+        setText('coverageCount', `${count} ${count === 1 ? 'country' : 'countries'} with data`);
     }
     const active = window.CompareMode?.state.active || false;
     const intro = document.querySelector('.page-intro'); if (intro) intro.hidden = active;
     const count = window.CompareMode?.state.countries.length || 0;
     const badge = document.getElementById('compareCount'); if (badge) { badge.hidden = !count; badge.textContent = count; }
-    const notice = document.getElementById('sourceNotice');
     const demo = service.dataSource === 'sample';
     const qualityNote = document.getElementById('dataQualityNote');
     if (qualityNote) qualityNote.hidden = service.dataSource !== 'csv' || !qualityNote.textContent;
-    notice?.classList.toggle('archive-notice', !demo);
-    notice?.classList.toggle('demo-notice', demo);
-    setText('sourceTitle', demo ? 'Demo dataset · Fictional values' : service.dataSource === 'upload' ? 'Uploaded archive · Local CSV files' : 'Historical archive · Google COVID-19 Open Data');
-    setText('sourceDescription', demo ? 'You’re exploring simulated observations. These are not historical COVID-19 statistics.' : service.dataSource === 'upload' ? 'Uploaded files are local to this tab. Reporting coverage varies by country and metric.' : 'Recorded observations, not current conditions. Reporting coverage varies by country and metric.');
-    const sourceSwitch = document.getElementById('sourceSwitch');
-    if (sourceSwitch) {
-        const url = new URL(window.location.href);
-        if (demo) url.searchParams.delete('data'); else url.searchParams.set('data', 'sample');
-        sourceSwitch.href = `${url.pathname}${url.search}${url.hash}`;
-        sourceSwitch.replaceChildren(document.createTextNode(demo ? 'Open historical archive ' : 'Explore the demo '));
-        const arrow = document.createElement('span'); arrow.textContent = '↗'; arrow.setAttribute('aria-hidden', 'true'); sourceSwitch.appendChild(arrow);
+    const source = document.getElementById('dataSourceSelector');
+    if (source) {
+        source.value = service.dataSource;
+        source.dataset.source = service.dataSource;
+        source.querySelector('[value="upload"]').hidden = service.dataSource !== 'upload';
+        source.title = demo ? 'Fictional demonstration data' : service.dataSource === 'upload' ? 'Uploaded files are local to this tab' : 'Original Google COVID-19 Open Data · Historical observations';
     }
 }
 
@@ -187,6 +185,23 @@ function stopTimeline() {
     if (button) { button.textContent = '▶'; button.setAttribute('aria-label', 'Play timeline'); button.setAttribute('aria-pressed', 'false'); }
 }
 
+function scheduleTimeline(slider) {
+    clearInterval(timelineTimer);
+    timelineTimer = setInterval(() => {
+        slider.value = String(Math.min(Number(slider.max), Number(slider.value) + 1));
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+        if (Number(slider.value) >= Number(slider.max)) stopTimeline();
+    }, 500 / timelineSpeed);
+}
+
+function setTimelineSpeed(value) {
+    const speed = Number(value);
+    timelineSpeed = timelineSpeeds.includes(speed) ? speed : 1;
+    const selector = document.getElementById('timelineSpeed');
+    if (selector) selector.value = String(timelineSpeed);
+    if (timelineTimer !== null) scheduleTimeline(document.getElementById('dateSlider'));
+}
+
 function toggleTimeline() {
     if (timelineTimer !== null) { stopTimeline(); return; }
     const slider = document.getElementById('dateSlider');
@@ -195,17 +210,23 @@ function toggleTimeline() {
     const button = document.getElementById('playTimelineBtn');
     button.textContent = 'Ⅱ'; button.setAttribute('aria-label', 'Pause timeline'); button.setAttribute('aria-pressed', 'true');
     slider.dispatchEvent(new Event('input', { bubbles: true }));
-    timelineTimer = setInterval(() => {
-        slider.value = String(Math.min(Number(slider.max), Number(slider.value) + 1));
-        slider.dispatchEvent(new Event('input', { bubbles: true }));
-        if (Number(slider.value) >= Number(slider.max)) stopTimeline();
-    }, 500);
+    scheduleTimeline(slider);
 }
 
 function initializeUI() {
     if (initializeUI.initialized) return;
     initializeUI.initialized = true;
     applyDatasetTheme((window.dataService || window.globeInstance?.dataService).currentDataset);
+    const source = document.getElementById('dataSourceSelector');
+    if (source) {
+        source.value = (window.dataService || window.globeInstance?.dataService).dataSource;
+        source.onchange = () => {
+            if (!['csv', 'sample'].includes(source.value)) return;
+            const url = new URL(window.location.href);
+            if (source.value === 'sample') url.searchParams.set('data', 'sample'); else url.searchParams.delete('data');
+            window.location.assign(`${url.pathname}${url.search}${url.hash}`);
+        };
+    }
     document.getElementById('countrySearchInput')?.addEventListener('input', filterCountries);
     document.getElementById('searchModal')?.addEventListener('click', event => { if (event.target.id === 'searchModal') closeSearch(); });
     document.getElementById('errorClose')?.addEventListener('click', () => { document.getElementById('errorDisplay').style.display = 'none'; });
@@ -223,6 +244,11 @@ function initializeUI() {
         if (code) { CompareMode.addCountry(code); atlasActions.setView('compare'); }
     });
     document.getElementById('playTimelineBtn')?.addEventListener('click', toggleTimeline);
+    const speed = document.getElementById('timelineSpeed');
+    if (speed) {
+        speed.value = String(timelineSpeed);
+        speed.addEventListener('change', () => setTimelineSpeed(speed.value));
+    }
     document.getElementById('dateSlider')?.addEventListener('input', event => { if (event.isTrusted) stopTimeline(); });
     document.addEventListener('visibilitychange', () => { if (document.hidden) stopTimeline(); });
     document.addEventListener('country-selected', () => { syncAtlasState(); if (!document.getElementById('visualizationPanel')?.hidden) changeVisualization(); });

@@ -203,6 +203,73 @@ test('colors use the same numeric domain across dates and have a bounded cache',
     assert.ok(service.colorCache.size <= 2048);
 });
 
+test('appearance-specific color caches preserve observations and restore the original dark palette', async t => {
+    const previousWindow = globalThis.window;
+    let theme = 'dark';
+    globalThis.window = { AtlasTheme: { getResolvedTheme: () => theme } };
+    t.after(() => {
+        if (previousWindow === undefined) delete globalThis.window;
+        else globalThis.window = previousWindow;
+    });
+    const service = await prepare(fixture());
+    service.changeDate('2020-01-01');
+    const records = service.epidemData, index = service.indexedData;
+    const dark = service.getCountryColor('us');
+    const darkMissing = service.getDefaultColor();
+    const darkCorrection = service.getCountryColor('fr');
+    const darkScale = service.getColorScale();
+    assert.equal(dark, '#68434c');
+    assert.equal(darkMissing, '#475569');
+    assert.deepEqual(darkScale.colors(), ['#68434c', '#894550', '#ae505c', '#d2656b', '#ef9290', '#ffd0bd']);
+    theme = 'light';
+    assert.equal(service.getCachedColor('us', service.currentDate), null, 'Dark cached colors cannot leak into the light globe');
+    const light = service.getCountryColor('us');
+    const lightScale = service.getColorScale();
+    assert.notEqual(light, dark);
+    assert.notEqual(service.getCountryColor('fr'), darkCorrection);
+    assert.notEqual(service.getDefaultColor(), darkMissing);
+    assert.equal(lightScale(null), service.getDefaultColor());
+    assert.equal(lightScale(0), light);
+    assert.deepEqual(lightScale.domain(), darkScale.domain());
+    assert.deepEqual(lightScale.breaks(), darkScale.breaks(), 'Appearance cannot alter numeric color bands');
+    assert.equal(lightScale.type, darkScale.type);
+    assert.equal(service.getDataValue('us'), 0);
+    assert.equal(service.getDataValue('fr'), -4);
+    assert.equal(service.epidemData, records);
+    assert.equal(service.indexedData, index);
+    service.getDisplayValue = () => { throw new Error('Switching back should reuse the appearance-specific cache'); };
+    theme = 'dark';
+    assert.equal(service.getCountryColor('US'), dark);
+    theme = 'light';
+    assert.equal(service.getCountryColor('US'), light);
+});
+
+test('light palettes darken with larger observations and distinguish zero, missing and corrections', async t => {
+    const previousWindow = globalThis.window;
+    globalThis.window = { AtlasTheme: { getResolvedTheme: () => 'light' } };
+    t.after(() => {
+        if (previousWindow === undefined) delete globalThis.window;
+        else globalThis.window = previousWindow;
+    });
+    const service = await prepare(fixture());
+    const luminance = hex => {
+        const rgb = hex.slice(1).match(/../g).map(channel => parseInt(channel, 16) / 255)
+            .map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+        return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+    };
+    for (const dataset of ['epidem', 'hospitalizations', 'vaccinations']) {
+        service.currentDataset = dataset;
+        const scale = service.getColorScale(), colors = scale.colors();
+        assert.equal(colors.length, 6);
+        assert.equal(scale(0), colors[0]);
+        assert.equal(scale(scale.domain()[1]), colors.at(-1));
+        for (let index = 1; index < colors.length; index++) {
+            assert.ok(luminance(colors[index - 1]) > luminance(colors[index]), `${dataset} light palette must darken toward high values`);
+        }
+        assert.equal(new Set([scale(0), scale(null), scale(-4)]).size, 3);
+    }
+});
+
 test('formatting keeps UTC calendar dates and preserves missing versus zero', () => {
     assert.equal(formatDate('2020-01-01'), 'Jan 1, 2020');
     assert.equal(formatDate('2020-02-30'), '');

@@ -43,7 +43,7 @@ window.CompareMode = {
         code = String(code).toLowerCase();
         if (!window.globeInstance.dataService.getAllCountries().some(country => country.countryCode === code) || this.state.countries.includes(code)) return;
         if (this.state.countries.length >= 4) { this.message('Compare up to 4 countries. Remove a country before adding another.'); return; }
-        this.state.countries.push(code); ChartFactory.countryColor(code);
+        this.state.countries.push(code);
         this.message(); CompareUI.updateCountryList(); this.updateComparisonView(); window.syncAtlasState?.();
     },
 
@@ -87,6 +87,7 @@ window.CompareMode = {
     syncControls() {
         const service = window.globeInstance?.dataService;
         if (!service) return;
+        const options = document.querySelector('.compare-options'); if (options) options.hidden = !this.state.countries.length;
         const columns = service.availableColumns[service.currentDataset] || [];
         this.state.selectedColumn = columns.includes(service.currentColumn) ? service.currentColumn :
             columns.includes(this.state.selectedColumn) ? this.state.selectedColumn : columns[0];
@@ -108,7 +109,7 @@ window.CompareMode = {
                 if (option.disabled) option.title = 'Population data is unavailable.';
                 units.appendChild(option);
             }
-            units.title = populationAvailable ? '' : 'Population data is unavailable; counts remain available.';
+            units.title = populationAvailable ? 'Use population-adjusted values to compare countries of different sizes.' : 'Population data is unavailable; counts remain available.';
             units.value = service.displayUnit || 'count';
             units.onchange = () => {
                 if (window.atlasActions?.setUnit) atlasActions.setUnit(units.value);
@@ -118,6 +119,7 @@ window.CompareMode = {
         }
         const smoothing = document.getElementById('compareSmoothingSelector');
         if (smoothing) {
+            const group = smoothing.closest('.control-group'); if (group) group.hidden = !metric.smoothingAllowed;
             smoothing.disabled = !metric.smoothingAllowed; smoothing.value = metric.smoothingAllowed ? service.smoothing || 'raw' : 'raw';
             smoothing.onchange = () => {
                 if (window.atlasActions?.setSmoothing) atlasActions.setSmoothing(smoothing.value);
@@ -136,9 +138,10 @@ window.CompareMode = {
 
     updateComparisonView() {
         if (!this.state.active) return;
+        ChartFactory.reconcileComparisonCountries(this.state.countries);
         const container = document.getElementById('compareChartContainer');
         container.replaceChildren(); this.syncControls();
-        if (!this.state.countries.length) return CompareUI.showNoCountriesMessage();
+        if (!this.state.countries.length) { this.message(); return CompareUI.showNoCountriesMessage(); }
         if (this.state.countries.length === 1) this.message('Add another country to compare trends on the same dates.');
         else if (document.getElementById('compareMessage')?.textContent.startsWith('Add another')) this.message();
         const settings = { dateRange: this.state.dateRange, selectedColumn: this.state.selectedColumn,
@@ -151,6 +154,13 @@ window.CompareMode = {
         const domainValues = countries.flatMap(country => this.state.chartType === 'bar' ? ChartFactory.aggregateBars(country.dates,
             [{ values: country.series[country.column] }], country.metric, country.smoothing).series[0].values : country.series[country.column]);
         const sharedDomain = this.state.scale === 'shared' ? ChartFactory.valueDomain(domainValues) : null;
+        if (this.state.scale === 'shared' && ChartFactory.comparisonWarnings) {
+            const series = countries.map(country => ({ values: this.state.chartType === 'bar' ? ChartFactory.aggregateBars(country.dates,
+                [{ values: country.series[country.column] }], country.metric, country.smoothing).series[0].values : country.series[country.column] }));
+            for (const text of ChartFactory.comparisonWarnings(series, settings.unit)) {
+                const warning = document.createElement('p'); warning.className = 'chart-warning'; warning.textContent = text; container.appendChild(warning);
+            }
+        }
         const wrapper = document.createElement('div'); wrapper.className = 'compare-charts-wrapper'; container.appendChild(wrapper);
         // Complete the grid before measuring chart widths.
         const charts = countries.map(country => {
@@ -162,9 +172,10 @@ window.CompareMode = {
             return { country, chart };
         });
         for (const { country, chart } of charts) ChartFactory.renderCartesian(chart, country.dates,
-            [{ key: country.countryCode, label: country.countryName, values: country.series[country.column], missingReasons: country.missingReasons, color: ChartFactory.countryColor(country.countryCode) }], this.state.chartType,
+            [{ key: country.countryCode, label: country.countryName, values: country.series[country.column], missingReasons: country.missingReasons,
+                reported: country.reported, color: ChartFactory.countryColor(country.countryCode) }], this.state.chartType,
             { title: `${country.countryName}: ${country.metric.label}`, unitLabel: ChartFactory.unitLabel(country.column, country.unit),
-                metric: country.metric, smoothing: country.smoothing, yDomain: sharedDomain });
+                column: country.column, unit: country.unit, metric: country.metric, smoothing: country.smoothing, yDomain: sharedDomain, showLegend: false });
     },
 
     reorderCountries(dragged, target) {

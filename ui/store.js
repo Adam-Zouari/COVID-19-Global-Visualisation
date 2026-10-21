@@ -5,6 +5,8 @@ const DEFAULTS = {
     compareChartType: 'line', compareScale: 'shared', dataMode: 'csv'
 };
 
+import { UNIT_DEFINITIONS } from '../dataService/metrics.js';
+
 export function createStore(initial = {}) {
     let state = Object.freeze({ ...DEFAULTS, ...initial,
         compareCountries: Object.freeze([...(initial.compareCountries || [])]),
@@ -30,7 +32,7 @@ export function createStore(initial = {}) {
 export function readURLState(search) {
     const params = new URLSearchParams(search);
     const category = ['epidem', 'hospitalizations', 'vaccinations'].includes(params.get('category')) ? params.get('category') : 'epidem';
-    const unit = ['count', 'per100k', 'percent', 'per100'].includes(params.get('unit')) ? params.get('unit') : 'count';
+    const unit = Object.hasOwn(UNIT_DEFINITIONS, params.get('unit')) ? params.get('unit') : 'count';
     const compareCountries = [...new Set((params.get('compare') || '').toLowerCase().split(',').filter(code => /^[a-z]{2}$/.test(code)))].slice(0, 4);
     const country = params.get('country')?.toLowerCase();
     const range = (params.get('range') || '0,100').split(',').map(Number);

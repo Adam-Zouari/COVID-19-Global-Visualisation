@@ -6,38 +6,18 @@ window.CompareUI = {
     hide() { document.getElementById('comparePanel').hidden = true; },
 
     initializeDateRangeSlider() {
-        const label = document.getElementById('compareDateModeLabel'); if (label) label.textContent = 'Historical period';
         const sliders = document.getElementById('dateRangeSlider'); if (!sliders) return;
         sliders.replaceChildren();
         const service = window.globeInstance.dataService, dates = service.getAvailableDates?.() || service.availableDates;
-        const inputs = {};
-        for (const key of ['start', 'end']) {
-            const input = document.createElement('input'); input.type = 'range'; input.id = `${key}DateSlider`; input.className = 'date-slider';
-            input.min = '0'; input.max = String(Math.max(0, dates.length - 1)); input.step = '1';
-            input.value = String(ChartFactory.dateIndex(CompareMode.state.dateRange[key], dates.length)); input.disabled = dates.length <= 1;
-            input.setAttribute('aria-label', `${key === 'start' ? 'Start' : 'End'} date`); inputs[key] = input; sliders.appendChild(input);
-        }
-        const update = () => {
-            for (const key of ['start', 'end']) {
-                const text = service.formatDate(dates[Number(inputs[key].value)]);
-                const label = document.getElementById(`${key}DateLabel`); if (label) label.textContent = text;
-                inputs[key].setAttribute('aria-valuetext', text);
-            }
-        };
-        for (const key of ['start', 'end']) {
-            inputs[key].oninput = () => {
-                if (Number(inputs.start.value) > Number(inputs.end.value)) inputs[key].value = inputs[key === 'start' ? 'end' : 'start'].value;
-                update();
-            };
-            inputs[key].onchange = () => {
-                const percent = input => dates.length > 1 ? Number(input.value) / (dates.length - 1) * 100 : 100;
-                CompareMode.updateDateRange(percent(inputs.start), percent(inputs.end));
-            };
-        }
-        update();
+        this.rangeControl = new DateRangeControl(sliders, {
+            dates, range: CompareMode.state.dateRange, idPrefix: 'compare-date-range',
+            sliderIds: { start: 'startDateSlider', end: 'endDateSlider' }, formatDate: date => service.formatDate(date),
+            onChange: range => CompareMode.updateDateRange(range.start, range.end)
+        });
     },
 
     updateCountryList() {
+        ChartFactory.reconcileComparisonCountries(CompareMode.state.countries);
         const list = document.getElementById('headerCountriesList'); list.replaceChildren();
         for (const code of CompareMode.state.countries) {
             const name = window.globeInstance.dataService.getCountryName(code);
@@ -56,11 +36,19 @@ window.CompareUI = {
         list.appendChild(add);
     },
 
+    updateCountryColors() {
+        // Update existing chips in place so appearance changes preserve drag
+        // handlers, accessible labels, and keyboard focus.
+        for (const item of document.querySelectorAll('#headerCountriesList .header-country-item')) {
+            const swatch = item.querySelector('.country-color');
+            if (swatch) swatch.style.backgroundColor = ChartFactory.countryColor(item.dataset.countryCode);
+        }
+    },
+
     showNoCountriesMessage() {
         const wrapper = document.createElement('div'); wrapper.className = 'no-countries-message';
-        const heading = document.createElement('h3'); heading.textContent = 'A shared perspective';
-        const text = document.createElement('p'); text.textContent = 'Choose 2–4 countries to compare the same metric across history. Start with population-adjusted values for a fairer comparison.';
-        const button = document.createElement('button'); button.className = 'primary-btn'; button.textContent = 'Choose countries'; button.onclick = openSearch;
-        wrapper.append(heading, text, button); document.getElementById('compareChartContainer').replaceChildren(wrapper);
+        const heading = document.createElement('h3'); heading.textContent = 'Choose countries to compare';
+        const text = document.createElement('p'); text.textContent = 'Use Add country above to compare 2–4 countries on the same dates.';
+        wrapper.append(heading, text); document.getElementById('compareChartContainer').replaceChildren(wrapper);
     }
 };

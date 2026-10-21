@@ -1,9 +1,10 @@
 import { getMetricMetadata } from './metrics.js';
 import { isValidDate, numericValue } from './utils.js';
+import { UNIT_DEFINITIONS } from './metrics.js';
 
 const DAY = 86_400_000;
-const FACTORS = { per100k: 100_000, percent: 100, per100: 100 };
 const isSmoothed = value => ['7day', '7-day', '7-day-average', '7-day average'].includes(value);
+const availabilityHistory = new WeakMap();
 
 function options(service, options = {}) {
     const column = options.column || service.currentColumn;
@@ -19,7 +20,7 @@ function transform(service, country, value, unit) {
     if (value === null) return null;
     if (unit === 'count') return value;
     const population = service.getPopulation(country);
-    return population === null ? null : value / population * FACTORS[unit];
+    return population === null ? null : value / population * UNIT_DEFINITIONS[unit].factor;
 }
 
 function observation(service, country, date, settings) {
@@ -32,6 +33,8 @@ function displayed(service, country, date, settings) {
     if (rawValue === null || !settings.valid) return null;
     let value = rawValue;
     if (settings.smoothing === '7day') {
+        // Average reported daily additions or occupancy snapshots. Occupancy is
+        // a stock of patients in care, never admissions summed across days.
         const end = Date.parse(`${date}T00:00:00Z`);
         const firstDate = service.datesByDataset[settings.dataset]?.[0];
         const start = new Date(end - 6 * DAY).toISOString().slice(0, 10);
@@ -80,6 +83,49 @@ export function getDisplayValue(code, requested = {}) {
     const date = requested.date || this.currentDate;
     if (!isValidDate(date)) return null;
     return displayed(this, code.trim().toLowerCase(), date, options(this, requested));
+}
+
+/** Explain absence without confusing an index entry, a missing report, and a missing denominator. */
+export function getCountryAvailability(code, requested = {}) {
+    if (typeof code !== 'string') return { status: 'no-observations', label: 'No observations for this metric', description: '' };
+    const country = code.trim().toLowerCase();
+    const settings = options(this, requested);
+    const date = requested.date || this.currentDate;
+    // A raw history scan is much cheaper than building every country's transformed
+    // calendar series when opening search. Replacing the data index invalidates it.
+    let cache = availabilityHistory.get(this);
+    if (!cache || cache.index !== this.indexedData) {
+        cache = { index: this.indexedData, metrics: new Map() };
+        availabilityHistory.set(this, cache);
+    }
+    const key = `${settings.dataset}:${settings.column}`;
+    if (!cache.metrics.has(key)) cache.metrics.set(key, new Map());
+    const countries = cache.metrics.get(key);
+    if (!countries.has(country)) {
+        countries.set(country, Object.values(this.indexedData[settings.dataset]?.[country] || {})
+            .some(record => numericValue(record[settings.column]) !== null));
+    }
+    if (!countries.get(country)) return {
+        status: 'no-observations', label: 'No observations for this metric',
+        description: 'This location is in the geographic index, but has no source observations for the selected metric.'
+    };
+    const reported = observation(this, country, date, settings);
+    if (reported === null) return {
+        status: 'other-dates', label: 'No report on selected date',
+        description: 'Source observations for this metric are available on other dates.'
+    };
+    if (settings.unit !== 'count' && this.getPopulation(country) === null) return {
+        status: 'missing-population', label: 'Population unavailable',
+        description: 'A source observation is available, but the selected population-adjusted value cannot be calculated.'
+    };
+    if (settings.smoothing === '7day' && displayed(this, country, date, settings) === null) return {
+        status: 'insufficient-history', label: 'Insufficient reports for average',
+        description: 'This date has a source observation, but a seven-day average needs a full calendar window and at least five reports.'
+    };
+    return {
+        status: 'available', label: 'Data available',
+        description: `An observation is available for ${date}${reported === 0 ? '; a reported zero is data' : ''}.`
+    };
 }
 
 export function getCountrySeries(code, requested = {}) {

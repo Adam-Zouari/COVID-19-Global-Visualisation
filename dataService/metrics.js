@@ -1,4 +1,12 @@
 /** Shared semantic rules for source observations and their display transformations. */
+export const UNIT_DEFINITIONS = Object.freeze(Object.fromEntries(Object.entries({
+    count: { label: 'Count', factor: null },
+    per100k: { label: 'Per 100,000 people', factor: 100_000 },
+    per1m: { label: 'Per 1,000,000 people', factor: 1_000_000 },
+    percent: { label: '% of population', factor: 100 },
+    per100: { label: 'Doses per 100 people', factor: 100 }
+}).map(([unit, definition]) => [unit, Object.freeze(definition)])));
+
 const definitions = {
     new_confirmed: ['New confirmed cases', 'epidem', 'daily'],
     new_deceased: ['New reported deaths', 'epidem', 'daily'],
@@ -27,9 +35,9 @@ const definitions = {
 
 function metadata(column, label, dataset, kind) {
     const coverage = kind === 'cumulative' && /persons_(fully_)?vaccinated/.test(column);
-    const allowedUnits = Object.freeze(['count', /vaccine_doses/.test(column) ? 'per100' : coverage ? 'percent' : 'per100k']);
+    const allowedUnits = Object.freeze(['count', ...(/vaccine_doses/.test(column) ? ['per100'] : coverage ? ['percent'] : ['per100k', 'per1m'])]);
     return Object.freeze({ column, label, dataset, category: dataset === 'epidem' ? 'epidemiology' : dataset,
-        kind, allowedUnits, smoothingAllowed: kind === 'daily',
+        kind, allowedUnits, smoothingAllowed: kind === 'daily' || kind === 'occupancy',
         description: kind === 'daily' ? 'Reported additions on this date. Negative values indicate reporting corrections.' :
             kind === 'occupancy' ? 'Patients in care on this date, measured as a snapshot.' :
                 'The source cumulative total reported on this date, preserved independently of daily observations.' });
@@ -52,5 +60,5 @@ export function getMetricMetadata(column = this?.currentColumn) {
 }
 
 export function getUnitLabel(column = this?.currentColumn, unit = this?.displayUnit || 'count') {
-    return ({ count: 'Count', per100k: 'Per 100,000 people', percent: '% of population', per100: 'Doses per 100 people' })[unit] || 'Count';
+    return Object.hasOwn(UNIT_DEFINITIONS, unit) ? UNIT_DEFINITIONS[unit].label : UNIT_DEFINITIONS.count.label;
 }

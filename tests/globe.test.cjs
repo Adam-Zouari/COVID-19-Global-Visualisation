@@ -231,6 +231,96 @@ test('globe dimensions follow its container instead of the viewport', () => {
     assert.equal(globe.radius, 232);
 });
 
+test('globe token changes update outlines without rebuilding geometry or recoloring observations', async () => {
+    const { JSDOM } = await import('jsdom');
+    const { select } = await import('d3');
+    const dom = new JSDOM('<svg><g><circle class="ocean"></circle><path class="graticule"></path></g></svg>');
+    const { context, globe } = harness();
+    const colors = {
+        '--globe-ocean': '#101d30', '--globe-rim': '#345074', '--globe-grid': '#90abc9',
+        '--globe-border': '#17283b', '--globe-hover': '#f3f7fe', '--globe-selection': '#f3f7fe'
+    };
+    context.window.AtlasTheme = { getColor: name => colors[name] };
+    globe.globeGroup = select(dom.window.document.querySelector('g'));
+    globe.countryFeatures = [{ id: 'selected' }, { id: 'hovered' }, { id: 'other' }];
+    globe.globeGroup.selectAll('.country').data(globe.countryFeatures).join('path')
+        .attr('class', 'country').attr('d', 'M0,0L1,1Z').attr('fill', '#ef9290');
+    const originalPaths = globe.globeGroup.selectAll('.country').nodes();
+    globe.selectedCountry = 'selected'; globe.hoveredCountry = 'hovered'; globe.globeCreated = true;
+    globe.createGlobe = () => { throw new Error('Geometry must remain intact'); };
+    globe.updateGlobeColors = () => { throw new Error('Observation colors must remain intact'); };
+    globe.refreshGlobeAppearance();
+    assert.equal(globe.globeGroup.select('.ocean').attr('fill'), '#101d30');
+
+    const originalSelect = globe.globeGroup.select.bind(globe.globeGroup);
+    const originalSelectAll = globe.globeGroup.selectAll.bind(globe.globeGroup);
+    let svgReads = 0;
+    globe.globeGroup.select = (...args) => { svgReads++; return originalSelect(...args); };
+    globe.globeGroup.selectAll = (...args) => { svgReads++; return originalSelectAll(...args); };
+    globe.refreshGlobeAppearance();
+    assert.equal(svgReads, 0, 'Identical dark globe colors require no SVG work when the UI changes theme');
+
+    colors['--globe-border'] = '#20344a'; colors['--globe-hover'] = '#e0efff'; colors['--globe-selection'] = '#ffffff';
+    globe.refreshGlobeAppearance();
+    assert.deepEqual(originalPaths.map(path => path.getAttribute('stroke')), ['#ffffff', '#e0efff', '#20344a']);
+    assert.deepEqual(globe.globeGroup.selectAll('.country').nodes(), originalPaths);
+    for (const path of originalPaths) {
+        assert.equal(path.getAttribute('d'), 'M0,0L1,1Z');
+        assert.equal(path.getAttribute('fill'), '#ef9290');
+    }
+    dom.window.close();
+});
+
+test('changing globe appearance recolors existing paths and legend even when chrome tokens match', async () => {
+    const { JSDOM } = await import('jsdom');
+    const { select } = await import('d3');
+    const dom = new JSDOM('<svg><g><circle class="ocean"></circle><path class="graticule"></path></g></svg><div id="globeLegend"></div>');
+    const { context, globe } = harness(); context.document = dom.window.document;
+    let theme = 'dark';
+    const palettes = { dark: ['#68434c', '#ffd0bd'], light: ['#fce5de', '#782537'] };
+    context.window.AtlasTheme = { getColor: () => '', getResolvedTheme: () => theme };
+    globe.dataService = {
+        currentColumn: 'new_confirmed', displayUnit: 'count', smoothing: 'raw', dataSource: 'csv',
+        getDisplayValue: code => code === 'low' ? 0 : 10,
+        getCountryColor: code => palettes[theme][code === 'low' ? 0 : 1],
+        getDefaultColor: () => theme === 'light' ? '#c2cad5' : '#475569',
+        getColorScale() {
+            const scale = value => palettes[theme][value === 0 ? 0 : 1];
+            scale.colors = () => palettes[theme]; scale.domain = () => [0, 10];
+            scale.breaks = () => [0, 5, 10]; scale.type = 'linear';
+            return scale;
+        }
+    };
+    globe.globeGroup = select(dom.window.document.querySelector('g'));
+    globe.countryFeatures = [{ id: 'low' }, { id: 'high' }];
+    globe.getCountryCode = feature => feature.id;
+    globe.globeGroup.selectAll('.country').data(globe.countryFeatures).join('path')
+        .attr('class', 'country').attr('d', 'M0,0L1,1Z');
+    const paths = globe.globeGroup.selectAll('.country').nodes();
+    const features = globe.countryFeatures;
+    globe.getGlobePalette(); globe.globeCreated = true;
+    globe.selectedCountry = 'low'; globe.selectedCountryCode = 'low';
+    globe.tooltip = { style() {} };
+    globe.createGlobe = () => { throw new Error('Theme changes must retain the existing geometry'); };
+    globe.dataService.loadData = () => { throw new Error('Theme changes must retain loaded observations'); };
+    globe.updateGlobeColors();
+    const legend = dom.window.document.getElementById('globeLegend');
+    legend.querySelector('details').open = true;
+    assert.deepEqual(paths.map(path => path.getAttribute('fill')), palettes.dark);
+    theme = 'light'; globe.refreshGlobeAppearance();
+    assert.deepEqual(paths.map(path => path.getAttribute('fill')), palettes.light);
+    assert.match(legend.querySelector('.legend-gradient').style.background, /252, 229, 222/);
+    assert.equal(legend.querySelector('details').open, true);
+    theme = 'dark'; globe.refreshGlobeAppearance();
+    assert.deepEqual(paths.map(path => path.getAttribute('fill')), palettes.dark);
+    assert.deepEqual(globe.globeGroup.selectAll('.country').nodes(), paths);
+    assert.equal(globe.countryFeatures, features);
+    assert.equal(globe.selectedCountry, 'low');
+    assert.equal(globe.selectedCountryCode, 'low');
+    assert.deepEqual(paths.map(path => path.getAttribute('d')), ['M0,0L1,1Z', 'M0,0L1,1Z']);
+    dom.window.close();
+});
+
 test('a newly created globe remains still', async () => {
     const { context, frames } = harness();
     context.window.GlobeVis.prototype.initVis = async function() {};
@@ -300,5 +390,65 @@ test('country details show the selected metric, category indicators, and true re
     globe.updateCountryInfoPanel(null);
     assert.equal(document.getElementById('countryInfo').hidden, true);
     assert.equal(document.getElementById('exploreWorkspace').classList.contains('has-selection'), false);
+    dom.window.close();
+});
+
+test('normalized country values explain population division and retain the selected averaging basis', () => {
+    const { context, globe } = harness();
+    context.window.MetricRegistry = { UNIT_DEFINITIONS: {
+        count: { factor: null }, per100k: { factor: 100_000 }, per1m: { factor: 1_000_000 },
+        percent: { factor: 100 }, per100: { factor: 100 }
+    } };
+    let count = 2_000_000;
+    globe.dataService = {
+        displayUnit: 'per100k', smoothing: 'raw', getPopulation: () => 100_000_000,
+        getDisplayValue(code, options) { assert.equal(code, 'tn'); assert.equal(options.unit, 'count'); return count; }
+    };
+    assert.match(globe.normalizationExplanation('tn', 2000), /Raw count ÷ population × 100,000: 2,000,000 ÷ 100,000,000 × 100,000 ≈ 2,000 Per 100,000 people/);
+    globe.dataService.displayUnit = 'per1m';
+    assert.match(globe.normalizationExplanation('tn', 20_000), /× 1,000,000 ≈ 20,000 Per 1,000,000 people/);
+    count = 100;
+    globe.dataService.smoothing = '7day';
+    assert.match(globe.normalizationExplanation('tn', 1), /^7-day average count.*100 ÷ 100,000,000/);
+    assert.doesNotMatch(globe.normalizationExplanation('tn', 1), /Raw count/);
+    assert.equal(globe.normalizationExplanation('tn', null), '');
+    globe.dataService.getPopulation = () => null;
+    assert.equal(globe.normalizationExplanation('tn', 1), '');
+    globe.dataService.getPopulation = () => 100_000_000;
+    count = 0;
+    assert.match(globe.normalizationExplanation('tn', 0), /0 ÷ 100,000,000/);
+    globe.dataService.displayUnit = 'count';
+    assert.equal(globe.normalizationExplanation('tn', 0), '');
+});
+
+test('logarithmic legend explains actual color bands without a misleading numeric midpoint', async () => {
+    const { JSDOM } = await import('jsdom');
+    const dom = new JSDOM('<div id="globeLegend"></div>');
+    const { context, globe } = harness(); context.document = dom.window.document;
+    const colors = ['#68434c', '#83515b', '#994350', '#c75b63', '#ed8281', '#ffd0bd'];
+    const boundaries = [0, 6.3, 52.8, 392.1, 2900, 21000, 154500];
+    const scale = value => value < 0 ? '#aa6611' : colors[0];
+    scale.domain = () => [-8, 154500]; scale.colors = () => colors;
+    scale.breaks = () => boundaries; scale.type = 'logarithmic';
+    globe.dataService = {
+        currentColumn: 'current_hospitalized_patients', displayUnit: 'count', smoothing: 'raw',
+        getColorScale: () => scale, getDefaultColor: () => '#475569'
+    };
+    globe.updateLegend();
+    const legend = dom.window.document.getElementById('globeLegend');
+    assert.match(legend.querySelector('.legend-note').textContent, /Logarithmic color bands/);
+    assert.equal(legend.querySelector('.legend-range').textContent, '0154.5K');
+    assert.doesNotMatch(legend.querySelector('.legend-range').textContent, /392/);
+    assert.match(legend.querySelector('.legend-explanation').textContent, /not equal increases/);
+    assert.equal(legend.querySelectorAll('.legend-band').length, 6);
+    assert.match(legend.querySelectorAll('.legend-band')[3].getAttribute('aria-label'), /392.1 up to but excluding 2,900/);
+    assert.doesNotMatch(legend.textContent, /Reported zero \/ low values/);
+    assert.match(legend.querySelector('.legend-explanation').textContent, /Zero is a reported value/);
+    assert.match(legend.querySelector('.legend-band').getAttribute('aria-label'), /^0 up to but excluding/);
+    assert.match(legend.textContent, /Not reported/);
+    assert.match(legend.textContent, /Negative: reporting correction/);
+    const details = legend.querySelector('details');
+    assert.equal(details.open, false); details.open = true; globe.updateLegend();
+    assert.equal(legend.querySelector('details').open, true);
     dom.window.close();
 });

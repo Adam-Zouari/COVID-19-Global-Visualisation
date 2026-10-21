@@ -4,9 +4,11 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { JSDOM } from 'jsdom';
 import * as d3 from 'd3';
+import DataService from '../dataService/index.js';
 
-function harness(t) {
-    const dom = new JSDOM('<!doctype html><div id="visualizationPanel"><div id="chartContainer"></div></div>', { runScripts: 'outside-only' });
+function harness(t, { fullUI = false } = {}) {
+    const dom = new JSDOM(fullUI ? readFileSync(new URL('../index.html', import.meta.url), 'utf8') :
+        '<!doctype html><div id="visualizationPanel"><div id="chartContainer"></div></div>', { runScripts: 'outside-only' });
     t.after(() => dom.window.close());
     const context = dom.getInternalVMContext();
     context.d3 = d3; context.requestAnimationFrame = callback => { callback(); return 1; }; context.cancelAnimationFrame = () => {};
@@ -19,11 +21,11 @@ function harness(t) {
         availableColumns: { epidem: ['new_confirmed', 'new_deceased', 'new_tested'] }, indexedData: { epidem: rows },
         availableDates: Object.keys(rows.us), formatDate: date => date, getCountryName: code => code === 'us' ? '<img src=x onerror=alert(1)>' : 'France',
         getMetricMetadata: column => ({ column, label: { new_confirmed: 'New confirmed cases', new_deceased: 'New deaths', new_tested: 'New tests' }[column], kind: 'daily', smoothingAllowed: true }),
-        getUnitLabel: (_column, unit) => unit === 'per100k' ? 'Per 100,000 people' : 'Count'
+        getUnitLabel: (_column, unit) => ({ per100k: 'Per 100,000 people', per1m: 'Per 1,000,000 people' })[unit] || 'Count'
     } };
-    for (const file of ['charts/chartFactory.js', 'charts/chartControls.js', 'charts/compareCharts.js'])
+    for (const file of ['charts/chartFactory.js', 'ui/dateRange.js', 'charts/chartControls.js', 'charts/compareCharts.js'])
         vm.runInContext(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), context, { filename: file });
-    return { dom, window: dom.window, document: dom.window.document, factory: vm.runInContext('ChartFactory', context),
+    return { dom, context, window: dom.window, document: dom.window.document, factory: vm.runInContext('ChartFactory', context),
         controls: vm.runInContext('ChartControls', context), comparison: vm.runInContext('CompareCharts', context),
         service: context.window.globeInstance.dataService, container: dom.window.document.getElementById('chartContainer') };
 }
@@ -68,7 +70,9 @@ test('bars bind repeated values to exact dates, allow corrections and escape imp
     assert.match(container.querySelector('.chart-tooltip').textContent, /2020-01-02/);
     assert.equal(container.querySelector('.chart-tooltip img'), null);
     assert.match(container.querySelector('svg').getAttribute('aria-label'), /New confirmed cases/);
-    assert.match(container.textContent, /Count/);
+    assert.equal(container.querySelector('.axis-unit-label').textContent, 'Cases');
+    assert.match(container.querySelector('.chart-heading-title').textContent, /New confirmed cases/);
+    assert.equal(container.querySelector('.chart-heading-title img'), null);
 });
 
 test('line gaps remain gaps and keyboard crosshair exposes missing observations', t => {
@@ -114,15 +118,156 @@ test('long histories have no point markers and range sliders reach each day', t 
     assert.equal(controls.context.countryCode, 'us');
 });
 
-test('long daily bar histories aggregate weekly without treating missing days as zero', t => {
-    const { factory } = harness(t);
+test('weekly bars distinguish partial totals, missing weeks and reported zeros', t => {
+    const { factory, container, window } = harness(t);
     const dates = Array.from({ length: 140 }, (_, index) => new Date(Date.UTC(2020, 0, 6 + index)).toISOString().slice(0, 10));
     const values = dates.map(() => 2); values[8] = null;
+    values.fill(null, 14, 21); values.fill(0, 21, 28);
     const result = factory.aggregateBars(dates, [{ key: 'us', values }], { kind: 'daily' }, 'none');
     assert.equal(result.dates.length, 20);
     assert.equal(result.series[0].values[0], 14);
-    assert.equal(result.series[0].values[1], null);
+    assert.equal(result.series[0].values[1], 12);
+    assert.equal(result.series[0].coverage[1].reportedDays, 6);
+    assert.equal(result.series[0].coverage[1].expectedDays, 7);
+    assert.equal(result.series[0].values[2], null);
+    assert.equal(result.series[0].values[3], 0);
     assert.match(result.note, /Weekly totals/);
+    factory.renderCartesian(container, dates, [{ key: 'us', label: 'United States', values }], 'bar',
+        { title: 'New confirmed cases — United States', column: 'new_confirmed', metric: { kind: 'daily' }, smoothing: 'raw' });
+    assert.equal(container.querySelectorAll('.missing-bar-marker').length, 1);
+    assert.equal(container.querySelectorAll('.reported-zero-marker').length, 1);
+    const partial = container.querySelector('.incomplete-bar');
+    assert.equal(partial.__data__.value, 12);
+    assert.match(partial.getAttribute('fill'), /^url\(#partial-week-/);
+    partial.dispatchEvent(new window.FocusEvent('focus'));
+    assert.match(container.querySelector('.chart-tooltip').textContent, /12 Cases.*Partial weekly total.*Reported days: 6 of 7/);
+    container.querySelector('.missing-bar-marker').dispatchEvent(new window.FocusEvent('focus'));
+    assert.match(container.querySelector('.chart-tooltip').textContent, /No observations in this week.*Reported days: 0 of 7/);
+    assert.match(container.querySelector('.chart-subtitle').textContent, /Weekly totals.*2020/);
+    assert.doesNotMatch(container.innerHTML, /NaN|Infinity/);
+});
+
+test('edge weeks retain observed values while disclosing the selected fraction of a week', t => {
+    const { factory, container, window } = harness(t);
+    const dates = Array.from({ length: 140 }, (_, index) => new Date(Date.UTC(2020, 0, 8 + index)).toISOString().slice(0, 10));
+    const values = dates.map(() => 2);
+    const result = factory.aggregateBars(dates, [{ key: 'us', values }], { kind: 'daily' }, 'raw');
+    assert.equal(result.series[0].values[0], 10);
+    assert.equal(result.series[0].coverage[0].selectedDays, 5);
+    assert.equal(result.series[0].values.at(-1), 4);
+    factory.renderCartesian(container, dates, [{ key: 'us', label: 'United States', values }], 'bar',
+        { metric: { kind: 'daily' }, column: 'new_confirmed', smoothing: 'raw' });
+    assert.equal(container.querySelectorAll('.incomplete-bar').length, 2);
+    container.querySelector('.incomplete-bar').dispatchEvent(new window.FocusEvent('focus'));
+    assert.match(container.querySelector('.chart-tooltip').textContent, /Partial weekly total.*Reported days: 5 of 5 selected days \(7-day calendar week\).*Selected period includes 5 of 7 days/);
+    assert.ok(container.querySelector('.chart-subtitle').textContent.includes(factory.periodLabel(dates)));
+});
+
+test('weekly averages disclose raw reporting separately from available averages', t => {
+    const { factory, container, window } = harness(t);
+    const dates = Array.from({ length: 140 }, (_, index) => new Date(Date.UTC(2020, 0, 6 + index)).toISOString().slice(0, 10));
+    const values = dates.map(() => 2); values.fill(null, 0, 7); values[8] = null;
+    const series = [{ key: 'us', label: 'United States', values, reported: dates.map(() => true) }];
+    const result = factory.aggregateBars(dates, series, { kind: 'daily' }, '7day');
+    assert.equal(result.series[0].values[0], null);
+    assert.equal(result.series[0].coverage[0].reportedDays, 7);
+    assert.equal(result.series[0].values[1], 2);
+    assert.equal(result.series[0].coverage[1].displayedDays, 6);
+    factory.renderCartesian(container, dates, series, 'bar', { metric: { kind: 'daily', smoothingAllowed: true }, smoothing: '7day' });
+    container.querySelector('.missing-bar-marker').dispatchEvent(new window.FocusEvent('focus'));
+    assert.match(container.querySelector('.chart-tooltip').textContent, /No available daily averages.*Reported days: 7 of 7.*Available daily averages: 0 of 7/);
+    container.querySelector('.incomplete-bar').dispatchEvent(new window.FocusEvent('focus'));
+    assert.match(container.querySelector('.chart-tooltip').textContent, /Partial weekly mean.*Available daily averages: 6 of 7/);
+    assert.match(container.querySelector('.chart-subtitle').textContent, /Weekly means.*7-day average/);
+});
+
+test('weekly cumulative snapshots never carry earlier reports across a missing end date', t => {
+    const { factory } = harness(t);
+    const dates = Array.from({ length: 140 }, (_, index) => new Date(Date.UTC(2020, 0, 6 + index)).toISOString().slice(0, 10));
+    const values = dates.map((_, index) => index); values[6] = null;
+    const result = factory.aggregateBars(dates, [{ key: 'us', values }], { kind: 'cumulative' }, 'raw');
+    assert.equal(result.series[0].values[0], null);
+    assert.equal(result.series[0].values[1], 13);
+    assert.match(result.series[0].missingReasons[0], /last selected day/);
+    assert.match(result.note, /not carried forward/);
+});
+
+test('occupancy weekly bars average daily snapshots and identify partial, missing and zero weeks', t => {
+    const { factory, container, window } = harness(t);
+    const dates = Array.from({ length: 140 }, (_, index) => new Date(Date.UTC(2020, 0, 6 + index)).toISOString().slice(0, 10));
+    const values = dates.map(() => 10); values[0] = 0; values[2] = null;
+    values.fill(null, 14, 21); values.fill(0, 21, 28);
+    const series = [{ key: 'us', label: 'United States', values }];
+    const metric = { column: 'current_hospitalized_patients', kind: 'occupancy', smoothingAllowed: true };
+    const result = factory.aggregateBars(dates, series, metric, 'raw');
+    assert.ok(Math.abs(result.series[0].values[0] - 50 / 6) < 1e-10, 'Weekly occupancy is a mean, not the sum of patients across days');
+    assert.equal(result.series[0].values[2], null);
+    assert.equal(result.series[0].values[3], 0);
+    assert.equal(result.aggregation, 'Weekly mean occupancy');
+    assert.match(result.note, /reported daily patient snapshots; patients are never summed across days/);
+    factory.renderCartesian(container, dates, series, 'bar', { column: metric.column, metric, smoothing: 'raw' });
+    assert.match(container.querySelector('.chart-subtitle').textContent, /Weekly mean occupancy.*reported daily patient snapshots/);
+    assert.equal(container.querySelector('.axis-unit-label').textContent, 'Patients');
+    container.querySelector('.incomplete-bar').dispatchEvent(new window.FocusEvent('focus'));
+    assert.match(container.querySelector('.chart-tooltip').textContent, /Partial weekly mean of available daily patient snapshots.*Reported days: 6 of 7/);
+    assert.equal(container.querySelectorAll('.missing-bar-marker').length, 1);
+    assert.equal(container.querySelectorAll('.reported-zero-marker').length, 1);
+    assert.doesNotMatch(container.querySelector('.chart-subtitle').textContent, /total|admission|7-day average/);
+});
+
+test('smoothed occupancy weekly bars disclose means of trailing averages rather than admissions or snapshots', t => {
+    const { factory, container, window } = harness(t);
+    const dates = Array.from({ length: 140 }, (_, index) => new Date(Date.UTC(2020, 0, 6 + index)).toISOString().slice(0, 10));
+    const values = dates.map(() => 10); values.fill(null, 0, 7); values[8] = null;
+    const series = [{ key: 'us', label: 'United States', values, reported: dates.map(() => true) }];
+    const metric = { column: 'current_hospitalized_patients', kind: 'occupancy', smoothingAllowed: true };
+    const result = factory.aggregateBars(dates, series, metric, '7day');
+    assert.equal(result.series[0].values[0], null);
+    assert.equal(result.series[0].values[1], 10);
+    assert.equal(result.series[0].coverage[1].reportedDays, 7);
+    assert.equal(result.series[0].coverage[1].displayedDays, 6);
+    assert.match(result.note, /mean of available trailing 7-day occupancy averages; patients are never summed across days/);
+    factory.renderCartesian(container, dates, series, 'bar', { column: metric.column, metric, smoothing: '7day' });
+    assert.match(container.querySelector('.chart-subtitle').textContent, /Weekly mean occupancy.*7-day average of daily patient snapshots/);
+    container.querySelector('.incomplete-bar').dispatchEvent(new window.FocusEvent('focus'));
+    assert.match(container.querySelector('.chart-tooltip').textContent, /Partial weekly mean of available 7-day occupancy averages.*Reported days: 7 of 7.*Available daily averages: 6 of 7/);
+    container.querySelector('.missing-bar-marker').dispatchEvent(new window.FocusEvent('focus'));
+    assert.match(container.querySelector('.chart-tooltip').textContent, /No available daily averages.*Reported days: 7 of 7.*Available daily averages: 0 of 7/);
+    assert.doesNotMatch(container.querySelector('.chart-subtitle').textContent, /admission|weekly totals|weekly snapshots/i);
+});
+
+test('hospital analysis labels real occupancy averages separately from admissions and unsmoothed cumulative totals', async t => {
+    const { factory, container, window } = harness(t);
+    const service = new DataService();
+    service.countryIndex = [{ location_key: 'US', country_name: 'United States' }];
+    service.epidemData = [{ location_key: 'US', date: '2020-01-01', new_confirmed: 0 }];
+    service.vaccinationsData = [{ location_key: 'US', date: '2020-01-01', cumulative_persons_vaccinated: 0 }];
+    service.hospitalizationsData = [0, 14, null, 28, 35, null, 7, 14, 0].map((value, index) => ({
+        location_key: 'US', date: `2020-01-${String(index + 1).padStart(2, '0')}`,
+        current_hospitalized_patients: value, new_hospitalized_patients: (index + 1) * 2,
+        cumulative_hospitalized_patients: (index + 1) * 10
+    }));
+    service.validateDataStructure(); service.buildCountryCodeMap(); service.processData(); service.setDefaultValues();
+    await service.indexAllData();
+    service.changeDataset('hospitalizations');
+    window.globeInstance.dataService = service;
+    for (const [column, smoothing, expected, label] of [
+        ['current_hospitalized_patients', 'raw', 7, 'Reported daily patient snapshots'],
+        ['current_hospitalized_patients', '7day', 16.8, '7-day average of daily patient snapshots'],
+        ['new_hospitalized_patients', '7day', 8, '7-day average of reported daily values'],
+        ['cumulative_hospitalized_patients', '7day', 70, 'Reported cumulative values']
+    ]) {
+        service.changeColumn(column); service.smoothing = smoothing;
+        factory.createChart(container, 'us', 'line', {});
+        assert.equal(container.querySelector('.data-line').__data__.find(point => point.date === '2020-01-07').value, expected);
+        assert.ok(container.querySelector('.chart-subtitle').textContent.includes(label));
+        assert.equal(container.querySelector('.axis-unit-label').textContent, 'Patients');
+        if (column.startsWith('cumulative_')) {
+            assert.equal(factory.prepareDataForCountry('us').smoothing, 'raw');
+            assert.doesNotMatch(container.querySelector('.chart-subtitle').textContent, /7-day average/);
+        }
+    }
+    assert.equal(service.indexedData.hospitalizations.us['2020-01-07'].current_hospitalized_patients, 7);
 });
 
 test('combined charts keep common dates, exact metrics and stable country colors after reorder', t => {
@@ -138,6 +283,207 @@ test('combined charts keep common dates, exact metrics and stable country colors
     assert.equal(factory.countryColor('us'), usColor); assert.equal(factory.countryColor('fr'), frColor);
     assert.equal(container.querySelector('.data-line').getAttribute('stroke'), frColor);
     assert.equal(Object.keys(colors).length, 2);
+    assert.match(container.querySelector('.chart-heading-title').textContent, /New confirmed cases.*France.*<img/);
+    assert.equal(container.querySelector('.chart-heading-title img'), null);
+    assert.equal(container.querySelectorAll('.chart-legend .legend-item').length, 2);
+});
+
+test('four comparison colors and line patterns are independent of previous country browsing', t => {
+    const { factory } = harness(t);
+    for (let index = 0; index < 30; index++) factory.countryColor(`previous-${index}`);
+    for (const code of ['us', 'fr', 'de', 'ca']) factory.countryColor(code);
+    factory.reconcileComparisonCountries(['us', 'fr', 'de', 'ca']);
+    const styles = codes => Object.fromEntries(codes.map(code => [code, [factory.countryColor(code), factory.countryLineDash(code)]]));
+    const original = styles(['us', 'fr', 'de', 'ca']);
+    assert.deepEqual(Object.values(original).map(([color]) => color), ['#59b5ff', '#ffb23f', '#ef73cb', '#79d17d']);
+    assert.equal(new Set(Object.values(original).map(([, dash]) => dash)).size, 4);
+    factory.reconcileComparisonCountries(['ca', 'fr', 'us', 'de']);
+    assert.deepEqual(styles(['us', 'fr', 'de', 'ca']), original);
+    factory.reconcileComparisonCountries(['ca', 'us', 'de']);
+    factory.reconcileComparisonCountries(['ca', 'us', 'de', 'tn']);
+    for (const code of ['us', 'de', 'ca']) assert.deepEqual(styles([code])[code], original[code]);
+    assert.deepEqual(styles(['tn']).tn, original.fr, 'A replacement reuses only the vacated slot');
+    assert.equal(factory.countryColor('US'), original.us[0], 'Analysis shares the comparison identity');
+});
+
+test('four-country charts keep matching colors, patterns and legends across themes and display modes', t => {
+    const { context, window, document, factory, service } = harness(t, { fullUI: true });
+    service.indexedData.epidem.de = service.indexedData.epidem.us;
+    service.indexedData.epidem.ca = service.indexedData.epidem.fr;
+    const palettes = {
+        dark: ['#59b5ff', '#ffb23f', '#ef73cb', '#79d17d'],
+        light: ['#1765ab', '#9a5800', '#a23883', '#28723c']
+    };
+    let theme = 'dark';
+    window.AtlasTheme = { getSeriesColor: index => palettes[theme][index], getColor: () => '' };
+    context.appendCountryLabel = (container, _code, name) => container.appendChild(document.createTextNode(name));
+    for (const file of ['ui/compare.js', 'ui/compareUI.js'])
+        vm.runInContext(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), context, { filename: file });
+    for (let index = 0; index < 30; index++) factory.countryColor(`previous-${index}`);
+    Object.assign(window.CompareMode.state, { active: true, countries: ['us', 'fr', 'de', 'ca'] });
+    window.CompareUI.updateCountryList();
+    for (const appearance of ['dark', 'light', 'dark']) {
+        theme = appearance; window.CompareUI.updateCountryColors();
+        for (const displayMode of ['combined', 'separate']) {
+            window.CompareMode.state.displayMode = displayMode; window.CompareMode.updateComparisonView();
+            const lines = [...document.querySelectorAll('#compareChartContainer .data-line')];
+            assert.deepEqual(lines.map(line => line.getAttribute('stroke')), palettes[theme]);
+            assert.deepEqual(lines.map(line => line.getAttribute('stroke-dasharray')), [null, '9 4', '2 4', '9 4 2 4']);
+            if (displayMode === 'combined') {
+                const legendLines = [...document.querySelectorAll('.chart-legend .legend-line line')];
+                assert.deepEqual(legendLines.map(line => line.getAttribute('stroke')), palettes[theme]);
+                assert.deepEqual(legendLines.map(line => line.getAttribute('stroke-dasharray')), lines.map(line => line.getAttribute('stroke-dasharray')));
+            }
+            assert.deepEqual([...document.querySelectorAll('#headerCountriesList .country-color')].map(node => node.style.backgroundColor), palettes[theme].map(color => d3.color(color).formatRgb()));
+        }
+        const analysis = document.createElement('div');
+        factory.createChart(analysis, 'de', 'line', {});
+        assert.equal(analysis.querySelector('.data-line').getAttribute('stroke'), palettes[theme][2]);
+        assert.equal(analysis.querySelector('.data-line').getAttribute('stroke-dasharray'), '2 4');
+    }
+});
+
+test('appearance updates redraw visible analysis once and preserve source observations and country identity', t => {
+    const { context, window, document, factory, container, service } = harness(t);
+    let theme = 'dark';
+    window.AtlasTheme = {
+        getSeriesColor: index => (theme === 'dark' ? ['#70b7ff', '#f5b85e'] : ['#1464ad', '#875300'])[index],
+        getColor: token => token === '--chart-surface' ? theme === 'dark' ? '#1b293d' : '#ffffff' : ''
+    };
+    window.globeInstance.selectedCountryCode = 'us';
+    const observations = service.indexedData.epidem.us;
+    factory.createChart(container, 'us', 'line', {});
+    assert.equal(container.querySelector('.data-line').getAttribute('stroke'), '#70b7ff');
+    const frames = [];
+    context.requestAnimationFrame = callback => { frames.push(callback); return frames.length; };
+    vm.runInContext(readFileSync(new URL('../ui/visualizations.js', import.meta.url), 'utf8'), context);
+    theme = 'light';
+    document.dispatchEvent(new window.CustomEvent('atlas:themechange', { detail: { theme } }));
+    document.dispatchEvent(new window.CustomEvent('atlas:themechange', { detail: { theme } }));
+    window.dispatchEvent(new window.Event('resize'));
+    assert.equal(frames.length, 1);
+    frames.shift()();
+    assert.equal(container.querySelector('.data-line').getAttribute('stroke'), '#1464ad');
+    assert.equal(factory.countryColor('US'), '#1464ad');
+    assert.equal(factory.countryColor('fr'), '#875300');
+    assert.equal(service.indexedData.epidem.us, observations);
+    assert.deepEqual(Array.from(container.querySelector('.data-line').__data__, point => point.value), [5, 5, -2]);
+    container.querySelector('.chart-hit-area').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+    assert.equal(container.querySelector('.cursor-points circle').getAttribute('stroke'), '#ffffff');
+    assert.equal(container.querySelector('.cursor-points circle').getAttribute('fill'), '#1464ad');
+});
+
+test('appearance updates recolor comparison charts and existing country chips without changing selections', t => {
+    const { context, window, document, factory } = harness(t, { fullUI: true });
+    let theme = 'dark';
+    window.AtlasTheme = { getSeriesColor: index => (theme === 'dark' ? ['#70b7ff', '#f5b85e'] : ['#1464ad', '#875300'])[index], getColor: () => '' };
+    context.appendCountryLabel = (container, _code, name) => container.appendChild(document.createTextNode(name));
+    for (const file of ['ui/compare.js', 'ui/compareUI.js', 'ui/visualizations.js'])
+        vm.runInContext(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), context, { filename: file });
+    Object.assign(window.CompareMode.state, { active: true, countries: ['us', 'fr'], dateRange: { start: 50, end: 100 } });
+    window.CompareUI.updateCountryList(); window.CompareMode.updateComparisonView();
+    const chip = document.querySelector('#headerCountriesList .header-country-item');
+    const frames = [];
+    context.requestAnimationFrame = callback => { frames.push(callback); return frames.length; };
+    theme = 'light';
+    document.dispatchEvent(new window.CustomEvent('atlas:themechange'));
+    frames.shift()();
+    assert.equal(document.querySelector('#headerCountriesList .header-country-item'), chip);
+    assert.equal(chip.querySelector('.country-color').style.backgroundColor, 'rgb(20, 100, 173)');
+    assert.deepEqual([...document.querySelectorAll('#compareChartContainer .data-line')].map(line => line.getAttribute('stroke')), ['#1464ad', '#875300']);
+    assert.deepEqual(Array.from(window.CompareMode.state.countries), ['us', 'fr']);
+    assert.equal(window.CompareMode.state.dateRange.start, 50);
+    assert.equal(window.CompareMode.state.dateRange.end, 100);
+    assert.equal(factory.countryColor('us'), '#1464ad');
+});
+
+test('chart headings identify the selected metric, actual period, smoothing and semantic units', t => {
+    const { factory, container } = harness(t);
+    factory.createChart(container, 'us', 'line', { dateRange: { start: 50, end: 100 }, smoothing: '7day' });
+    assert.match(container.querySelector('.chart-heading-title').textContent, /New confirmed cases/);
+    const subtitle = container.querySelector('.chart-subtitle').textContent;
+    assert.match(subtitle, /7-day average/);
+    assert.ok(subtitle.includes(factory.periodLabel(['2020-01-02', '2020-01-03'])));
+    assert.equal(container.querySelector('.axis-unit-label').textContent, 'Cases');
+    assert.equal(container.querySelector('.chart-legend'), null);
+    assert.equal(factory.axisUnitLabel('new_persons_vaccinated'), 'People');
+    assert.equal(factory.axisUnitLabel('current_hospitalized_patients'), 'Patients');
+    assert.equal(factory.axisUnitLabel('new_deceased'), 'Deaths');
+    assert.equal(factory.axisUnitLabel('new_vaccine_doses_administered'), 'Doses');
+    assert.equal(factory.axisUnitLabel('new_confirmed', 'per100k'), 'Cases per 100,000 people');
+    assert.equal(factory.axisUnitLabel('cumulative_deceased', 'per1m'), 'Deaths per 1,000,000 people');
+});
+
+async function deathsFixture() {
+    const service = new DataService();
+    service.countryIndex = [{ location_key: 'US', country_name: 'United States' }, { location_key: 'FR', country_name: 'France' }];
+    service.demographicsData = [{ location_key: 'US', population: 100_000_000 }, { location_key: 'FR', population: 50_000_000 }];
+    service.epidemData = [1_000_000, 1_500_000, 2_000_000].flatMap((value, index) => [
+        { location_key: 'US', date: `2020-01-0${index + 1}`, cumulative_deceased: value },
+        { location_key: 'FR', date: `2020-01-0${index + 1}`, cumulative_deceased: value / 4 }
+    ]);
+    service.hospitalizationsData = [{ location_key: 'US', date: '2020-01-01', current_hospitalized_patients: 10 }];
+    service.vaccinationsData = [{ location_key: 'US', date: '2020-01-01', cumulative_persons_vaccinated: 100 }];
+    service.validateDataStructure(); service.buildCountryCodeMap(); service.processData(); service.setDefaultValues();
+    await service.indexAllData();
+    service.currentColumn = 'cumulative_deceased';
+    return service;
+}
+
+for (const view of ['analysis', 'combined', 'separate']) test(`${view} charts recalculate observations, domain and compact ticks when population units change`, async t => {
+    const { context, window, document, factory, comparison } = harness(t, { fullUI: view === 'separate' });
+    const service = await deathsFixture();
+    window.globeInstance.dataService = service;
+    if (view === 'separate') {
+        context.appendCountryLabel = (container, _code, name) => { container.textContent = name; };
+        vm.runInContext(readFileSync(new URL('../ui/compare.js', import.meta.url), 'utf8'), context, { filename: 'ui/compare.js' });
+        Object.assign(window.CompareMode.state, { active: true, countries: ['us', 'fr'], displayMode: 'separate', scale: 'shared' });
+    }
+    for (const [unit, expected, label, compact] of [
+        ['count', 2_000_000, 'Deaths', '2.00M'], ['per100k', 2_000, 'Deaths per 100,000 people', '2.0k'],
+        ['per1m', 20_000, 'Deaths per 1,000,000 people', '20.0k'], ['count', 2_000_000, 'Deaths', '2.00M']
+    ]) {
+        service.displayUnit = unit;
+        const container = document.getElementById(view === 'separate' ? 'compareChartContainer' : 'chartContainer');
+        if (view === 'analysis') factory.createChart(container, 'us', 'line', {});
+        else if (view === 'combined') comparison.createCombinedChart(container, ['us', 'fr'], 'line');
+        else window.CompareMode.updateComparisonView();
+        const charts = view === 'separate' ? [...container.querySelectorAll('.chart-div')] : [container];
+        assert.equal(charts.length, view === 'separate' ? 2 : 1);
+        assert.equal(charts[0].querySelector('.data-line').__data__.at(-1).value, expected);
+        const ticks = [...charts[0].querySelectorAll('.y-axis .tick')];
+        assert.ok(Math.max(...ticks.map(tick => tick.__data__)) >= expected, `${unit}: axis covers the transformed value`);
+        assert.ok(Math.max(...ticks.map(tick => tick.__data__)) < expected * 1.5, `${unit}: axis does not retain the previous unit domain`);
+        assert.ok(ticks.every(tick => tick.textContent === factory.formatValue(tick.__data__)), 'All units retain compact tick notation');
+        assert.ok(ticks.some(tick => tick.textContent === compact), `${unit}: the axis displays ${compact}`);
+        for (const chart of charts) assert.equal(chart.querySelector('.axis-unit-label').textContent, label);
+        if (view === 'separate') assert.deepEqual(
+            [...charts[0].querySelectorAll('.y-axis .tick')].map(tick => tick.__data__),
+            [...charts[1].querySelectorAll('.y-axis .tick')].map(tick => tick.__data__), 'Separate charts share the newly transformed scale');
+        charts[0].querySelector('.chart-hit-area').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+        assert.ok(charts[0].querySelector('.chart-tooltip').textContent.includes(compact));
+        assert.ok(charts[0].querySelector('.chart-tooltip').textContent.includes(label));
+        assert.doesNotMatch(container.innerHTML, /NaN|Infinity/);
+    }
+});
+
+test('large shared-scale differences and isolated raw peaks receive factual guidance', t => {
+    const { factory, container } = harness(t);
+    const dates = Array.from({ length: 35 }, (_, index) => new Date(Date.UTC(2020, 0, index + 1)).toISOString().slice(0, 10));
+    const values = dates.map(() => 1); values[15] = 1000;
+    const series = [{ key: 'us', label: 'United States', values }, { key: 'fr', label: 'France', values: dates.map(() => 2) }];
+    factory.renderCartesian(container, dates, series, 'line', { column: 'new_confirmed', unit: 'count', metric: { kind: 'daily' }, smoothing: 'raw' });
+    const warnings = [...container.querySelectorAll('.chart-warning')].map(note => note.textContent);
+    assert.equal(warnings.length, 2);
+    assert.match(warnings[0], /shared scale.*population-adjusted.*independent scales/);
+    assert.match(warnings[1], /isolated peaks.*does not identify their cause.*7-day average/);
+    assert.equal(factory.comparisonWarnings([{ values: [1, 2] }, { values: [3, null] }], 'count').length, 0);
+    assert.equal(factory.comparisonWarnings([{ values: [0, 0] }, { values: [300, null] }], 'count').length, 0);
+    assert.doesNotMatch(factory.comparisonWarnings(series, 'per100k')[0], /population-adjusted/);
+    const zeroBaseline = dates.map(() => 0); zeroBaseline[15] = 1000;
+    assert.equal(factory.hasIsolatedPeaks([{ values: zeroBaseline }]), true);
+    factory.renderCartesian(container, dates, [series[0]], 'line', { metric: { kind: 'daily' }, smoothing: '7day' });
+    assert.equal(container.querySelector('.chart-warning'), null);
 });
 
 test('a single-day line view remains finite and unsupported charts explain valid choices', t => {

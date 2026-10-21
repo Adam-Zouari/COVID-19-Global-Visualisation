@@ -46,3 +46,13 @@ test('untrusted URL inputs are constrained and duplicate countries cannot exceed
     assert.deepEqual(state.compareCountries, ['tn', 'us', 'fr', 'de']);
     assert.deepEqual(state.compareRange, { start: 0, end: 100 });
 });
+
+test('all supported unit choices survive shared URL restoration, including per million', () => {
+    for (const unit of ['count', 'per100k', 'per1m', 'percent', 'per100']) {
+        const url = stateToURL({ ...createStore().getState(), unit }, 'https://example.com/');
+        assert.equal(readURLState(url.search).unit, unit);
+    }
+    for (const unit of ['per1k', 'per10k', 'toString', '__proto__']) {
+        assert.equal(readURLState(`?unit=${unit}`).unit, 'count');
+    }
+});
