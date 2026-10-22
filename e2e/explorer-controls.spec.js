@@ -21,6 +21,47 @@ async function coverage(page) {
         `${expected} ${expected === 1 ? 'country' : 'countries'} with data`);
 }
 
+test('comparison bottom spacing matches unchanged Explore across viewport sizes', async ({ page }) => {
+    const errors = []; page.on('pageerror', error => errors.push(error.message));
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await ready(page, '/?data=sample&country=tn&compare=tn,us&view=compare');
+    await expect(page.locator('#compareChartContainer .data-line').first()).toBeVisible();
+    const spacing = () => page.locator('#comparePanel').evaluate(node => parseFloat(getComputedStyle(node).paddingBottom));
+    for (const viewport of [
+        { width: 1366, height: 768 }, { width: 1440, height: 1000 },
+        { width: 1920, height: 1080 }, { width: 900, height: 1000 },
+        { width: 390, height: 844 }
+    ]) {
+        await page.setViewportSize(viewport);
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const comparisonGap = await spacing();
+        await expect(page.locator('#exploreView')).toBeHidden();
+        await page.locator('#navExplore').click();
+        const reference = await page.evaluate(() => {
+            const panels = [...document.querySelectorAll('#exploreWorkspace > .panel')].filter(node => node.getClientRects().length);
+            const bottom = Math.max(...panels.map(node => node.getBoundingClientRect().bottom + scrollY));
+            return { gap: Math.max(0, innerHeight - bottom),
+                mainPadding: getComputedStyle(document.querySelector('.app-main')).paddingBottom };
+        });
+        expect(reference.mainPadding).toBe('0px');
+        expect(Math.abs(comparisonGap - reference.gap)).toBeLessThan(1);
+        await page.locator('#navCompare').click();
+        expect(Math.abs(await spacing() - reference.gap)).toBeLessThan(1);
+        const scroll = await page.evaluate(() => {
+            scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
+            const before = scrollY;
+            CompareUI.matchExploreBottomSpacing();
+            return { before, after: scrollY };
+        });
+        expect(Math.abs(scroll.after - scroll.before)).toBeLessThan(1);
+        const pageEndGap = await page.locator('#compareChartContainer').evaluate(node =>
+            document.documentElement.scrollHeight - (node.getBoundingClientRect().bottom + scrollY));
+        expect(Math.abs(pageEndGap - reference.gap)).toBeLessThan(1);
+        await page.screenshot({ path: `test-results/compare-matched-spacing-${viewport.width}-${viewport.height}.png`, fullPage: true });
+    }
+    expect(errors).toEqual([]);
+});
+
 for (const theme of ['dark', 'light']) {
     for (const viewport of [{ width: 1366, height: 768 }, { width: 320, height: 740 }]) {
         test(`globe pointer controls and reporting badge work in ${theme} at ${viewport.width}px`, async ({ page }) => {

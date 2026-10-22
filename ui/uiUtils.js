@@ -133,7 +133,8 @@ function updateAtlasPresentation() {
         }).length;
         setText('coverageCount', `${count} ${count === 1 ? 'country' : 'countries'} with data`);
     }
-    const active = window.CompareMode?.state.active || false;
+    const active = window.CompareMode?.state.active ||
+        (window.AtlasView?.restoring && window.AtlasView.initialView === 'compare') || false;
     const intro = document.querySelector('.page-intro'); if (intro) intro.hidden = active;
     const count = window.CompareMode?.state.countries.length || 0;
     const badge = document.getElementById('compareCount'); if (badge) { badge.hidden = !count; badge.textContent = count; }

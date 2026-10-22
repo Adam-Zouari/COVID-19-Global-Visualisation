@@ -33,7 +33,7 @@ function applyRequestedState(state) {
     CompareMode.state.scale = state.compareScale;
     window.globeInstance.refreshData();
     if (state.selectedCountry && valid.has(state.selectedCountry)) window.globeInstance.goToCountry(state.selectedCountry);
-    if (state.view === 'compare') CompareMode.enter();
+    if (state.view === 'compare') CompareMode.enter({ focus: false });
     window.syncAtlasState();
 }
 
@@ -46,6 +46,7 @@ try {
     await globe.ready;
     applyRequestedState(requestedState);
     restoring = false;
+    window.AtlasView?.finish(CompareMode.state.active ? 'compare' : 'explore');
     window.syncAtlasState();
     const url = stateToURL(window.AtlasStore.getState(), window.location.href);
     window.history.replaceState({ atlas: true }, '', `${url.pathname}${url.search}${url.hash}`);
@@ -65,6 +66,7 @@ try {
     }
 } catch (error) {
     restoring = false;
+    window.AtlasView?.finish(window.CompareMode?.state.active ? 'compare' : 'explore');
     console.error('Unable to initialize atlas:', error);
     document.getElementById('loader').style.display = 'none';
     document.getElementById('errorMessage').textContent = error.message;

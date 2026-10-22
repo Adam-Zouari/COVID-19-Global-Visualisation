@@ -48,7 +48,10 @@ function scheduleVisualizationRefresh() {
     visualizationResizeFrame = requestAnimationFrame(() => {
         visualizationResizeFrame = null;
         window.CompareUI?.updateCountryColors();
-        if (window.CompareMode?.state.active) CompareMode.updateComparisonView();
+        if (window.CompareMode?.state.active) {
+            CompareUI.matchExploreBottomSpacing();
+            CompareMode.updateComparisonView();
+        }
         else {
             const panel = document.getElementById('visualizationPanel');
             if (panel && !panel.hidden) changeVisualization();

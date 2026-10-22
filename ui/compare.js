@@ -2,7 +2,7 @@ window.CompareMode = {
     state: { active: false, countries: [], displayMode: 'combined', chartType: 'line',
         dateRange: { start: 0, end: 100 }, selectedColumn: null, scale: 'shared' },
 
-    enter() {
+    enter({ focus = true } = {}) {
         const globe = window.globeInstance;
         if (this.state.active || !globe?.dataService.availableDates.length) return;
         window.stopTimeline?.();
@@ -11,8 +11,9 @@ window.CompareMode = {
         const code = globe.selectedCountryCode || document.getElementById(`country-${globe.selectedCountry}`)?.getAttribute('data-country-code');
         if (code && !this.state.countries.includes(code) && this.state.countries.length < 4) this.state.countries.push(code);
         const explore = document.getElementById('exploreView');
+        CompareUI.matchExploreBottomSpacing();
         if (explore) explore.hidden = true;
-        CompareUI.show(); this.syncControls(); this.updateComparisonView(); this.updateNavigation();
+        CompareUI.show({ focus }); this.syncControls(); this.updateComparisonView(); this.updateNavigation();
         window.syncAtlasState?.();
     },
 
@@ -28,6 +29,10 @@ window.CompareMode = {
     },
 
     updateNavigation() {
+        if (window.AtlasView) {
+            window.AtlasView.render(this.state.active ? 'compare' : 'explore');
+            return;
+        }
         for (const [id, active] of [['navExplore', !this.state.active], ['navCompare', this.state.active]]) {
             const node = document.getElementById(id);
             if (node) { node.classList.toggle('active', active); if (active) node.setAttribute('aria-current', 'page'); else node.removeAttribute('aria-current'); }

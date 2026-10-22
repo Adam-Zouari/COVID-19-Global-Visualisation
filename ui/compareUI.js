@@ -1,9 +1,33 @@
 window.CompareUI = {
-    show() {
+    show({ focus = true } = {}) {
         const panel = document.getElementById('comparePanel'); panel.hidden = false;
-        this.initializeDateRangeSlider(); this.updateCountryList(); document.getElementById('compareTitle')?.focus();
+        this.initializeDateRangeSlider(); this.updateCountryList();
+        if (focus) document.getElementById('compareTitle')?.focus();
     },
     hide() { document.getElementById('comparePanel').hidden = true; },
+
+    matchExploreBottomSpacing() {
+        const panel = document.getElementById('comparePanel');
+        const explore = document.getElementById('exploreView');
+        const intro = document.querySelector('.page-intro');
+        if (!panel || !explore) return;
+        const previous = [explore, intro].filter(Boolean).map(node => [node, node.hidden]);
+        const scroll = { left: window.scrollX, top: window.scrollY };
+        // Read Explore's actual layout, including responsive heights. Restore
+        // hidden content synchronously before paint; Compare stays in place.
+        try {
+            previous.forEach(([node]) => { node.hidden = false; });
+            const bottoms = [...explore.querySelectorAll('.control-panel, .globe-stage, .country-details')]
+                .filter(node => node.getClientRects().length)
+                .map(node => node.getBoundingClientRect().bottom + window.scrollY);
+            const gap = bottoms.length ? Math.max(0, window.innerHeight - Math.max(...bottoms)) : 0;
+            panel.style.setProperty('--compare-bottom-space', `${gap}px`);
+        } finally {
+            previous.forEach(([node, hidden]) => { node.hidden = hidden; });
+            if (window.scrollX !== scroll.left || window.scrollY !== scroll.top)
+                window.scrollTo({ ...scroll, behavior: 'instant' });
+        }
+    },
 
     initializeDateRangeSlider() {
         const sliders = document.getElementById('dateRangeSlider'); if (!sliders) return;
