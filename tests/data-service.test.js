@@ -1,10 +1,10 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { csvParse } from 'd3';
+import { csvParse, csvParseRows } from 'd3';
 import DataService from '../dataService/index.js';
 import { formatDate, formatNumber } from '../dataService/utils.js';
 
-globalThis.d3 = { csvParse };
+globalThis.d3 = { csvParse, csvParseRows };
 
 function fixture() {
     const service = new DataService({ useSampleData: false });
@@ -80,6 +80,30 @@ test('older Google key headers and country_key exports are accepted', async () =
     }
 });
 
+test('blank identifier aliases and optional region fields do not discard national observations', async () => {
+    const service = fixture();
+    for (const property of ['epidemData', 'hospitalizationsData', 'vaccinationsData', 'countryIndex']) {
+        service[property][0] = { ...service[property][0], location_key: '  ', key: 'US', subregion1_code: ' \t', subregion2_code: ' ' };
+    }
+    await prepare(service);
+    assert.equal(service.countryIndex.length, 2);
+    assert.equal(service.epidemData.length, 3, 'Actual regional records are still excluded');
+    service.changeDate('2020-01-01');
+    assert.equal(service.getDataValue('US'), 0);
+});
+
+test('late population validation failure leaves every source table and prior denominator untouched', () => {
+    const service = fixture();
+    service.demographicsData = [{ location_key: 'US', population: -1 }];
+    service.populationByCountry.us = 1000;
+    const originals = Object.fromEntries(['epidemData', 'hospitalizationsData', 'vaccinationsData', 'countryIndex', 'demographicsData', 'populationByCountry']
+        .map(property => [property, service[property]]));
+    const records = structuredClone(service.epidemData);
+    assert.throws(() => service.validateDataStructure(), /invalid population/);
+    for (const [property, original] of Object.entries(originals)) assert.equal(service[property], original, property);
+    assert.deepEqual(service.epidemData, records);
+});
+
 test('invalid dates, numbers, duplicate records and missing headers are rejected', () => {
     const cases = [
         [row => { row.date = '2020-02-30'; }, /invalid date/],
@@ -129,6 +153,51 @@ test('CSV uploads handle BOM and quoted fields and reject duplicate headers', as
     assert.equal(rows[0].country_name, 'United States, example');
     await assert.rejects(service.readCSVFile(file('date,date\na,b')), /duplicate column/);
     await assert.rejects(service.readCSVFile(file('  ')), /empty/);
+});
+
+test('CSV loading rejects surplus or missing fields and preserves quoted multiline values and empty lines', async () => {
+    const service = new DataService();
+    const file = text => ({ text: async () => text });
+    await assert.rejects(service.readCSVFile(file('date,location_key,new_confirmed\n2020-01-01,US,5,999\n')), /record 2 has 4 fields; expected 3/);
+    await assert.rejects(service.readCSVFile(file('date,location_key,new_confirmed\n2020-01-01,US\n')), /record 2 has 2 fields; expected 3/);
+    await assert.rejects(service.readCSVFile(file('date,,new_confirmed\n2020-01-01,US,5\n')), /empty column header/);
+    const rows = await service.readCSVFile(file('location_key,country_name\n\nUS,"United\nStates, example"\n\n'));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].country_name, 'United\nStates, example');
+    assert.deepEqual(rows.columns, ['location_key', 'country_name']);
+});
+
+test('replacement uploads preserve a supported selected metric and unit, and reset incompatible transformations', async () => {
+    const service = await prepare(fixture());
+    service.changeColumn('cumulative_confirmed'); service.displayUnit = 'per100k'; service.smoothing = '7day';
+    const file = text => ({ text: async () => text });
+    const observations = file('date,location_key,new_confirmed,cumulative_confirmed\n2021-01-01,US,2,100\n');
+    const index = file('location_key,country_name\nUS,United States\n');
+    const population = file('location_key,population\nUS,500\n');
+    await service.processUploadedFiles(observations, observations, observations, index, population);
+    assert.equal(service.currentColumn, 'cumulative_confirmed');
+    assert.equal(service.displayUnit, 'per100k');
+    assert.equal(service.smoothing, 'raw', 'Cumulative totals cannot retain an averaging setting');
+    assert.equal(service.getDisplayValue('US'), 20_000);
+    assert.equal(service.populationSource, 'uploaded demographics CSV');
+    const daily = file('date,location_key,new_confirmed\n2021-01-01,US,3\n');
+    service.displayUnit = 'percent';
+    await service.processUploadedFiles(daily, daily, daily, index);
+    assert.equal(service.currentColumn, 'new_confirmed');
+    assert.equal(service.displayUnit, 'count');
+    assert.equal(service.getDisplayValue('US'), 3);
+});
+
+test('reindexing source records invalidates both numeric domains and previously cached map colors', async () => {
+    const service = await prepare(fixture());
+    const before = service.getCountryColor('US');
+    assert.ok(service.getCachedColor('US', service.currentDate));
+    service.epidemData.find(row => row.country_key === 'us' && row.date === service.currentDate).new_confirmed = 0;
+    await service.indexAllData();
+    assert.equal(service.getCachedColor('US', service.currentDate), null);
+    assert.deepEqual(service.getDisplayDomain(), [-4, 0]);
+    assert.equal(service.getCountryColor('US'), service.getColorScale()(0));
+    assert.notEqual(service.getCountryColor('US'), before);
 });
 
 test('API CSV ingestion strips BOM and rejects duplicate headers without replacing loaded data', async t => {

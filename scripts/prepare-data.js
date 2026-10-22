@@ -1,11 +1,11 @@
 import { createReadStream, createWriteStream } from 'node:fs';
-import { access, mkdir, unlink, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdir, open, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pipeline } from 'node:stream/promises';
 import { parse } from 'csv-parse';
 import { stringify } from 'csv-stringify';
-import { isValidDate, MIN_OBSERVATION_DATE } from '../dataService/utils.js';
+import { isValidDate, MIN_OBSERVATION_DATE, COUNTRY_IDENTIFIER_FIELDS, countryKey, isCountryRow } from '../dataService/utils.js';
 
 const files = {
     'country_level_epidem.csv': ['epidemiology.csv', 'country_level_epidem.csv'],
@@ -15,10 +15,31 @@ const files = {
     'country_level_demographics.csv': ['demographics.csv', 'country_level_demographics.csv']
 };
 
+async function requireNewOutput(file) {
+    try {
+        await lstat(file);
+        throw new Error(`Output already exists: ${path.basename(file)}. Choose a new destination to preserve existing data.`);
+    } catch (error) { if (error.code !== 'ENOENT') throw error; }
+}
+
+function validateHeaders(columns, input, output) {
+    const name = path.basename(input);
+    if (new Set(columns).size !== columns.length) throw new Error(`${name} contains duplicate column headers.`);
+    if (columns.some(column => !column.trim())) throw new Error(`${name} contains an empty column header.`);
+    if (!COUNTRY_IDENTIFIER_FIELDS.some(field => columns.includes(field))) throw new Error(`${name}: missing country identifier.`);
+    const required = output === 'small_index.csv' ? ['country_name', 'country'] :
+        output === 'country_level_demographics.csv' ? ['population'] : ['date'];
+    if (!required.some(field => columns.includes(field))) throw new Error(`${name}: missing required ${required.join(' or ')} column.`);
+    return columns;
+}
+
 /** Stream original Google CSVs into country-only files without loading them into RAM. */
 export async function prepareData(source, destination = 'data') {
     const inputRoot = path.resolve(source);
     const outputRoot = path.resolve(destination);
+    const reportFile = path.join(outputRoot, 'prepare-report.json');
+    // A report from another run must never be associated with fresh outputs.
+    await requireNewOutput(reportFile);
     const plan = [];
     for (const [output, aliases] of Object.entries(files)) {
         let input;
@@ -30,10 +51,7 @@ export async function prepareData(source, destination = 'data') {
         if (!input && output === 'country_level_demographics.csv') continue;
         if (!input) throw new Error(`Missing ${aliases[0]} in the source directory.`);
         const target = path.join(outputRoot, output);
-        try {
-            await access(target);
-            throw new Error(`Output already exists: ${output}. Choose a new destination to preserve existing data.`);
-        } catch (error) { if (error.code !== 'ENOENT') throw error; }
+        await requireNewOutput(target);
         if (input === target) throw new Error('Source and destination must be different files.');
         plan.push({ input, target });
     }
@@ -52,19 +70,18 @@ export async function prepareData(source, destination = 'data') {
             // Track ownership only after exclusive creation succeeds.
             await new Promise((resolve, reject) => { output.once('open', resolve); output.once('error', reject); });
             created.push(target);
-            await pipeline(createReadStream(input), parse({ columns: true, bom: true, skip_empty_lines: true }),
+            await pipeline(createReadStream(input), parse({ columns: columns => validateHeaders(columns, input, path.basename(target)), bom: true, skip_empty_lines: true }),
                 async function* (rows) {
                     for await (const row of rows) {
-                        const key = String(row.location_key || row.key || row.country_key || row.country_code || row.iso_code || '').trim();
-                        if (!/^[A-Z]{2}$/i.test(key) ||
-                            (row.aggregation_level?.trim() && Number(row.aggregation_level) !== 0) ||
-                            row.subregion1_code?.trim() || row.subregion2_code?.trim()) {
+                        const key = countryKey(row);
+                        if (!isCountryRow(row, key)) {
                             stats.excludedSubregions++;
                             continue;
                         }
-                        if (Object.hasOwn(row, 'date') && (!isValidDate(row.date) || row.date < MIN_OBSERVATION_DATE || row.date > lastValidDate)) {
+                        const date = row.date?.trim();
+                        if (Object.hasOwn(row, 'date') && (!isValidDate(date) || date < MIN_OBSERVATION_DATE || date > lastValidDate)) {
                             stats.excludedInvalidDates++;
-                            if (stats.invalidDateExamples.length < 20) stats.invalidDateExamples.push({ location_key: key, date: row.date });
+                            if (stats.invalidDateExamples.length < 20) stats.invalidDateExamples.push({ location_key: key.toUpperCase(), date: row.date });
                             continue;
                         }
                         count++;
@@ -77,9 +94,10 @@ export async function prepareData(source, destination = 'data') {
             report.files[path.basename(target)] = stats;
         }
         if (Object.values(report.files).some(stats => stats.excludedInvalidDates > 0)) {
-            const reportFile = path.join(outputRoot, 'prepare-report.json');
-            await writeFile(reportFile, `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx' });
+            const reportOutput = await open(reportFile, 'wx');
             created.push(reportFile);
+            try { await reportOutput.writeFile(`${JSON.stringify(report, null, 2)}\n`); }
+            finally { await reportOutput.close(); }
         }
     } catch (error) {
         // Only the new files exclusively created by this invocation are removed.

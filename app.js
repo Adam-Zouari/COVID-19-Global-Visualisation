@@ -9,12 +9,13 @@ if (document.readyState !== 'complete') {
 const requestedState = readURLState(window.location.search);
 window.AtlasStore = createStore(requestedState);
 window.MetricRegistry = MetricRegistry;
-let restoring = true;
-window.AtlasStore.subscribe(state => {
-    if (restoring) return;
+function persistURL(state) {
+    if (window.AtlasView.restoring) return;
     const url = stateToURL(state, window.location.href);
-    window.history.replaceState({ atlas: true }, '', `${url.pathname}${url.search}${url.hash}`);
-});
+    if (url.href !== window.location.href)
+        window.history.replaceState({ atlas: true }, '', `${url.pathname}${url.search}${url.hash}`);
+}
+window.AtlasStore.subscribe(persistURL);
 
 function applyRequestedState(state) {
     const service = window.dataService;
@@ -33,8 +34,7 @@ function applyRequestedState(state) {
     CompareMode.state.scale = state.compareScale;
     window.globeInstance.refreshData();
     if (state.selectedCountry && valid.has(state.selectedCountry)) window.globeInstance.goToCountry(state.selectedCountry);
-    if (state.view === 'compare') CompareMode.enter({ focus: false });
-    window.syncAtlasState();
+    if (window.AtlasView.current === 'compare') CompareMode.enter({ focus: false });
 }
 
 try {
@@ -45,11 +45,9 @@ try {
     const globe = window.initializeGlobe();
     await globe.ready;
     applyRequestedState(requestedState);
-    restoring = false;
-    window.AtlasView?.finish(CompareMode.state.active ? 'compare' : 'explore');
+    window.AtlasView.finish(CompareMode.state.active ? 'compare' : 'explore');
     window.syncAtlasState();
-    const url = stateToURL(window.AtlasStore.getState(), window.location.href);
-    window.history.replaceState({ atlas: true }, '', `${url.pathname}${url.search}${url.hash}`);
+    persistURL(window.AtlasStore.getState());
     if (window.dataService.dataSource === 'csv') {
         try {
             const response = await fetch('/api/data-quality');
@@ -65,8 +63,7 @@ try {
         } catch { /* A missing preparation report does not invalidate observations. */ }
     }
 } catch (error) {
-    restoring = false;
-    window.AtlasView?.finish(window.CompareMode?.state.active ? 'compare' : 'explore');
+    window.AtlasView.finish(window.CompareMode?.state.active ? 'compare' : 'explore');
     console.error('Unable to initialize atlas:', error);
     document.getElementById('loader').style.display = 'none';
     document.getElementById('errorMessage').textContent = error.message;

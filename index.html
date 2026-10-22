@@ -34,8 +34,8 @@
         <header class="app-header" id="header">
             <a class="brand" href="/" aria-label="COVID-19 Atlas home"><img src="assets/icons/atlas.svg" width="38" height="38" alt=""><span><strong>COVID-19 <span class="brand-light">ATLAS</span></strong><small>A world of perspective</small></span></a>
             <nav class="primary-nav" aria-label="Main navigation">
-                <button id="navExplore" class="nav-link active" onclick="atlasActions.setView('explore')" aria-current="page">Explore</button>
-                <button id="navCompare" class="nav-link" onclick="atlasActions.setView('compare')">Compare <span id="compareCount" class="nav-count" hidden>0</span></button>
+                <button id="navExplore" class="nav-link active" onclick="AtlasView.navigate('explore')" aria-current="page">Explore</button>
+                <button id="navCompare" class="nav-link" onclick="AtlasView.navigate('compare')">Compare <span id="compareCount" class="nav-count" hidden>0</span></button>
             </nav>
             <div class="header-actions">
                 <select id="dataSourceSelector" class="data-source-select" aria-label="Data source">
@@ -305,7 +305,7 @@
                 </section>
                 <section>
                     <h3>Population-adjusted values</h3>
-                    <p>Per 100,000 values divide a count by the available population estimate. Vaccination coverage uses people vaccinated; doses per 100 people can exceed 100. Missing population produces no calculated value.</p>
+                    <p>Per 100,000 and per million values divide a count by the available population estimate, then multiply by 100,000 or 1,000,000. Vaccination coverage uses people vaccinated; doses per 100 people can exceed 100. Missing population produces no calculated value.</p>
                 </section>
                 <section>
                     <h3>Reading the map</h3>

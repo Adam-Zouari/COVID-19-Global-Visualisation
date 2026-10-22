@@ -16,11 +16,3 @@ export function changeColumn(column) {
     this.currentColumn = column;
     return true;
 }
-
-export function getDateIndex(date) {
-    return this.availableDates.indexOf(date);
-}
-
-export function getDateFromIndex(index) {
-    return Number.isInteger(index) ? this.availableDates[index] || this.currentDate : this.currentDate;
-}

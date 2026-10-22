@@ -20,10 +20,15 @@ function harness(t, { fullUI = false } = {}) {
         currentDataset: 'epidem', currentColumn: 'new_confirmed', displayUnit: 'count', smoothing: 'none',
         availableColumns: { epidem: ['new_confirmed', 'new_deceased', 'new_tested'] }, indexedData: { epidem: rows },
         availableDates: Object.keys(rows.us), formatDate: date => date, getCountryName: code => code === 'us' ? '<img src=x onerror=alert(1)>' : 'France',
-        getMetricMetadata: column => ({ column, label: { new_confirmed: 'New confirmed cases', new_deceased: 'New deaths', new_tested: 'New tests' }[column], kind: 'daily', smoothingAllowed: true }),
+        getCountrySeries(code, { column }) {
+            const rows = this.indexedData[this.currentDataset]?.[code];
+            return rows ? this.availableDates.map(date => ({ date, value: rows[date]?.[column] ?? null })) : [];
+        },
+        getMetricMetadata: column => ({ column, label: { new_confirmed: 'New confirmed cases', new_deceased: 'New deaths', new_tested: 'New tests' }[column],
+            kind: 'daily', allowedUnits: ['count', 'per100k', 'per1m'], smoothingAllowed: true }),
         getUnitLabel: (_column, unit) => ({ per100k: 'Per 100,000 people', per1m: 'Per 1,000,000 people' })[unit] || 'Count'
     } };
-    for (const file of ['charts/chartFactory.js', 'ui/dateRange.js', 'charts/chartControls.js', 'charts/compareCharts.js'])
+    for (const file of ['charts/chartFactory.js', 'ui/dateRange.js', 'charts/chartControls.js', 'charts/compareCharts.js', 'ui/uiUtils.js'])
         vm.runInContext(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), context, { filename: file });
     return { dom, context, window: dom.window, document: dom.window.document, factory: vm.runInContext('ChartFactory', context),
         controls: vm.runInContext('ChartControls', context), comparison: vm.runInContext('CompareCharts', context),
@@ -33,7 +38,8 @@ function harness(t, { fullUI = false } = {}) {
 test('preparation selects one shared metric and preserves zero, corrections and missing observations', t => {
     const { factory } = harness(t);
     const data = factory.prepareDataForCountry('US');
-    assert.deepEqual(Array.from(data.columns), ['new_confirmed']);
+    assert.equal(data.column, 'new_confirmed');
+    assert.deepEqual(Object.keys(data.series), ['new_confirmed']);
     assert.equal(data.series.new_confirmed[2], -2);
     assert.equal(factory.prepareDataForCountry('us', { selectedColumn: 'new_deceased' }).series.new_deceased[0], 0);
     assert.equal(factory.prepareDataForCountry('us', { selectedColumn: 'new_tested' }).series.new_tested[1], null);
@@ -493,4 +499,71 @@ test('a single-day line view remains finite and unsupported charts explain valid
     assert.doesNotMatch(container.innerHTML, /NaN|Infinity/);
     factory.createChart(container, 'us', 'pie', {});
     assert.match(container.querySelector('.chart-error').textContent, /line or bar/);
+});
+
+test('tiny population rates remain distinguishable from zero without changing compact counts', t => {
+    const { factory } = harness(t);
+    for (const value of [0.004, -0.004, 0.00001, -0.00001]) {
+        const formatted = factory.formatValue(value);
+        assert.equal(formatted, value.toLocaleString(undefined, { maximumFractionDigits: 8 }));
+        assert.notEqual(formatted, '0');
+        assert.notEqual(formatted, '-0');
+    }
+    assert.equal(factory.formatValue(0), '0');
+    assert.equal(factory.formatValue(2000), '2.0k');
+    assert.equal(factory.formatValue(2_000_000), '2.00M');
+});
+
+test('daily bars expose one focus target per report and do not claim weekly aggregation', t => {
+    const { factory, container } = harness(t);
+    factory.renderCartesian(container, ['2020-01-01', '2020-01-02', '2020-01-03'],
+        [{ key: 'us', label: 'United States', values: [0, null, -2] }], 'bar', { column: 'new_confirmed', metric: { kind: 'daily' } });
+    assert.equal(container.querySelectorAll('.data-bar').length, 1);
+    assert.equal(container.querySelectorAll('.reported-zero-marker').length, 1);
+    assert.equal(container.querySelectorAll('.missing-bar-marker').length, 1);
+    assert.equal(container.querySelectorAll('svg [tabindex="0"]').length, 3);
+    assert.doesNotMatch(container.querySelector('svg').getAttribute('aria-label'), /week|hatch/i);
+    assert.match(container.querySelector('svg desc').textContent, /Hollow diamonds.*reported zeros/);
+});
+
+test('isolated observations remain visible in long line histories', t => {
+    const { factory, container } = harness(t);
+    const dates = Array.from({ length: 50 }, (_, index) => new Date(Date.UTC(2020, 0, index + 1)).toISOString().slice(0, 10));
+    const values = dates.map(() => null); values[20] = 0; values[35] = -3;
+    factory.renderCartesian(container, dates, [{ key: 'us', label: 'United States', values }], 'line', { column: 'new_confirmed' });
+    assert.deepEqual([...container.querySelectorAll('.data-point')].map(point => point.__data__.value), [0, -3]);
+    assert.doesNotMatch(container.innerHTML, /NaN|Infinity/);
+});
+
+test('date ticks identify distinct calendar dates in daily and weekly charts', t => {
+    const { factory, container } = harness(t);
+    for (const length of [1, 80, 140]) for (const type of ['line', 'bar']) {
+        const dates = Array.from({ length }, (_, index) => new Date(Date.UTC(2020, 0, index + 1)).toISOString().slice(0, 10));
+        factory.renderCartesian(container, dates, [{ key: 'us', label: 'United States', values: dates.map(() => 1) }], type,
+            { column: 'new_confirmed', metric: { kind: 'daily' } });
+        const labels = [...container.querySelectorAll('.x-axis .tick text')].map(node => node.textContent);
+        assert.ok(labels.length > 0);
+        assert.equal(new Set(labels).size, labels.length, `${length}-day ${type} ticks must not repeat month-only labels`);
+        if (length === 1) assert.equal(labels.length, 1);
+    }
+});
+
+test('keyboard inspection positions tooltips relative to the visible chart', t => {
+    const { factory, container, window } = harness(t);
+    Object.defineProperty(container, 'clientWidth', { value: 720 });
+    container.getBoundingClientRect = () => ({ left: 200, top: 300, width: 720, height: 450 });
+    factory.createChart(container, 'us', 'line', {});
+    container.querySelector('svg').getBoundingClientRect = () => ({ left: 200, top: 350, width: 720, height: 390 });
+    container.querySelector('.chart-hit-area').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+    const tooltip = container.querySelector('.chart-tooltip');
+    assert.equal(tooltip.style.left, '712px');
+    assert.equal(tooltip.style.top, '138px');
+    assert.match(tooltip.textContent, /2020-01-03/);
+});
+
+test('comparison preparation treats uppercase and lowercase country codes as one selection', t => {
+    const { comparison, container } = harness(t);
+    comparison.createCombinedChart(container, ['US', 'us', 'FR'], 'line');
+    assert.equal(container.querySelectorAll('.data-line').length, 2);
+    assert.equal(container.querySelectorAll('.chart-legend .legend-item').length, 2);
 });

@@ -43,7 +43,6 @@
 .axis-unit-label { fill: var(--chart-axis-unit); font-size: 11px; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 7px 0; color: var(--chart-legend); font-size: 12px; }
 .chart-legend .legend-item { display: inline-flex; align-items: center; gap: 8px; }
-.chart-legend i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; }
 .chart-legend .legend-line { width: 28px; height: 10px; flex-shrink: 0; }
 .chart-crosshair { stroke: var(--chart-zero); stroke-width: 1; stroke-dasharray: 4 4; pointer-events: none; }
 .chart-tooltip { position: absolute; z-index: 30; pointer-events: none; padding: 10px 12px; border: 1px solid var(--chart-tooltip-border); border-radius: 7px; background: var(--chart-tooltip-bg); color: var(--chart-tooltip-text); font-size: 12px; line-height: 1.6; box-shadow: 0 6px 20px var(--shadow); max-width: 300px; }

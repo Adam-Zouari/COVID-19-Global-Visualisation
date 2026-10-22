@@ -7,11 +7,11 @@ import * as countries from './countryManager.js';
 import * as state from './stateManager.js';
 import * as display from './displayData.js';
 import { getMetricMetadata, getUnitLabel } from './metrics.js';
-import { log, formatDate, formatNumber } from './utils.js';
+import { formatDate, formatNumber } from './utils.js';
 
 /** Country-level Google COVID-19 data, independent of the globe and chart UI. */
 export class DataService {
-    constructor({ useSampleData = false, debug = false, apiEndpoints = {} } = {}) {
+    constructor({ useSampleData = false, apiEndpoints = {} } = {}) {
         this.epidemData = [];
         this.hospitalizationsData = [];
         this.vaccinationsData = [];
@@ -32,11 +32,9 @@ export class DataService {
         this.datesByDataset = { epidem: [], hospitalizations: [], vaccinations: [] };
         this.indexedData = {};
         this.dataByDate = {};
-        this.globalDataRanges = {};
-        this.colorCache = {};
+        this.colorCache = new Map();
         this.countryCodeMap = Object.create(null);
         this.countryNameMap = Object.create(null);
-        this.debug = debug;
         this.useSampleData = useSampleData;
         this.dataSource = useSampleData ? 'sample' : 'csv';
         this.apiEndpoints = {
@@ -51,4 +49,4 @@ export class DataService {
 }
 
 Object.assign(DataService.prototype, loading, processing, colors, samples, queries, countries, state, display,
-    { log, formatDate, formatNumber, getMetricMetadata, getUnitLabel });
+    { formatDate, formatNumber, getMetricMetadata, getUnitLabel });

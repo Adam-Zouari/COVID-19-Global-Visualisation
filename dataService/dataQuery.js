@@ -1,7 +1,5 @@
 ﻿import { numericValue } from './utils.js';
 
-const DATASETS = { epidem: 'epidemData', hospitalizations: 'hospitalizationsData', vaccinations: 'vaccinationsData' };
-
 export function getDataForDate(datasetName, date) {
     return this.dataByDate[datasetName]?.[date] || [];
 }
@@ -12,14 +10,6 @@ export function getCountryData(countryKey) {
     // Comparing countries requires the same reporting date. Never substitute future/past records.
     const record = this.indexedData[this.currentDataset]?.[key]?.[this.currentDate];
     return record ? { ...record, countryKey: key, countryName: this.getCountryName(key) } : null;
-}
-
-export function getCurrentDataset() {
-    return this[DATASETS[this.currentDataset]] || [];
-}
-
-export function getAllCountriesDataForCurrentDate() {
-    return this.getDataForDate(this.currentDataset, this.currentDate);
 }
 
 export function getDataValue(countryKey) {

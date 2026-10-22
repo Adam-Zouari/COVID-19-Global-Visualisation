@@ -91,6 +91,10 @@ export function getCountryAvailability(code, requested = {}) {
     const country = code.trim().toLowerCase();
     const settings = options(this, requested);
     const date = requested.date || this.currentDate;
+    if (!settings.valid) return {
+        status: 'unsupported-unit', label: 'Unit unavailable for this metric',
+        description: 'Choose a display unit supported by the selected metric.'
+    };
     // A raw history scan is much cheaper than building every country's transformed
     // calendar series when opening search. Replacing the data index invalidates it.
     let cache = availabilityHistory.get(this);

@@ -15,16 +15,11 @@ class GlobeVis {
         this.animationFrameId = null;
         this.rotationFrameId = null;
         this.destroyed = false;
-        this.debug = false;
         this.listeners = new AbortController();
         this.worldRequest = new AbortController();
         this.measure();
         window.globeInstance = this;
         this.ready = this.initVis();
-    }
-
-    log(message, data) {
-        if (this.debug) console.debug(`[GlobeVis] ${message}`, data ?? '');
     }
 
     measure() {
@@ -55,6 +50,7 @@ class GlobeVis {
         this.tooltip = d3.select('body').append('div').attr('class', 'tooltip')
             .attr('role', 'tooltip').style('opacity', 0);
         this.drag = d3.drag()
+            .filter(event => !event.ctrlKey && !event.button && (!event.touches || event.touches.length === 1))
             .on('start', event => this.dragstarted(event))
             .on('drag', event => this.dragged(event))
             .on('end', () => this.dragended());
@@ -85,8 +81,10 @@ class GlobeVis {
             this.svg.style('display', 'none');
             this.showGlobeError(`Unable to load the globe: ${error.message}. Upload CSV files to recover, or reload to retry.`);
         } finally {
-            const loader = document.getElementById('loader');
-            if (loader) loader.style.display = 'none';
+            if (!this.destroyed) {
+                const loader = document.getElementById('loader');
+                if (loader) loader.style.display = 'none';
+            }
         }
     }
 
@@ -106,6 +104,7 @@ class GlobeVis {
 
     showGlobeError(text) {
         const container = document.getElementById('globe');
+        if (!container || this.destroyed) return;
         let message = container.querySelector('.globe-error');
         if (!message) {
             message = document.createElement('div');
@@ -124,6 +123,7 @@ class GlobeVis {
             this.refreshData();
             this.dispatchStateEvent('atlas-ready');
         } catch (error) {
+            if (this.destroyed) return;
             console.error('Unable to recover globe:', error);
             this.showGlobeError(`Map unavailable: ${error.message}. Reload the page to retry.`);
         }
@@ -175,7 +175,6 @@ class GlobeVis {
         this.dateListeners?.abort();
         this.worldRequest.abort();
         this.resizeObserver?.disconnect();
-        clearTimeout(this.dateUpdateTimeout);
         this.svg?.interrupt().on('.drag', null).on('.zoom', null).remove();
         this.tooltip?.remove();
         if (window.globeInstance === this) window.globeInstance = null;

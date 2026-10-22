@@ -1,13 +1,22 @@
 ﻿import { setStatus } from './utils.js';
 
 function parseCSVText(text, name) {
-    if (!globalThis.d3?.csvParse) throw new Error('The CSV library did not load.');
+    if (!globalThis.d3?.csvParseRows) throw new Error('The CSV library did not load.');
     const csv = text.replace(/^\uFEFF/, '');
     if (!csv.trim()) throw new Error(`${name} is empty.`);
-    const parsed = globalThis.d3.csvParse(csv);
-    if (new Set(parsed.columns).size !== parsed.columns.length) {
-        throw new Error(`${name} contains duplicate column headers.`);
-    }
+    let columns;
+    const parsed = globalThis.d3.csvParseRows(csv, (values, index) => {
+        if (index === 0) {
+            columns = values;
+            if (new Set(columns).size !== columns.length) throw new Error(`${name} contains duplicate column headers.`);
+            if (columns.some(column => !column.trim())) throw new Error(`${name} contains an empty column header.`);
+            return null;
+        }
+        if (values.length === 1 && values[0] === '') return null;
+        if (values.length !== columns.length) throw new Error(`${name}: CSV record ${index + 1} has ${values.length} fields; expected ${columns.length}.`);
+        return Object.fromEntries(columns.map((column, position) => [column, values[position]]));
+    });
+    parsed.columns = columns;
     return parsed;
 }
 
@@ -33,7 +42,7 @@ function result(service) {
 async function prepareData(service, data, source) {
     // A rejected upload/load leaves the existing usable data and caches intact.
     const candidate = new service.constructor({
-        useSampleData: source === 'sample', debug: service.debug, apiEndpoints: service.apiEndpoints
+        useSampleData: source === 'sample', apiEndpoints: service.apiEndpoints
     });
     Object.assign(candidate, data);
     candidate.currentDataset = service.currentDataset;
@@ -45,6 +54,11 @@ async function prepareData(service, data, source) {
     candidate.buildCountryCodeMap();
     candidate.processData();
     candidate.setDefaultValues();
+    if (candidate.availableColumns[candidate.currentDataset].includes(service.currentColumn)) candidate.currentColumn = service.currentColumn;
+    const metric = candidate.getMetricMetadata();
+    if (!metric.allowedUnits.includes(candidate.displayUnit) ||
+        (candidate.displayUnit !== 'count' && !Object.keys(candidate.populationByCountry).length)) candidate.displayUnit = 'count';
+    if (!metric.smoothingAllowed) candidate.smoothing = 'raw';
     await candidate.indexAllData();
     await candidate.precalculateColors();
     Object.assign(service, candidate);
@@ -65,7 +79,7 @@ export async function loadData() {
                 demographicsData: this.generateSampleDemographicsData()
             }, 'sample');
         }
-        if (!globalThis.d3?.csvParse) throw new Error('The CSV library did not load. Check the connection and reload.');
+        if (!globalThis.d3?.csvParseRows) throw new Error('The CSV library did not load. Check the connection and reload.');
         const [epidemData, hospitalizationsData, vaccinationsData, countryIndex, demographicsData] = await Promise.all([
             readCSVEndpoint(this.apiEndpoints.epidem),
             readCSVEndpoint(this.apiEndpoints.hospitalizations),

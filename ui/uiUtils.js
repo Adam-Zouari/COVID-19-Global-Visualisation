@@ -5,7 +5,6 @@ const timelineSpeeds = [0.5, 1, 2, 4];
 
 function applyDatasetTheme(dataset) {
     document.documentElement.dataset.category = dataset;
-    document.body.dataset.category = dataset;
     const ids = { epidem: 'epidemBtn', hospitalizations: 'hospBtn', vaccinations: 'vaccBtn' };
     document.querySelectorAll('.dataset-btn').forEach(button => {
         const active = button.id === ids[dataset];
@@ -35,6 +34,19 @@ function hasPopulation() {
     return service?.getAllCountries?.().some(country => service.getPopulation?.(country.countryCode) > 0) || false;
 }
 
+function updateSelectOptions(select, choices) {
+    if (select.options.length !== choices.length || choices.some((choice, index) => select.options[index].value !== choice.value)) {
+        select.replaceChildren(...choices.map(choice => {
+            const option = document.createElement('option'); option.value = choice.value; return option;
+        }));
+    }
+    choices.forEach((choice, index) => {
+        const option = select.options[index];
+        if (option.textContent !== choice.label) option.textContent = choice.label;
+        option.disabled = Boolean(choice.disabled);
+    });
+}
+
 function validateDisplaySettings() {
     const service = window.dataService || window.globeInstance?.dataService;
     const metric = currentMetric();
@@ -49,8 +61,6 @@ function changeDataset(dataset) {
     globe.dataService.changeDataset(dataset);
     // Preserve smoothing for daily additions and occupancy snapshots. Cumulative
     // totals always retain their raw source meaning.
-    validateDisplaySettings();
-    applyDatasetTheme(dataset);
     refreshAtlasViews();
 }
 
@@ -61,10 +71,8 @@ function refreshAtlasViews() {
     globe.refreshData();
     if (window.CompareMode?.state.active) {
         CompareUI.initializeDateRangeSlider();
-        CompareMode.syncControls();
         CompareMode.updateComparisonView();
     } else if (document.getElementById('visualizationPanel')?.hidden === false) changeVisualization();
-    syncAtlasState();
 }
 
 function syncAtlasState() {
@@ -72,7 +80,7 @@ function syncAtlasState() {
     if (!service) return;
     const comparison = window.CompareMode?.state;
     window.AtlasStore?.setState({
-        view: comparison?.active ? 'compare' : 'explore', category: service.currentDataset,
+        view: window.AtlasView?.restoring ? AtlasView.current : comparison?.active ? 'compare' : 'explore', category: service.currentDataset,
         metric: service.currentColumn, unit: service.displayUnit || 'count', smoothing: service.smoothing || 'raw',
         selectedDate: service.currentDate, selectedCountry: window.globeInstance?.selectedCountryCode || null,
         compareCountries: comparison?.countries || [], compareRange: comparison?.dateRange || { start: 0, end: 100 },
@@ -99,12 +107,10 @@ function updateAtlasPresentation() {
     setText('timelineMeasure', service.smoothing === '7day' ? 'Trailing 7-day average' : 'Observation date');
     const units = document.getElementById('unitSelector');
     if (units) {
-        units.replaceChildren();
-        for (const value of metric.allowedUnits) {
-            const option = document.createElement('option'); option.value = value;
-            option.textContent = value === 'count' ? 'Absolute count' : service.getUnitLabel?.(service.currentColumn, value) || value;
-            option.disabled = value !== 'count' && !hasPopulation(); units.appendChild(option);
-        }
+        const populationAvailable = hasPopulation();
+        updateSelectOptions(units, metric.allowedUnits.map(value => ({ value,
+            label: value === 'count' ? 'Absolute count' : service.getUnitLabel?.(service.currentColumn, value) || value,
+            disabled: value !== 'count' && !populationAvailable })));
         units.value = service.displayUnit || 'count';
     }
     for (const [id, value] of [['rawBtn', 'raw'], ['averageBtn', '7day']]) {
@@ -119,7 +125,8 @@ function updateAtlasPresentation() {
     if (dates.length) {
         const firstYear = Number(dates[0].slice(0, 4)), lastYear = Number(dates.at(-1).slice(0, 4));
         setText('availablePeriod', firstYear === lastYear ? String(firstYear) : `${firstYear} — ${lastYear}`);
-        setText('availableCountries', `${service.getAllCountries().length} countries / territories`);
+        const countries = service.getAllCountries();
+        setText('availableCountries', `${countries.length} countries / territories`);
         const years = document.getElementById('timelineYears');
         if (years && years.dataset.period !== `${firstYear}-${lastYear}`) {
             years.replaceChildren(); years.dataset.period = `${firstYear}-${lastYear}`;
@@ -127,15 +134,12 @@ function updateAtlasPresentation() {
                 const span = document.createElement('span'); span.textContent = year; years.appendChild(span);
             }
         }
-        const count = service.getAllCountries().filter(country => {
+        const count = countries.filter(country => {
             const value = typeof service.getDisplayValue === 'function' ? service.getDisplayValue(country.countryCode) : service.getDataValue?.(country.countryCode);
             return typeof value === 'number' && Number.isFinite(value);
         }).length;
         setText('coverageCount', `${count} ${count === 1 ? 'country' : 'countries'} with data`);
     }
-    const active = window.CompareMode?.state.active ||
-        (window.AtlasView?.restoring && window.AtlasView.initialView === 'compare') || false;
-    const intro = document.querySelector('.page-intro'); if (intro) intro.hidden = active;
     const count = window.CompareMode?.state.countries.length || 0;
     const badge = document.getElementById('compareCount'); if (badge) { badge.hidden = !count; badge.textContent = count; }
     const demo = service.dataSource === 'sample';
@@ -151,11 +155,10 @@ function updateAtlasPresentation() {
 }
 
 window.atlasActions = {
-    setView(view) { stopTimeline(); if (view === 'compare') CompareMode.enter(); else CompareMode.exit(); syncAtlasState(); },
     setMetric(column) {
         const service = window.dataService || window.globeInstance?.dataService;
         if (!service?.availableColumns[service.currentDataset].includes(column)) return;
-        service.changeColumn(column); validateDisplaySettings(); refreshAtlasViews();
+        service.changeColumn(column); refreshAtlasViews();
     },
     setUnit(unit) {
         const service = window.dataService || window.globeInstance?.dataService;
@@ -234,7 +237,7 @@ function initializeUI() {
     });
     document.getElementById('addToCompareBtn')?.addEventListener('click', () => {
         const code = window.globeInstance?.selectedCountryCode;
-        if (code) { CompareMode.addCountry(code); atlasActions.setView('compare'); }
+        if (code) { CompareMode.addCountry(code); AtlasView.navigate('compare'); }
     });
     document.getElementById('playTimelineBtn')?.addEventListener('click', toggleTimeline);
     const speed = document.getElementById('timelineSpeed');

@@ -48,3 +48,15 @@ test('one-date and empty periods remain explicit and disable inapplicable handle
     assert.equal(empty.inputs.start.disabled, true); assert.equal(empty.dateInputs.start.disabled, true);
     assert.equal(empty.selection.textContent, 'No observations');
 });
+
+test('releasing an unchanged slider does not redraw the same range twice', t => {
+    const { instance, window, changes } = control(t);
+    let updates = 0;
+    instance.onInput = () => updates++;
+    instance.inputs.start.value = '1';
+    instance.inputs.start.dispatchEvent(new window.Event('input'));
+    instance.inputs.start.dispatchEvent(new window.Event('change'));
+    assert.equal(updates, 1);
+    assert.equal(changes.length, 1, 'A committed selection is still announced');
+    assert.equal(changes[0].selected.start, '2020-01-02');
+});

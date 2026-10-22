@@ -96,17 +96,10 @@ const ChartFactory = {
         const unit = settings.unit || service.displayUnit || 'count';
         const metric = this.metadata(column);
         const smoothing = this.smoothingMode(metric, settings.smoothing || service.smoothing || 'raw');
-        let observations;
-        if (service.getCountrySeries) observations = service.getCountrySeries(key, { column, unit, smoothing });
-        else {
-            const rows = service.indexedData[service.currentDataset]?.[key];
-            if (!rows) return null;
-            observations = (service.availableDates || Object.keys(rows).sort()).map(date => ({ date, value: rows[date]?.[column] ?? null }));
-        }
+        const observations = service.getCountrySeries(key, { column, unit, smoothing });
         if (!observations?.length) return null;
         return { countryCode: key, countryName: service.getCountryName(key), column, unit, smoothing,
-            metric, columns: [column], dates: observations.map(point => point.date),
-            displayDates: observations.map(point => service.formatDate(point.date)),
+            metric, dates: observations.map(point => point.date),
             reported: observations.map(point => typeof point.reported === 'boolean' ? point.reported :
                 Object.hasOwn(point, 'rawValue') ? this.isValue(point.rawValue) : this.isValue(point.value)),
             missingReasons: observations.map(point => this.isValue(point.value) ? '' :
@@ -117,19 +110,17 @@ const ChartFactory = {
 
     applySettings(data, settings = {}) {
         const timeline = settings.timeline?.length ? settings.timeline : data.dates;
-        const single = settings.dateMode === 'single';
-        const start = this.dateIndex(single ? settings.singleDate ?? 100 : settings.dateRange?.start ?? 0, timeline.length);
-        const end = single ? start : this.dateIndex(settings.dateRange?.end ?? 100, timeline.length);
+        const start = this.dateIndex(settings.dateRange?.start ?? 0, timeline.length);
+        const end = this.dateIndex(settings.dateRange?.end ?? 100, timeline.length);
         const selected = timeline.slice(Math.min(start, end), Math.max(start, end) + 1);
         // Keep every calendar day between endpoints, including dates on which
         // no selected country reports. Removing those dates would bridge gaps.
         const dates = data.dates.filter(date => date >= selected[0] && date <= selected.at(-1));
         const indices = new Map(data.dates.map((date, index) => [date, index]));
-        const service = window.globeInstance?.dataService;
-        return { ...data, dates, displayDates: dates.map(date => service?.formatDate(date) || date),
+        return { ...data, dates,
             reported: dates.map(date => data.reported?.[indices.get(date)] ?? this.isValue(data.series[data.column]?.[indices.get(date)])),
             missingReasons: dates.map(date => data.missingReasons?.[indices.get(date)] || 'No observation'),
-            series: Object.fromEntries(data.columns.map(column => [column, dates.map(date => data.series[column][indices.get(date)] ?? null)])) };
+            series: { [data.column]: dates.map(date => data.series[data.column][indices.get(date)] ?? null) } };
     },
 
     createChart(container, countryCode, vizType = 'line', settings) {
@@ -154,10 +145,8 @@ const ChartFactory = {
         if (!this.isValue(value)) return 'No observation';
         const magnitude = Math.abs(value);
         return magnitude >= 1000000 ? `${(value / 1000000).toFixed(2)}M` : magnitude >= 1000 ? `${(value / 1000).toFixed(1)}k` :
-            value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+            value.toLocaleString(undefined, magnitude > 0 && magnitude < 1 ? { maximumSignificantDigits: 3 } : { maximumFractionDigits: 2 });
     },
-
-    formatTickValue(value) { return this.formatValue(value); },
 
     valueDomain(values) {
         let min = 0, max = 0;
@@ -235,7 +224,7 @@ const ChartFactory = {
                         reportedDays: group.indices.filter(index => item.reported?.[index] ?? this.isValue(item.values[index])).length,
                         displayedDays: group.indices.filter(index => this.isValue(item.values[index])).length };
                 });
-                const values = groups.map((group, index) => {
+                const values = groups.map(group => {
                     const observations = group.indices.map(day => item.values[day]);
                     // A snapshot is the last selected calendar day's report,
                     // never a prior observation carried across a missing day.
@@ -266,6 +255,7 @@ const ChartFactory = {
         const hadDisplayedValues = series.some(item => item.values.some(value => this.isValue(value)));
         let note = '', aggregation = null;
         if (type === 'bar') ({ dates, series, note, aggregation } = this.aggregateBars(dates, series, options.metric, options.smoothing));
+        if (type === 'bar' && !note) note = 'Hollow diamonds mark unavailable observations; short baseline marks are reported zeros. Missing values are never treated as zero.';
         const column = options.column || options.metric?.column || window.globeInstance?.dataService.currentColumn;
         const unit = options.unit || window.globeInstance?.dataService.displayUnit || 'count';
         const unitLabel = column ? this.axisUnitLabel(column, unit) : options.unitLabel || this.unitLabel(column, unit);
@@ -287,7 +277,7 @@ const ChartFactory = {
         container.style.position = 'relative';
         const svg = d3.select(container).append('svg').attr('viewBox', `0 0 ${width} ${height}`)
             .attr('width', '100%').attr('height', height).attr('role', 'img')
-            .attr('aria-label', `${options.title || 'Observations over time'}. ${subtitle}. ${unitLabel}. ${type === 'bar' ? 'Hatched bars mark incomplete weeks; hollow diamonds mark unavailable values; short baseline marks represent reported zeros.' : 'Missing observations appear as gaps.'}`);
+            .attr('aria-label', `${options.title || 'Observations over time'}. ${subtitle}. ${unitLabel}. ${note || 'Missing observations appear as gaps.'}`);
         svg.append('title').text(options.title || 'Observations over time');
         svg.append('desc').text(`${subtitle}. ${note || 'Missing observations remain gaps and are never treated as zero.'}`);
         const plot = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
@@ -298,10 +288,11 @@ const ChartFactory = {
         const band = d3.scaleBand().domain(dates).range([0, plotWidth]).padding(0.2);
         const xAt = date => type === 'bar' ? band(date) + band.bandwidth() / 2 : time(new Date(`${date}T00:00:00Z`));
         const tickDates = dates.filter((_, index) => index % Math.max(1, Math.ceil(dates.length / (width < 500 ? 3 : 6))) === 0);
-        const xAxis = type === 'bar' ? d3.axisBottom(band).tickValues(tickDates).tickFormat(date => d3.utcFormat(dates.length < 10 ? '%d %b' : '%b %Y')(new Date(`${date}T00:00:00Z`))) :
-            d3.axisBottom(time).ticks(width < 500 ? 3 : 6).tickFormat(d3.utcFormat(dates.length < 60 ? '%d %b' : '%b %Y'));
+        const formatDateTick = d3.utcFormat(dates.length < 10 || new Set(tickDates.map(date => date.slice(0, 7))).size < tickDates.length ? '%d %b' : '%b %Y');
+        const xAxis = type === 'bar' ? d3.axisBottom(band).tickValues(tickDates).tickFormat(date => formatDateTick(new Date(`${date}T00:00:00Z`))) :
+            d3.axisBottom(time).tickValues(tickDates.map(date => new Date(`${date}T00:00:00Z`))).tickFormat(formatDateTick);
         plot.append('g').attr('class', 'x-axis').attr('transform', `translate(0,${plotHeight})`).call(xAxis);
-        plot.append('g').attr('class', 'y-axis').call(d3.axisLeft(y).ticks(5).tickFormat(value => this.formatTickValue(value)));
+        plot.append('g').attr('class', 'y-axis').call(d3.axisLeft(y).ticks(5).tickFormat(value => this.formatValue(value)));
         plot.append('g').attr('class', 'grid-lines').selectAll('line').data(y.ticks(5)).join('line')
             .attr('x2', plotWidth).attr('y1', value => y(value)).attr('y2', value => y(value));
         svg.append('text').attr('class', 'axis-unit-label').attr('x', margin.left).attr('y', 18).text(unitLabel);
@@ -331,7 +322,7 @@ const ChartFactory = {
                     }
                     return lines;
                 };
-                plot.append('g').selectAll('rect').data(points.filter(point => this.isValue(point.value))).join('rect')
+                plot.append('g').selectAll('rect').data(points.filter(point => this.isValue(point.value) && point.value !== 0)).join('rect')
                     .attr('class', point => incomplete(point) ? 'data-bar incomplete-bar' : 'data-bar')
                     .attr('x', point => band(point.date) + seriesIndex * barWidth)
                     .attr('width', barWidth).attr('y', point => y(Math.max(0, point.value)))
@@ -360,7 +351,9 @@ const ChartFactory = {
                 const line = d3.line().defined(point => this.isValue(point.value)).x(point => xAt(point.date)).y(point => y(point.value));
                 plot.append('path').datum(points).attr('class', 'data-line').attr('d', line).attr('fill', 'none').attr('stroke', color).attr('stroke-width', 2.25)
                     .attr('stroke-dasharray', item.lineDash ?? this.countryLineDash(item.key)).attr('stroke-linecap', 'round');
-                if (dates.length <= 30) plot.append('g').selectAll('circle').data(points.filter(point => this.isValue(point.value))).join('circle')
+                // Isolated reports have no visible line segment, even in long histories.
+                plot.append('g').selectAll('circle').data(points.filter(point => this.isValue(point.value) && (dates.length <= 30 ||
+                    !this.isValue(item.values[point.index - 1]) && !this.isValue(item.values[point.index + 1])))).join('circle')
                     .attr('class', 'data-point').attr('cx', point => xAt(point.date)).attr('cy', point => y(point.value)).attr('r', 2.5).attr('fill', color);
             }
         });
@@ -386,7 +379,8 @@ const ChartFactory = {
                     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
                     event.preventDefault(); const current = Number(overlay.attr('aria-valuenow'));
                     const index = event.key === 'Home' ? 0 : event.key === 'End' ? dates.length - 1 : Math.max(0, Math.min(dates.length - 1, current + (event.key === 'ArrowRight' ? 1 : -1)));
-                    inspect(index, { clientX: margin.left + xAt(dates[index]), clientY: margin.top + 60 });
+                    const bounds = svg.node().getBoundingClientRect(), scale = bounds.width / width || 1;
+                    inspect(index, { clientX: bounds.left + (margin.left + xAt(dates[index])) * scale, clientY: bounds.top + (margin.top + 60) * scale });
                 });
         }
         if (options.showLegend !== false && series.length > 1) {
@@ -409,7 +403,6 @@ const ChartFactory = {
             }
             container.appendChild(legend);
         }
-        if (type === 'bar' && !note) note = 'Hollow diamonds mark unavailable observations; short baseline marks are reported zeros. Missing values are never treated as zero.';
         if (note) { const hint = document.createElement('p'); hint.className = 'chart-note'; hint.textContent = note; container.appendChild(hint); }
         if (!values.some(value => this.isValue(value))) this.showError(container, hadDisplayedValues && aggregation ?
             'No weekly snapshots are available on the last selected days of these weeks.' :

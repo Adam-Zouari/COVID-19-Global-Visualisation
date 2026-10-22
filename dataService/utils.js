@@ -12,6 +12,23 @@ export function numericValue(value) {
     return Number.isFinite(number) ? number : null;
 }
 
+export const COUNTRY_IDENTIFIER_FIELDS = Object.freeze(['location_key', 'key', 'country_key', 'country_code', 'iso_code']);
+
+export function countryKey(row) {
+    for (const field of COUNTRY_IDENTIFIER_FIELDS) {
+        const key = String(row[field] ?? '').trim();
+        if (key) return key.toLowerCase();
+    }
+    return '';
+}
+
+/** Source national rows can contain whitespace-only optional region fields. */
+export function isCountryRow(row, key = countryKey(row)) {
+    return /^[a-z]{2}$/.test(key) &&
+        (!String(row.aggregation_level ?? '').trim() || Number(row.aggregation_level) === 0) &&
+        !String(row.subregion1_code ?? '').trim() && !String(row.subregion2_code ?? '').trim();
+}
+
 // Archive policy: observations predating the first COVID-19 outbreak month are excluded.
 export const MIN_OBSERVATION_DATE = '2019-12-01';
 
@@ -25,10 +42,6 @@ export function formatDate(dateString) {
 export function formatNumber(value) {
     const number = numericValue(value);
     return number === null ? '—' : number.toLocaleString('en-US');
-}
-
-export function log(message, data) {
-    if (this.debug) console.debug(`[DataService] ${message}`, ...(data === undefined ? [] : [data]));
 }
 
 export function setStatus(message) {

@@ -47,6 +47,12 @@ GlobeVis.prototype.dragstarted = function(event) {
 };
 
 GlobeVis.prototype.dragged = function(event) {
+    if (event.sourceEvent?.touches?.length > 1) {
+        // A second finger hands the gesture to zoom. Start a new rotation only
+        // after all fingers are lifted, rather than jumping back after a pinch.
+        this.dragended();
+        return;
+    }
     if (!this.dragStart) return;
     const dx = event.x - this.dragStart[0];
     const dy = event.y - this.dragStart[1];
@@ -64,6 +70,7 @@ GlobeVis.prototype.dragended = function() {
 GlobeVis.prototype.zoomed = function(event) {
     this.stopAutoRotation();
     this.cancelRotationAnimation();
+    this.tooltip.style('opacity', 0);
     this.projection.scale(this.radius * event.transform.k);
     this.render();
 };
@@ -141,7 +148,7 @@ GlobeVis.prototype.handleMouseOut = function(event, feature) {
 };
 
 GlobeVis.prototype.selectCountry = function(feature) {
-    this.clearCountrySelection();
+    this.clearCountrySelection({ notify: false });
     this.selectedCountry = feature.id;
     this.selectedCountryCode = this.getCountryCode(feature);
     this.globeGroup.selectAll('.country')
@@ -205,6 +212,9 @@ GlobeVis.prototype.unavailableReason = function(code) {
 
 GlobeVis.prototype.formatMetricValue = function(value, unit = this.dataService.displayUnit || 'count') {
     if (typeof value !== 'number' || !Number.isFinite(value)) return 'Not reported';
+    if (Math.abs(value) > 0 && Math.abs(value) < 0.1) {
+        return new Intl.NumberFormat('en-US', { maximumSignificantDigits: 3 }).format(value);
+    }
     return new Intl.NumberFormat('en-US', { maximumFractionDigits: unit === 'count' && this.dataService.smoothing !== '7day' ? 0 : 1 }).format(value);
 };
 
@@ -358,7 +368,7 @@ GlobeVis.prototype.updateCountryInfoPanel = function(record, feature) {
         : 'No observation by selected date';
     this.renderCountryTrend(series);
     panel.hidden = false;
-    panel.style.display = window.CompareMode?.state.active ? 'none' : 'block';
+    panel.style.display = '';
     document.getElementById('exploreWorkspace')?.classList.add('has-selection');
     // History remains useful when the currently selected date has no record.
     if (more) more.style.display = code ? 'block' : 'none';
@@ -400,7 +410,6 @@ GlobeVis.prototype.syncDateControls = function() {
 GlobeVis.prototype.setupDateSlider = function() {
     this.dateListeners?.abort();
     this.dateListeners = new AbortController();
-    clearTimeout(this.dateUpdateTimeout);
     const slider = document.getElementById('dateSlider');
     if (!slider) return;
     const dates = this.dataService.getAvailableDates?.() || this.dataService.availableDates || [];
@@ -458,13 +467,4 @@ GlobeVis.prototype.refreshData = function() {
     this.refreshSelectedCountry();
     this.setControlsDisabled(false);
     this.dispatchStateEvent('atlas-data-updated');
-};
-
-GlobeVis.prototype.changeDataset = function(dataset) {
-    if (!Object.hasOwn(this.dataService.availableColumns, dataset)) return;
-    this.dataService.changeDataset(dataset);
-    this.refreshData();
-    const names = { epidem: 'Epidemiology', hospitalizations: 'Hospitalizations', vaccinations: 'Vaccinations' };
-    const display = document.getElementById('currentDataset');
-    if (display) display.textContent = names[dataset] || dataset;
 };

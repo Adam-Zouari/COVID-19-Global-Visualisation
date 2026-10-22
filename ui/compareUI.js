@@ -1,11 +1,8 @@
 window.CompareUI = {
-    show({ focus = true } = {}) {
-        const panel = document.getElementById('comparePanel'); panel.hidden = false;
+    initialize({ focus = true } = {}) {
         this.initializeDateRangeSlider(); this.updateCountryList();
         if (focus) document.getElementById('compareTitle')?.focus();
     },
-    hide() { document.getElementById('comparePanel').hidden = true; },
-
     matchExploreBottomSpacing() {
         const panel = document.getElementById('comparePanel');
         const explore = document.getElementById('exploreView');
@@ -31,9 +28,8 @@ window.CompareUI = {
 
     initializeDateRangeSlider() {
         const sliders = document.getElementById('dateRangeSlider'); if (!sliders) return;
-        sliders.replaceChildren();
         const service = window.globeInstance.dataService, dates = service.getAvailableDates?.() || service.availableDates;
-        this.rangeControl = new DateRangeControl(sliders, {
+        new DateRangeControl(sliders, {
             dates, range: CompareMode.state.dateRange, idPrefix: 'compare-date-range',
             sliderIds: { start: 'startDateSlider', end: 'endDateSlider' }, formatDate: date => service.formatDate(date),
             onChange: range => CompareMode.updateDateRange(range.start, range.end)

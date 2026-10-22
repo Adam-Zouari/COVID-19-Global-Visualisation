@@ -1,4 +1,4 @@
-import { isValidDate, numericValue, MIN_OBSERVATION_DATE } from './utils.js';
+import { isValidDate, numericValue, MIN_OBSERVATION_DATE, COUNTRY_IDENTIFIER_FIELDS, countryKey, isCountryRow } from './utils.js';
 
 const DATASETS = { epidem: 'epidemData', hospitalizations: 'hospitalizationsData', vaccinations: 'vaccinationsData' };
 const METADATA = new Set(['date', 'country_key', 'location_key', 'key', 'country_code', 'country',
@@ -11,18 +11,6 @@ function headers(rows) {
     return [...fields];
 }
 
-function countryKey(row) {
-    const value = row.location_key || row.key || row.country_key || row.country_code || row.iso_code;
-    if (value === undefined || value === null) return '';
-    return String(value).trim().toLowerCase();
-}
-
-function isCountryRow(row, key) {
-    return /^[a-z]{2}$/.test(key) &&
-        (row.aggregation_level === undefined || row.aggregation_level === '' || Number(row.aggregation_level) === 0) &&
-        !row.subregion1_code && !row.subregion2_code;
-}
-
 function normalizeDataset(rows, name) {
     if (!Array.isArray(rows) || rows.length === 0) throw new Error(`${name}: the CSV file is empty.`);
     if (rows.columns && new Set(rows.columns).size !== rows.columns.length) {
@@ -30,7 +18,7 @@ function normalizeDataset(rows, name) {
     }
     const fields = headers(rows);
     if (!fields.includes('date')) throw new Error(`${name}: missing required date column.`);
-    if (!['location_key', 'key', 'country_key', 'country_code', 'iso_code'].some(field => fields.includes(field))) {
+    if (!COUNTRY_IDENTIFIER_FIELDS.some(field => fields.includes(field))) {
         throw new Error(`${name}: missing country identifier (location_key, key or country_key).`);
     }
     const metrics = fields.filter(field => !METADATA.has(field) &&
@@ -38,13 +26,14 @@ function normalizeDataset(rows, name) {
     if (!metrics.length) throw new Error(`${name}: no numeric metric columns found.`);
     const records = [];
     const seen = new Set();
+    const today = new Date().toISOString().slice(0, 10);
     for (const row of rows) {
         const key = countryKey(row);
         // Official files include states/counties. Never aggregate them into country totals.
         if (!isCountryRow(row, key)) continue;
         const date = String(row.date || '').trim();
         if (!isValidDate(date)) throw new Error(`${name}: invalid date "${date}" for ${key}. Expected YYYY-MM-DD.`);
-        if (date < MIN_OBSERVATION_DATE || date > new Date().toISOString().slice(0, 10)) {
+        if (date < MIN_OBSERVATION_DATE || date > today) {
             throw new Error(`${name}: implausible observation date "${date}" for ${key}. Run prepare-data to filter and report source date anomalies.`);
         }
         const id = `${key}:${date}`;
@@ -84,15 +73,14 @@ export function validateDataStructure() {
             if (!countries.has(row.country_key)) throw new Error(`Country index: no name for ${row.country_key}.`);
         }
     }
-    Object.assign(this, normalized);
-    this.countryIndex = [...countries.values()];
     const populationByCountry = Object.create(null);
     const demographics = [];
     if (!Array.isArray(this.demographicsData)) throw new Error('Demographics: expected CSV rows.');
-    if (this.demographicsData.length && !headers(this.demographicsData).includes('population')) {
+    const demographicsHeaders = headers(this.demographicsData);
+    if (this.demographicsData.length && !demographicsHeaders.includes('population')) {
         throw new Error('Demographics: missing required population column.');
     }
-    if (this.demographicsData.length && !['location_key', 'key', 'country_key', 'country_code', 'iso_code'].some(field => headers(this.demographicsData).includes(field))) {
+    if (this.demographicsData.length && !COUNTRY_IDENTIFIER_FIELDS.some(field => demographicsHeaders.includes(field))) {
         throw new Error('Demographics: missing country identifier (location_key, key or country_key).');
     }
     const seenPopulation = new Set();
@@ -109,9 +97,11 @@ export function validateDataStructure() {
         if (population !== null && population > 0) populationByCountry[key] = population;
         demographics.push({ location_key: key, population });
     }
-    this.demographicsData = demographics;
-    this.populationByCountry = populationByCountry;
-    this.populationSource = demographics.length ? (this.dataSource === 'sample' ? 'fictional demonstration estimates' : 'Google COVID-19 Open Data demographics') : null;
+    Object.assign(this, normalized, {
+        countryIndex: [...countries.values()], demographicsData: demographics, populationByCountry,
+        populationSource: demographics.length ? (this.dataSource === 'sample' ? 'fictional demonstration estimates' :
+            this.dataSource === 'upload' ? 'uploaded demographics CSV' : 'Google COVID-19 Open Data demographics') : null
+    });
 }
 
 export function processData() {

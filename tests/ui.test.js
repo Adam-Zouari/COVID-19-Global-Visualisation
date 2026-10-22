@@ -22,16 +22,20 @@ function harness(t) {
         getAvailableDates() { return this.metricDates || this.availableDates; },
         getAllCountries: () => Object.entries(names).map(([countryCode, countryName]) => ({ countryCode, countryName })),
         getPopulation: () => 1000000,
+        getCountrySeries(code, { column }) {
+            return dates.map(date => { const value = rows[code]?.[date]?.[column] ?? null; return { date, value, rawValue: value }; });
+        },
         getMetricMetadata(column) { column ||= this.currentColumn; return { column, label: column === 'new_tested' ? 'New tests' : 'New confirmed cases', kind: 'daily', allowedUnits: ['count', 'per100k'], smoothingAllowed: true }; },
         getUnitLabel: (_column, unit) => unit === 'per100k' ? 'Per 100,000 people' : 'Count'
     };
     const navigations = [];
-    let resetCount = 0, stopCount = 0;
+    let resetCount = 0, stopCount = 0, resizeCount = 0;
     const globe = { dataService: service, selectedCountry: null, selectedCountryCode: null,
-        stopAutoRotation() {}, cancelRotationAnimation() {}, resetView() { resetCount++; }, goToCountry: code => navigations.push(code) };
+        stopAutoRotation() {}, cancelRotationAnimation() {}, resize() { resizeCount++; }, resetView() { resetCount++; }, goToCountry: code => navigations.push(code) };
     context.window.dataService = service; context.window.globeInstance = globe;
-    for (const file of ['ui/uiUtils.js', 'ui/search.js', 'ui/dateRange.js', 'ui/compare.js', 'ui/compareUI.js', 'charts/chartFactory.js', 'charts/compareCharts.js'])
+    for (const file of ['ui/view.js', 'ui/uiUtils.js', 'ui/search.js', 'ui/dateRange.js', 'ui/compare.js', 'ui/compareUI.js', 'charts/chartFactory.js', 'charts/compareCharts.js'])
         vm.runInContext(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), context, { filename: file });
+    dom.window.AtlasView.initialize(); dom.window.AtlasView.finish('explore');
     context.window.syncAtlasState = () => {};
     context.window.stopTimeline = () => { stopCount++; };
     context.window.atlasActions = {
@@ -41,7 +45,7 @@ function harness(t) {
     };
     return { window: dom.window, document: dom.window.document, context, service, globe, navigations,
         factory: vm.runInContext('ChartFactory', context), comparison: vm.runInContext('CompareCharts', context), compare: dom.window.CompareMode,
-        resetCount: () => resetCount, stopCount: () => stopCount };
+        resetCount: () => resetCount, stopCount: () => stopCount, resizeCount: () => resizeCount };
 }
 
 test('search and comparison treat imported country names as literal text', t => {
@@ -96,7 +100,7 @@ test('comparison period shares a highlighted track and touch date fields preserv
 });
 
 test('comparison preserves selected country, date and analysis context when exiting', t => {
-    const { document, globe, service, compare, resetCount, stopCount } = harness(t);
+    const { document, globe, service, compare, resetCount, stopCount, resizeCount } = harness(t);
     globe.selectedCountryCode = 'sg'; const originalDate = service.currentDate;
     document.getElementById('visualizationPanel').hidden = false;
     assert.equal(document.querySelector('[data-country-code="sg"]'), null);
@@ -108,6 +112,7 @@ test('comparison preserves selected country, date and analysis context when exit
     assert.equal(document.getElementById('exploreView').hidden, false); assert.equal(document.getElementById('comparePanel').hidden, true);
     assert.equal(globe.selectedCountryCode, 'sg'); assert.equal(service.currentDate, originalDate);
     assert.equal(document.getElementById('visualizationPanel').hidden, false); assert.equal(resetCount(), 0);
+    assert.equal(resizeCount(), 1, 'returning from the hidden view remeasures the globe');
 });
 
 test('comparison limits selection to four countries, ignores duplicates and explains how to continue', t => {
@@ -142,11 +147,12 @@ test('comparison country chips retain four distinct identities after browsing, r
 });
 
 test('separate country charts use one shared metric and common scale by default', t => {
-    const { document, compare, service } = harness(t);
+    const { window, document, compare, service } = harness(t);
     compare.state.countries = ['tn', 'fr']; compare.enter(); compare.changeDisplayMode('separate');
     const axes = [...document.querySelectorAll('.country-chart-container .y-axis')].map(axis => axis.textContent);
     assert.equal(axes.length, 2); assert.equal(axes[0], axes[1]);
-    compare.updateSelectedColumn('new_tested');
+    const selector = document.getElementById('compareMetricSelector');
+    selector.value = 'new_tested'; selector.dispatchEvent(new window.Event('change'));
     assert.equal(service.currentColumn, 'new_tested'); assert.equal(document.getElementById('compareMetricSelector').value, 'new_tested');
     for (const chart of document.querySelectorAll('.country-chart-container svg')) assert.match(chart.getAttribute('aria-label'), /New tests/);
     compare.changeScale('independent'); assert.equal(compare.state.scale, 'independent');
@@ -178,4 +184,39 @@ test('empty comparison points to the existing picker and one-country charts keep
     compare.addCountry('us');
     assert.equal(document.querySelector('.no-countries-message'), null);
     assert.ok(document.querySelector('#compareChartContainer svg'));
+});
+
+test('view navigation during loading keeps the latest requested view without activating unready comparison', t => {
+    const { window, document, service, compare } = harness(t);
+    const dates = service.availableDates; service.availableDates = [];
+    window.AtlasView.restoring = true;
+    window.AtlasView.navigate('compare');
+    assert.equal(window.AtlasView.current, 'compare');
+    assert.equal(document.getElementById('comparePanel').hidden, false);
+    assert.equal(document.querySelector('.page-intro').hidden, true);
+    assert.equal(compare.state.active, false);
+    window.AtlasView.navigate('explore');
+    assert.equal(window.AtlasView.current, 'explore');
+    assert.equal(document.getElementById('comparePanel').hidden, true);
+    service.availableDates = dates;
+    window.AtlasView.finish('explore'); window.AtlasView.navigate('compare');
+    assert.equal(compare.state.active, true);
+    window.AtlasView.navigate('explore');
+    assert.equal(compare.state.active, false);
+});
+
+test('comparison keeps select options and focus during updates and updates population availability in place', t => {
+    const { document, service, compare } = harness(t);
+    compare.syncControls();
+    const metrics = document.getElementById('compareMetricSelector'), units = document.getElementById('compareUnitSelector');
+    const metricOption = metrics.options[0], rateOption = units.querySelector('[value="per100k"]');
+    metrics.focus();
+    service.smoothing = '7day'; compare.syncControls();
+    assert.equal(document.activeElement, metrics);
+    assert.equal(metrics.options[0], metricOption);
+    assert.equal(units.querySelector('[value="per100k"]'), rateOption);
+    service.getPopulation = () => null; compare.syncControls();
+    assert.equal(rateOption.disabled, true);
+    service.getPopulation = () => 1000000; compare.syncControls();
+    assert.equal(rateOption.disabled, false);
 });

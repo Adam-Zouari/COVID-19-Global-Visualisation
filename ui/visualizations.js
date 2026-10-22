@@ -1,6 +1,5 @@
 function selectedVisualizationCountry() {
-    const instance = window.globeInstance;
-    return instance?.selectedCountryCode || (instance?.selectedCountry ? document.getElementById(`country-${instance.selectedCountry}`)?.getAttribute('data-country-code') : null);
+    return window.globeInstance?.selectedCountryCode;
 }
 
 function showVisualizations() {
@@ -8,10 +7,6 @@ function showVisualizations() {
     if (!countryCode) return;
     const panel = document.getElementById('visualizationPanel');
     if (!panel) return;
-    const name = window.globeInstance.dataService.getCountryName(countryCode);
-    const flag = document.getElementById('viz-flag');
-    if (flag) { flag.src = `https://flagcdn.com/${countryCode.toLowerCase()}.svg`; flag.alt = ''; }
-    document.getElementById('viz-country-name').textContent = name;
     panel.hidden = false;
     changeVisualization();
     panel.scrollIntoView?.({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });

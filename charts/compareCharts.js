@@ -1,10 +1,8 @@
 const CompareCharts = {
-    prepareDataForCountries(countryCodes, settings = {}) {
-        ChartFactory.reconcileComparisonCountries(countryCodes);
-        return [...new Set(countryCodes)].map(code => ChartFactory.prepareDataForCountry(code, settings)).filter(Boolean);
-    },
     prepare(countryCodes, settings = {}) {
-        const countries = this.prepareDataForCountries(countryCodes, settings);
+        const codes = [...new Set(countryCodes.map(code => code.toLowerCase()))];
+        ChartFactory.reconcileComparisonCountries(codes);
+        const countries = codes.map(code => ChartFactory.prepareDataForCountry(code, settings)).filter(Boolean);
         const service = window.globeInstance.dataService;
         const timeline = service.getAvailableDates?.(settings.selectedColumn || service.currentColumn) || [...new Set(countries.flatMap(country => country.dates))].sort();
         return countries.map(country => ChartFactory.applySettings(country, { ...settings, timeline }));

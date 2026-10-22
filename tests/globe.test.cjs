@@ -11,7 +11,7 @@ function harness() {
     const context = vm.createContext({
         window: { matchMedia: () => ({ matches: false }), innerWidth: 375, innerHeight: 667 },
         document: { hidden: false, getElementById: id => elements.get(id) || null },
-        AbortController, console, clearTimeout,
+        AbortController, console,
         requestAnimationFrame: callback => { const id = nextId++; frames.set(id, callback); return id; },
         cancelAnimationFrame: id => frames.delete(id)
     });
@@ -22,7 +22,7 @@ function harness() {
     const globe = Object.assign(Object.create(context.window.GlobeVis.prototype), {
         animationFrameId: null, rotationFrameId: null, lastFrameTime: null,
         autoRotate: true, autoRotateSpeed: 0.2, currentRotation: [0, 0, 0],
-        destroyed: false, countryFeatures: [], render() {}, log() {},
+        destroyed: false, countryFeatures: [], render() {},
         projection: { rotate(value) { if (value) { rotation = [...value]; return this; } return [...rotation]; } }
     });
     function tick(timestamp) {
@@ -63,6 +63,21 @@ test('a new country animation cancels the old callback and follows shortest rota
     assert.equal(newCompleted, true);
     assert.equal(globe.currentRotation[0], 1090);
     assert.equal(frames.size, 0);
+});
+
+test('pinching suspends rotation until a fresh single-finger drag starts', () => {
+    const { globe } = harness();
+    globe.tooltip = { style() {} };
+    globe.dragstarted({ x: 0, y: 0 });
+    globe.dragged({ x: 50, y: 20, sourceEvent: { touches: [{}] } });
+    const rotation = [...globe.currentRotation];
+    globe.dragged({ x: 100, y: 40, sourceEvent: { touches: [{}, {}] } });
+    globe.dragged({ x: 150, y: 60, sourceEvent: { touches: [{}] } });
+    assert.deepEqual([...globe.currentRotation], rotation);
+    globe.dragended();
+    globe.dragstarted({ x: 150, y: 60 });
+    globe.dragged({ x: 175, y: 60, sourceEvent: { touches: [{}] } });
+    assert.equal(globe.currentRotation[0], rotation[0] + 5);
 });
 
 test('search selection persists when comparison cancels the unfinished rotation', () => {
@@ -114,6 +129,45 @@ test('atlas features without IDs retain independent mappings and stable unique k
     assert.deepEqual(countries.map(feature => feature.id), ids);
 });
 
+test('every bundled atlas feature maps without numeric-ID fallbacks or a data-source index', async () => {
+    const { context, globe } = harness();
+    context.d3 = await import('d3');
+    context.topojson = await import('topojson-client');
+    globe.worldData = require('world-atlas/countries-110m.json');
+    globe.dataService = { getCountryKeyFromName: () => null };
+    globe.buildCountryFeatureMap();
+    assert.equal(globe.countryFeatures.length, 177);
+    assert.equal(globe.countryFeatureMap.size, globe.countryFeatures.length);
+    for (const feature of globe.countryFeatures) {
+        assert.match(globe.getCountryCode(feature), /^[a-z]{2}$/, feature.properties.name);
+    }
+});
+
+test('replacing a country selection emits only its final state and explicit clearing still notifies', async () => {
+    const { JSDOM } = await import('jsdom');
+    const { select } = await import('d3');
+    const dom = new JSDOM('<svg><g></g></svg>');
+    const { globe } = harness();
+    const countries = [{ id: 'tn' }, { id: 'fr' }];
+    globe.globeGroup = select(dom.window.document.querySelector('g'));
+    globe.globeGroup.selectAll('.country').data(countries).join('path').attr('class', 'country');
+    globe.getCountryCode = feature => feature.id;
+    globe.updateCountryInfoPanel = () => {};
+    globe.refreshSelectedCountry = () => {};
+    globe.dataService = { getAllCountries: () => [{ countryCode: 'sg' }] };
+    const notifications = [];
+    globe.dispatchStateEvent = name => { notifications.push([name, globe.selectedCountryCode]); };
+    globe.selectCountry(countries[0]);
+    globe.selectCountry(countries[1]);
+    globe.goToCountry('sg');
+    globe.clearCountrySelection();
+    assert.deepEqual(notifications, [
+        ['country-selected', 'tn'], ['country-selected', 'fr'],
+        ['country-selected', 'sg'], ['country-selected', null]
+    ]);
+    dom.window.close();
+});
+
 test('search selects countries absent from the low-resolution geometry', () => {
     const { globe } = harness();
     const record = { countryKey: 'sg', countryName: 'Singapore' };
@@ -141,6 +195,40 @@ test('a successful upload recovers an uncreated globe without restarting automat
     assert.equal(geometryLoaded, true);
     assert.equal(refreshed, true);
     assert.equal(frames.size, 0);
+});
+
+test('a destroyed globe ignores a pending recovery failure', async () => {
+    const { context, globe } = harness();
+    let rejectMap, errors = 0;
+    context.console = { error() { errors++; } };
+    globe.ensureWorldData = () => new Promise((resolve, reject) => { rejectMap = reject; });
+    globe.showGlobeError = () => { errors++; };
+    const recovery = globe.recoverAfterDataLoad();
+    globe.destroyed = true;
+    rejectMap(new Error('Aborted old map request'));
+    await recovery;
+    assert.equal(errors, 0);
+});
+
+test('an old destroyed initialization cannot hide the replacement globe loader', async () => {
+    const { JSDOM } = await import('jsdom');
+    const dom = new JSDOM('<div id="globe"></div><div id="loader" style="display:flex"></div>');
+    const { context, globe } = harness();
+    context.document = dom.window.document;
+    const d3 = await import('d3');
+    context.d3 = { ...d3, select: node => d3.select(typeof node === 'string' ? dom.window.document.querySelector(node) : node) };
+    Object.assign(globe, { width: 360, height: 420, radius: 150 });
+    let resolveData;
+    globe.dataService = { loadData: () => new Promise(resolve => { resolveData = resolve; }) };
+    globe.ensureWorldData = async () => ({});
+    globe.setupEventListeners = () => {};
+    globe.setControlsDisabled = () => {};
+    const ready = globe.initVis();
+    globe.destroyed = true;
+    resolveData();
+    await ready;
+    assert.equal(dom.window.document.getElementById('loader').style.display, 'flex');
+    dom.window.close();
 });
 
 class Control extends EventTarget {
@@ -317,6 +405,8 @@ test('selected metric formatting distinguishes missing observations, zero, and n
     assert.equal(globe.formatMetricValue(0), '0');
     assert.equal(globe.formatMetricValue(-21), '-21');
     assert.equal(globe.formatMetricValue(1.2345, 'per100k'), '1.2');
+    assert.equal(globe.formatMetricValue(0.04, 'per100k'), '0.04');
+    assert.equal(globe.formatMetricValue(-0.000071428, 'per100k'), '-0.0000714');
 });
 
 test('country details show the selected metric, category indicators, and true reporting dates', async () => {
@@ -353,6 +443,10 @@ test('country details show the selected metric, category indicators, and true re
     assert.match(document.getElementById('countryLastReported').textContent, /2020-01-05/);
     assert.equal(document.getElementById('countryInfo').hidden, false);
     assert.equal(document.getElementById('exploreWorkspace').classList.contains('has-selection'), true);
+    context.window.CompareMode = { state: { active: true } };
+    globe.updateCountryInfoPanel(record, { countryCode: 'tn' });
+    assert.equal(document.getElementById('countryInfo').style.display, '', 'Compare visibility belongs to its parent; exiting must reveal the selected country');
+    context.window.CompareMode.state.active = false;
     const trend = document.querySelector('.country-sparkline path').getAttribute('d');
     assert.equal((trend.match(/M/g) || []).length, 2, 'A missing report breaks the trend path');
     assert.equal((trend.match(/L/g) || []).length, 2);
@@ -427,7 +521,14 @@ test('logarithmic legend explains actual color bands without a misleading numeri
     assert.match(legend.textContent, /Not reported/);
     assert.match(legend.textContent, /Negative: reporting correction/);
     const details = legend.querySelector('details');
-    assert.equal(details.open, false); details.open = true; globe.updateLegend();
+    assert.equal(details.open, false); details.open = true;
+    details.querySelector('summary').focus();
+    globe.updateLegend();
     assert.equal(legend.querySelector('details').open, true);
+    assert.equal(dom.window.document.activeElement, legend.querySelector('summary'));
+    scale.domain = () => [0, 0.0000714];
+    scale.breaks = () => [0, 0.000001, 0.000002, 0.000003, 0.000004, 0.000005, 0.0000714];
+    globe.updateLegend();
+    assert.equal(legend.querySelector('.legend-range span:last-child').textContent, '0.0000714');
     dom.window.close();
 });

@@ -32,7 +32,7 @@ Select a country on the globe or through search, including countries and territo
 
 The comparison period uses two keyboard-accessible handles on one highlighted track. Date fields provide an alternative to dragging, including on touch screens. Bounds follow actual reporting dates for the selected metric. An entered date without observations snaps to the nearest available date within the interval, and the adjustment is announced; this changes the selected endpoint, never the underlying observations.
 
-Use `/` or `Ctrl/Cmd+K` to open country search. Search results and controls support keyboard navigation. Escape closes search, leaves comparison, or returns from inline analysis. The layout adapts to mobile, and country navigation honors reduced-motion preferences.
+Use `/` or `Ctrl/Cmd+K` to open country search. Search results and controls support keyboard navigation. Escape closes search, leaves comparison, or closes inline analysis. The layout adapts to mobile, and country navigation honors reduced-motion preferences.
 
 The URL preserves the data mode, view, category, metric, unit, smoothing, selected date and country, and comparison countries, range, layout, chart type, and scale. Copy the address to restore that context. Uploaded files remain local to the current tab and are not embedded in shared links.
 
@@ -81,7 +81,7 @@ npm start
 
 Demographics is optional during preparation and loading. The four observation/index files still work without it; population-adjusted units then become unavailable. A missing or invalid required dataset opens recovery controls for four CSV uploads plus an optional demographics upload. A successful upload replaces the data atomically and recovers the globe without reloading. Use prepared country-only files for uploads.
 
-The loader accepts `location_key`, older Google `key`, and existing `country_key`/`country_code`/`iso_code` identifiers. It retains country-level two-letter keys and filters subregions. It rejects invalid dates and numeric cells, duplicate country/date rows, and observations whose country is absent from the index.
+The loader accepts `location_key`, older Google `key`, and existing `country_key`/`country_code`/`iso_code` identifiers. It retains country-level two-letter keys and filters subregions using the same rules as preparation. It rejects inconsistent CSV row widths, duplicate or empty headers, missing required columns, invalid dates and numeric cells, duplicate country/date rows, and observations whose country is absent from the index. Rejected data leaves the previous observations and caches intact. Valid reloads retain the selected metric when it remains available; uploaded population files are identified as uploaded demographics.
 
 Official field definitions: [epidemiology](https://github.com/GoogleCloudPlatform/covid-19-open-data/blob/main/docs/table-epidemiology.md), [hospitalizations](https://github.com/GoogleCloudPlatform/covid-19-open-data/blob/main/docs/table-hospitalizations.md), [vaccinations](https://github.com/GoogleCloudPlatform/covid-19-open-data/blob/main/docs/table-vaccinations.md), [index](https://github.com/GoogleCloudPlatform/covid-19-open-data/blob/main/docs/table-index.md), and [demographics](https://github.com/GoogleCloudPlatform/covid-19-open-data/blob/main/docs/table-demographics.md).
 
@@ -146,7 +146,7 @@ data/                   prepared local CSVs and quality report (not committed)
 datasets/google/        original downloads (not committed)
 ```
 
-There is no build step. The data layer, registry, store, and bootstrap use ES modules; rendering modules expose a small browser-global API and load in an explicit order. One service and one globe own their data and event lifetimes.
+There is no build step. The data layer, registry, store, and bootstrap use ES modules; rendering modules expose a small browser-global API and load in an explicit order. One service and one globe own their data and event lifetimes. `ui/view.js` applies the requested workspace before the first paint and retains navigation changes made while application code or CSVs are loading. Comparison reads the active metric from the data service instead of maintaining a second copy.
 
 ## Validate changes
 
@@ -161,6 +161,8 @@ Browser tests use installed Google Chrome. Set the Playwright `channel` in `play
 `e2e/appearance.spec.js` exercises the original dark palette, default, stored and System preferences; early appearance application; keyboard and pointer menu behavior; live chart and globe recoloring with data, scale bounds, rotation, and geography retained; light globe labels and controls; and both appearances at 320px and 390px widths. It also writes Explore and Compare screenshots for visual review. To run this coverage separately, use `npm run test:e2e -- e2e/appearance.spec.js`.
 
 `e2e/explorer-controls.spec.js` checks real pointer zoom/reset at laptop and 320px mobile sizes in both appearances, including maximum zoom, preserved country/date context, and the globe-header reporting count. A controlled hospitalization fixture verifies daily occupancy, seven-day means, admissions, and unsmoothed cumulative totals in Explore and Compare.
+
+`e2e/view-restoration.spec.js` holds application and data requests to verify the first painted workspace, refresh without an Explore flash or unwanted heading focus, navigation during loading, retained URL settings, and archive-failure recovery. Node regressions also cover isolated reports, tiny nonzero rates, keyboard chart inspection, selection event lifetimes, pinch gestures, and CSV/preparation failure atomicity.
 
 ## Practical limits
 

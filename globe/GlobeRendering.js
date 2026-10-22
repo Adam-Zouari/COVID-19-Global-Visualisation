@@ -71,7 +71,7 @@ GlobeVis.prototype.updateGlobeColors = function() {
     this.updateLegend();
 };
 
-GlobeVis.prototype.clearCountrySelection = function() {
+GlobeVis.prototype.clearCountrySelection = function({ notify = true } = {}) {
     const palette = this.getGlobePalette();
     this.globeGroup.selectAll('.selected-country')
         .attr('stroke', feature => feature.id === this.hoveredCountry ? palette.hover : palette.border)
@@ -80,7 +80,7 @@ GlobeVis.prototype.clearCountrySelection = function() {
     this.selectedCountry = null;
     this.selectedCountryCode = null;
     this.updateCountryInfoPanel(null);
-    this.dispatchStateEvent('country-selected');
+    if (notify) this.dispatchStateEvent('country-selected');
 };
 
 GlobeVis.prototype.updateLegend = function() {
@@ -95,11 +95,14 @@ GlobeVis.prototype.updateLegend = function() {
         controls.appendChild(legend);
     }
     const rangesExpanded = Boolean(legend.querySelector('details')?.open);
+    const rangesFocused = legend.querySelector('summary') === document.activeElement;
     legend.replaceChildren();
     legend.removeAttribute('aria-describedby');
     const scale = this.dataService.getColorScale();
     const [minimum, maximum] = scale.domain();
-    const formatCompact = value => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+    const formatCompact = value => Math.abs(value) > 0 && Math.abs(value) < 0.1 ?
+        new Intl.NumberFormat('en-US', { maximumSignificantDigits: 3 }).format(value) :
+        new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
     const formatBoundary = value => new Intl.NumberFormat('en-US', { maximumSignificantDigits: 3 }).format(value);
     const formatExact = value => new Intl.NumberFormat('en-US', { maximumSignificantDigits: 12 }).format(value);
     const title = document.createElement('div');
@@ -149,6 +152,7 @@ GlobeVis.prototype.updateLegend = function() {
             row.append(swatch, label); bands.appendChild(row);
         }
         details.append(summary, explanation, bands); legend.appendChild(details);
+        if (rangesFocused) summary.focus({ preventScroll: true });
     }
     const swatches = [[this.dataService.getDefaultColor(),
         this.dataService.displayUnit !== 'count' ? 'Missing report / population unavailable' :

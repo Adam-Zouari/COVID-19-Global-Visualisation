@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { csvParse } from 'd3';
+import { csvParseRows } from 'd3';
 import DataService from '../dataService/index.js';
 import { METRICS, UNIT_DEFINITIONS, getMetricMetadata, getUnitLabel } from '../dataService/metrics.js';
 
-globalThis.d3 = { csvParse };
+globalThis.d3 = { csvParseRows };
 
 async function fixture(overrides = {}) {
     const service = new DataService({ useSampleData: false });
@@ -80,6 +80,7 @@ test('population-normalized observations preserve missingness, corrections and d
     assert.equal(service.getDisplayValue('TN', { date: '2020-01-01', column: 'cumulative_persons_vaccinated', unit: 'percent' }), 50);
     assert.ok(Math.abs(service.getDisplayValue('TN', { date: '2020-01-01', column: 'cumulative_vaccine_doses_administered', unit: 'per100' }) - 220) < 1e-10);
     assert.equal(service.getDisplayValue('TN', { date: '2020-01-01', column: 'cumulative_vaccine_doses_administered', unit: 'percent' }), null);
+    assert.equal(service.getCountryAvailability('TN', { date: '2020-01-01', column: 'cumulative_vaccine_doses_administered', unit: 'percent' }).status, 'unsupported-unit');
 });
 
 test('seven-day means use calendar dates, at least five reports, and an observed selected day', async () => {

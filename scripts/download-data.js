@@ -181,9 +181,8 @@ if (invokedDirectly && ['--help', '-h'].includes(process.argv[2])) {
             onRetry: ({ attempt, error }) => console.log(`  ${error.message} Retrying (${attempt}/2)…`),
             onComplete: result => console.log(`  ${result.status === 'skipped' ? 'Already exists; skipped' : 'Saved'} (${formatBytes(result.bytes)})`)
         });
-        console.log('\nAll five files are available. Prepare the four app datasets with:');
+        console.log('\nAll five files are available. Prepare country-level observations and population data with:');
         console.log(`npm run prepare-data -- "${directory}"`);
-        console.log('demographics.csv is saved for population-based features; the current app uses the other four files.');
     } catch (error) {
         console.error(`\n${error.message}`);
         process.exitCode = controller.signal.aborted ? 130 : 1;

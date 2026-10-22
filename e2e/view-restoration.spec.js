@@ -187,3 +187,35 @@ test('an initial Compare shell does not hide CSV failure recovery or block switc
     expect(new URL(page.url()).searchParams.get('data')).toBe('sample');
     expect(errors).toEqual([]);
 });
+
+for (const initialView of ['explore', 'compare']) {
+    test(`navigation while ${initialView} is loading preserves the latest click and restored data settings`, async ({ page }) => {
+        const errors = errorsOn(page), app = gate(), data = gate();
+        const selectedView = initialView === 'explore' ? 'compare' : 'explore';
+        let requests = 0;
+        await page.route('**/app.js', async route => { await app.promise; await route.continue(); });
+        await installCSVFixtures(page, { dataGate: () => data, onDataRequest: () => requests++ });
+        try {
+            await page.goto(`/?view=${initialView}&country=tn&compare=tn,us&unit=per100k&smooth=raw`, { waitUntil: 'commit' });
+            await page.locator(selectedView === 'compare' ? '#navCompare' : '#navExplore').click();
+            await expect(page.locator('html')).toHaveAttribute('data-view', selectedView);
+            app.release();
+            await expect.poll(() => requests).toBe(5);
+            // Repeated navigation while the data is still pending must use the final choice.
+            await page.locator(initialView === 'compare' ? '#navCompare' : '#navExplore').click();
+            await page.locator(selectedView === 'compare' ? '#navCompare' : '#navExplore').click();
+            data.release();
+            await waitForData(page);
+            await expect.poll(() => page.evaluate(() => window.AtlasView.restoring)).toBe(false);
+            await expect(page.locator('html')).toHaveAttribute('data-view', selectedView);
+            const state = await page.evaluate(() => window.AtlasStore.getState());
+            expect(state).toMatchObject({ view: selectedView, selectedCountry: 'tn', compareCountries: ['tn', 'us'], unit: 'per100k', smoothing: 'raw' });
+            expect(new URL(page.url()).searchParams.get('view')).toBe(selectedView === 'compare' ? 'compare' : null);
+            if (selectedView === 'compare') await page.locator('#navExplore').click();
+            await expect(page.locator('#countryInfo')).toBeVisible();
+            await expect(page.locator('#countryInfo')).toContainText('Tunisia');
+            await expect(page.locator('#globe svg')).toBeVisible();
+        } finally { app.release(); data.release(); }
+        expect(errors).toEqual([]);
+    });
+}

@@ -1,18 +1,17 @@
 // Analysis dates stay local; metric, unit and smoothing are shared with the atlas.
 const ChartControls = {
-    state: { dateMode: 'range', dateRange: { start: 0, end: 100 } }, context: null, frame: null,
+    state: { dateRange: { start: 0, end: 100 } }, context: null, frame: null,
     clearContext() { if (this.frame !== null) cancelAnimationFrame(this.frame); this.frame = null; this.context = null; },
 
     initialize(container, countryCode, vizType, data = ChartFactory.prepareDataForCountry(countryCode)) {
         if (!data) return this.getSettings();
         const service = window.globeInstance.dataService;
         const timeline = service.getAvailableDates?.(data.column) || data.dates;
-        data = { ...data, dates: timeline, displayDates: timeline.map(date => service.formatDate(date)) };
         this.timeline = timeline;
         this.context = { container, countryCode, vizType };
         let controls = document.getElementById('chartControlsContainer');
         if (!controls) { controls = document.createElement('div'); controls.id = 'chartControlsContainer'; controls.className = 'chart-controls-container'; container.before(controls); }
-        this.rangeControl = new DateRangeControl(controls, {
+        new DateRangeControl(controls, {
             dates: timeline, range: this.state.dateRange, idPrefix: 'date-range', formatDate: date => service.formatDate(date),
             onInput: range => { this.state.dateRange = range; this.updateChartInRealTime(); }
         });

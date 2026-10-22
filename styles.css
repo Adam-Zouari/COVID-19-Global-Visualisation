@@ -127,7 +127,6 @@ button > svg, .search-input-wrap > svg, .globe-hint > svg { width: 20px; height:
 kbd { font-family: inherit; font-size: 10px; color: var(--subtle); border: 1px solid var(--border); border-radius: 3px; padding: 0 5px; margin-left: 14px; }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; background: transparent; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); font-size: 20px; line-height: 1; }
 .icon-btn:hover:not(:disabled) { background: var(--surface-raised); color: var(--text); border-color: var(--border-hover); }
-.methodology-trigger { width: 28px; height: 28px; border-radius: 50%; font-size: 13px; }
 .app-main { max-width: 1700px; margin: 0 auto; padding: 14px 24px 0; }
 .page-intro { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding-bottom: 4px; }
 .eyebrow { color: var(--subtle); font-size: 10px; font-weight: 600; letter-spacing: .14em; }
@@ -172,16 +171,14 @@ input[type="file"]::file-selector-button { background: var(--control); color: va
 .globe-legend { display: grid; gap: 5px; font-size: 11px; }
 .globe-legend .legend-title { display: none; }
 .legend-gradient { height: 10px; border-radius: 3px; }
-.legend-steps { display: flex; gap: 3px; }
-.legend-steps > span { height: 10px; flex: 1; border-radius: 2px; }
 .legend-range { display: flex; justify-content: space-between; gap: 6px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .legend-note { color: var(--subtle); font-size: 10px; line-height: 1.6; }
 .legend-key { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 10px; }
 .legend-swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
 .coverage-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--interactive); flex-shrink: 0; margin-top: 5px; }
-.primary-btn, .secondary-btn, .control-btn { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 12px; padding: 10px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; white-space: nowrap; }
-.primary-btn, .control-btn { background: var(--dataset-color); color: var(--on-accent); border: 1px solid transparent; }
-.primary-btn:hover:not(:disabled), .control-btn:hover:not(:disabled) { background: var(--dataset-hover); }
+.primary-btn, .secondary-btn { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 12px; padding: 10px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.primary-btn { background: var(--dataset-color); color: var(--on-accent); border: 1px solid transparent; }
+.primary-btn:hover:not(:disabled) { background: var(--dataset-hover); }
 .secondary-btn { background: var(--secondary-bg); border: 1px solid var(--secondary-border); color: var(--secondary-text); }
 .secondary-btn:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--secondary-border-hover); color: var(--text); }
 .full-width { width: 100%; justify-content: space-between; }
@@ -250,8 +247,6 @@ input[type="range"]::-moz-range-thumb { width: 9px; height: 9px; border: 2px sol
 #dateSlider { width: 100%; flex: 1; min-width: 0; }
 .timeline-endpoints { display: flex; align-items: center; justify-content: space-between; margin: 8px 37px 0 150px; font-size: 9px; color: var(--subtle); font-variant-numeric: tabular-nums; }
 #timelineYears { display: flex; justify-content: space-around; flex: 1; padding: 0 20px; }
-.historical-label { display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--subtle); white-space: nowrap; }
-.history-symbol { font-size: 18px; }
 .country-analysis { position: relative; margin-top: 18px; padding: 18px 20px; scroll-margin-top: 80px; }
 .analysis-close { position: absolute; top: 14px; right: 16px; width: 32px; height: 32px; border: 0; background: transparent; font-size: 24px; }
 .analysis-close:hover:not(:disabled) { background: transparent; }
@@ -375,7 +370,6 @@ input.date-range-handle:focus-visible::-moz-range-thumb { outline: 2px solid var
     .brand strong { font-size: 12px; }
     .primary-nav { gap: 14px; margin-left: auto; }
     .nav-link { min-width: 0; padding: 0; font-size: 11px; }
-    .header-actions { gap: 0; }
     .search-trigger > span, .search-trigger > kbd { display: none; }
     .data-source-select { width: 136px; height: 34px; padding-left: 8px; padding-right: 24px; font-size: 11px; }
     .header-actions { gap: 6px; }
@@ -469,5 +463,5 @@ input.date-range-handle:focus-visible::-moz-range-thumb { outline: 2px solid var
     html { scroll-behavior: auto; }
     button, a, select, input { transition: none; }
     .loading-ring { animation: none; }
+    *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

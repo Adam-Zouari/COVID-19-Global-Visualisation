@@ -50,6 +50,7 @@ export async function indexAllData() {
     this.seriesCache = new Map();
     this.displayDomainCache = new Map();
     this.metricDatesCache = new Map();
+    this.colorCache = new Map();
     for (const [name, property] of Object.entries(DATASETS)) {
         const countries = this.indexedData[name] = Object.create(null);
         const dates = this.dataByDate[name] = Object.create(null);
@@ -63,10 +64,9 @@ export async function indexAllData() {
 export async function precalculateColors() {
     // Only ranges are precomputed. Materializing every country/date/column color
     // multiplies memory usage and used to rescan the entire CSV for every date.
-    this.globalDataRanges = Object.create(null);
     this.colorCache = new Map();
     for (const [name, property] of Object.entries(DATASETS)) {
-        const ranges = this.globalDataRanges[name] = Object.create(null);
+        const ranges = Object.create(null);
         for (const column of this.availableColumns[name]) ranges[column] = { min: 0, max: 0 };
         for (const row of this[property]) {
             for (const column of this.availableColumns[name]) {

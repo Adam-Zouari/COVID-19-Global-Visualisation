@@ -50,3 +50,42 @@ test('optional demographics is country-only and implausible source dates produce
     assert.equal(report.files['country_level_epidem.csv'].excludedInvalidDates, 2);
     assert.deepEqual(report.files['country_level_epidem.csv'].invalidDateExamples, [{ location_key: 'TN', date: '0022-01-10' }, { location_key: 'TN', date: '2019-03-30' }]);
 });
+
+test('preparation rejects duplicate or missing required headers and removes only its newly created files', async t => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'covid-prepare-headers-'));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const cases = [
+        ['hospitalizations.csv', 'date,location_key,new_confirmed,new_confirmed\n2020-01-01,TN,1,99\n', /duplicate column headers/],
+        ['epidemiology.csv', 'location_key,new_confirmed\nTN,1\n', /missing required date column/],
+        ['index.csv', 'location_key\nTN\n', /missing required country_name or country column/],
+        ['demographics.csv', 'location_key,population,population\nTN,1,99\n', /duplicate column headers/]
+    ];
+    for (const [index, [badFile, body, expected]] of cases.entries()) {
+        const source = path.join(root, `source-${index}`), output = path.join(root, `output-${index}`);
+        await mkdir(source);
+        for (const file of ['epidemiology.csv', 'hospitalizations.csv', 'vaccinations.csv']) {
+            await writeFile(path.join(source, file), 'date,location_key,new_confirmed\n2020-01-01,TN,1\n');
+        }
+        await writeFile(path.join(source, 'index.csv'), 'location_key,country_name\nTN,Tunisia\n');
+        await writeFile(path.join(source, badFile), body);
+        await assert.rejects(prepareData(source, output), expected);
+        assert.deepEqual(await readdir(output), [], 'Earlier output files are rolled back on a later schema failure');
+        assert.equal(await readFile(path.join(source, badFile), 'utf8'), body);
+    }
+});
+
+test('an existing quality report prevents mixing old provenance with freshly prepared observations', async t => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'covid-prepare-report-'));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const source = path.join(root, 'source'), output = path.join(root, 'output');
+    await mkdir(source); await mkdir(output);
+    const report = '{"source":"earlier preparation","excludedInvalidDates":99}\n';
+    await writeFile(path.join(output, 'prepare-report.json'), report);
+    for (const file of ['epidemiology.csv', 'hospitalizations.csv', 'vaccinations.csv']) {
+        await writeFile(path.join(source, file), 'date,location_key,new_confirmed\n2020-01-01,TN,1\n');
+    }
+    await writeFile(path.join(source, 'index.csv'), 'location_key,country_name\nTN,Tunisia\n');
+    await assert.rejects(prepareData(source, output), /Output already exists: prepare-report.json/);
+    assert.deepEqual(await readdir(output), ['prepare-report.json']);
+    assert.equal(await readFile(path.join(output, 'prepare-report.json'), 'utf8'), report);
+});

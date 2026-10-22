@@ -4,6 +4,7 @@
     const root = document.documentElement;
     function render(view) {
         const comparing = view === 'compare';
+        window.AtlasView.current = comparing ? 'compare' : 'explore';
         root.dataset.view = comparing ? 'compare' : 'explore';
         for (const [selector, hidden] of [['#exploreView', comparing], ['.page-intro', comparing], ['#comparePanel', !comparing]]) {
             const node = document.querySelector(selector);
@@ -17,8 +18,14 @@
         }
     }
     window.AtlasView = {
-        initialView, restoring: true, render,
-        initialize() { render(initialView); delete root.dataset.viewPending; },
+        current: initialView, restoring: true, render,
+        navigate(view) {
+            window.stopTimeline?.();
+            if (this.restoring) render(view);
+            else if (view === 'compare') window.CompareMode.enter();
+            else window.CompareMode.exit();
+        },
+        initialize() { render(this.current); delete root.dataset.viewPending; },
         finish(view) { this.restoring = false; render(view); }
     };
     root.dataset.view = initialView;

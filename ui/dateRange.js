@@ -58,9 +58,10 @@ window.DateRangeControl = class DateRangeControl {
     setIndex(key, index, commit) {
         const last = Math.max(0, this.dates.length - 1);
         const clamped = Math.max(0, Math.min(last, Math.round(index) || 0));
+        const previous = this.indices[key];
         this.indices[key] = key === 'start' ? Math.min(clamped, this.indices.end) : Math.max(clamped, this.indices.start);
         this.status.textContent = ''; this.refresh();
-        this.onInput?.(this.getRange(), this.getDates());
+        if (this.indices[key] !== previous) this.onInput?.(this.getRange(), this.getDates());
         if (commit) this.onChange?.(this.getRange(), this.getDates());
     }
 
