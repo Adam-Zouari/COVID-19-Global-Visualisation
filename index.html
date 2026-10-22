@@ -73,7 +73,7 @@
                     <button id="hospBtn" class="dataset-btn" aria-pressed="false" onclick="changeDataset('hospitalizations')"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 21V5h14v16M2 21h20M9 10h6m-3-3v6M9 21v-5h6v5"/></svg>Hospitalizations</button>
                     <button id="vaccBtn" class="dataset-btn" aria-pressed="false" onclick="changeDataset('vaccinations')"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m14 3 7 7m-5-5-4 4m5 0-8 8-4 2 2-4 8-8M4 20l-2 2M9 8l7 7"/></svg>Vaccinations</button>
                 </div>
-                <button class="text-btn source-link" onclick="openMethodology()">Source &amp; methodology <span aria-hidden="true">↗</span></button>
+                <button class="text-btn source-link" onclick="openMethodology()" aria-label="Source &amp; methodology" title="Source &amp; methodology"><span class="source-link-label">Source &amp; methodology</span><span aria-hidden="true">ⓘ</span></button>
             </div>
             <div id="exploreView">
                 <section class="historical-timeline panel" aria-label="Historical timeline">
@@ -107,7 +107,6 @@
                 <section class="explore-workspace" id="exploreWorkspace" aria-label="Interactive country explorer" tabindex="-1">
                     <aside class="control-panel panel">
                         <div class="panel-label">
-                            <span class="section-number">01</span>
                             <span>EXPLORER SETTINGS</span>
                             <button id="filtersToggle" class="icon-btn" aria-label="Toggle filters" aria-expanded="false">⌄</button>
                         </div>
@@ -127,7 +126,7 @@
                                 <legend>Reporting</legend>
                                 <div class="segmented-control">
                                     <button id="rawBtn" onclick="atlasActions.setSmoothing('raw')" aria-pressed="false">Daily</button>
-                                    <button id="averageBtn" class="active" aria-describedby="smoothingNote" title="Average of recent daily reports to make the trend easier to see" onclick="atlasActions.setSmoothing('7day')" aria-pressed="true">7-day average</button>
+                                    <button id="averageBtn" class="active" title="Average of recent daily reports to make the trend easier to see" onclick="atlasActions.setSmoothing('7day')" aria-pressed="true">7-day average</button>
                                 </div>
                             </fieldset>
                             <div class="legend-block">
@@ -137,14 +136,6 @@
                                 </div>
                                 <div id="globeLegend" class="globe-legend"></div>
                             </div>
-                            <details class="measurement-help">
-                                <summary>About these values</summary>
-                                <div class="measurement-help-content">
-                                    <p id="metricDescription" class="control-description">Select a measure to explore.</p>
-                                    <p id="populationNote" class="control-description"></p>
-                                    <p id="smoothingNote" class="control-description"></p>
-                                </div>
-                            </details>
                         </div>
                     </aside>
                     <div class="globe-stage panel">
@@ -194,6 +185,7 @@
                     </aside>
                 </section>
                 <section id="visualizationPanel" class="country-analysis panel" aria-label="Country analysis" hidden>
+                    <button id="analysisCloseBtn" class="icon-btn analysis-close" onclick="closeCountryAnalysis()" aria-label="Close country data" title="Close country data">×</button>
                     <div class="analysis-header">
                         <div>
                             <p class="eyebrow">A CLOSER LOOK</p>
@@ -204,7 +196,6 @@
                             <p id="analysisMetricLabel">Selected metric over time</p>
                         </div>
                         <div class="viz-controls">
-                            <button id="analysisCloseBtn" class="text-btn" onclick="restoreGlobe()">↑ Back to globe</button>
                             <label class="sr-only" for="vizTypeSelector">Visualization type</label>
                             <select id="vizTypeSelector" aria-label="Visualization type" onchange="changeVisualization()">
                                 <option value="line">Trend line</option>
@@ -270,15 +261,6 @@
                 <div id="compareMessage" class="inline-message" role="status" aria-live="polite"></div>
                 <div id="compareChartContainer" class="compare-chart-container panel"></div>
             </section>
-            <footer class="app-footer">
-                <div>
-                    <span class="footer-dot"></span>
-                    <span id="dataStatus" role="status" aria-live="polite">Loading observations</span>
-                </div>
-                <div>
-                    <button class="text-btn" onclick="openMethodology()">Methodology</button>
-                </div>
-            </footer>
         </main>
         <div id="searchModal" class="search-modal" role="dialog" aria-modal="true" aria-labelledby="searchTitle" hidden>
             <div class="search-container">

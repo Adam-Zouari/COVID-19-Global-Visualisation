@@ -66,24 +66,7 @@ GlobeVis.prototype.getCountryColor = function(feature) {
 };
 
 GlobeVis.prototype.updateGlobeColors = function() {
-    const countriesWithData = new Set();
-    this.globeGroup.selectAll('.country').attr('fill', feature => {
-        const code = this.getCountryCode(feature);
-        // A reported zero is data, not a missing value.
-        const value = code ? this.displayValue(code) : null;
-        if (typeof value === 'number' && Number.isFinite(value)) countriesWithData.add(code);
-        return this.getCountryColor(feature);
-    });
-    const status = document.getElementById('dataStatus');
-    if (status) {
-        const sources = {
-            sample: 'Sample data (fictional demonstration)',
-            upload: 'Uploaded CSV data',
-            csv: 'Original Google data'
-        };
-        const source = sources[this.dataService.dataSource] || 'Data';
-        status.textContent = `${source} · ${this.metricLabel()} · ${countriesWithData.size} mapped ${countriesWithData.size === 1 ? 'country' : 'countries'} with data`;
-    }
+    this.globeGroup.selectAll('.country').attr('fill', feature => this.getCountryColor(feature));
     this.tooltip.style('opacity', 0);
     this.updateLegend();
 };

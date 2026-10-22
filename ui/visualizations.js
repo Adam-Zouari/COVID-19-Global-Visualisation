@@ -18,11 +18,10 @@ function showVisualizations() {
     window.syncAtlasState?.();
 }
 
-function restoreGlobe() {
+function closeCountryAnalysis() {
     const panel = document.getElementById('visualizationPanel');
     if (panel) panel.hidden = true;
     ChartControls.clearContext();
-    document.getElementById('globe')?.scrollIntoView?.({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'center' });
     document.getElementById('seeMoreBtn')?.focus({ preventScroll: true });
     window.syncAtlasState?.();
 }

@@ -98,7 +98,6 @@ test('hospital occupancy supports daily snapshots and seven-day means without sm
     await page.locator('#averageBtn').click();
     await expect(page.locator('.primary-metric-value')).toHaveText('70');
     await expect(page.locator('#mapUnitsLabel')).toContainText('7-day average');
-    await expect(page.locator('#smoothingNote')).toContainText('daily patient snapshots, not new admissions');
     await page.locator('#seeMoreBtn').click();
     await expect(page.locator('#chartContainer .chart-subtitle')).toContainText('7-day average of daily patient snapshots');
     await page.locator('#addToCompareBtn').click();

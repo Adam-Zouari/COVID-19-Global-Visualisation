@@ -83,12 +83,7 @@ class GlobeVis {
             console.error('Unable to initialize globe:', error);
             this.stopAutoRotation();
             this.svg.style('display', 'none');
-            const message = document.createElement('div');
-            message.className = 'error-message globe-error';
-            message.textContent = `Unable to load the globe: ${error.message}`;
-            container.appendChild(message);
-            const status = document.getElementById('dataStatus');
-            if (status) status.textContent = 'Data unavailable. Upload CSV files to recover, or reload to retry.';
+            this.showGlobeError(`Unable to load the globe: ${error.message}. Upload CSV files to recover, or reload to retry.`);
         } finally {
             const loader = document.getElementById('loader');
             if (loader) loader.style.display = 'none';
@@ -109,6 +104,18 @@ class GlobeVis {
         return this.mapLoadPromise;
     }
 
+    showGlobeError(text) {
+        const container = document.getElementById('globe');
+        let message = container.querySelector('.globe-error');
+        if (!message) {
+            message = document.createElement('div');
+            message.className = 'error-message globe-error';
+            message.setAttribute('role', 'alert');
+            container.appendChild(message);
+        }
+        message.textContent = text;
+    }
+
     async recoverAfterDataLoad() {
         if (this.destroyed) return;
         try {
@@ -118,8 +125,7 @@ class GlobeVis {
             this.dispatchStateEvent('atlas-ready');
         } catch (error) {
             console.error('Unable to recover globe:', error);
-            const status = document.getElementById('dataStatus');
-            if (status) status.textContent = `Map unavailable: ${error.message}. Reload the page to retry.`;
+            this.showGlobeError(`Map unavailable: ${error.message}. Reload the page to retry.`);
         }
     }
 

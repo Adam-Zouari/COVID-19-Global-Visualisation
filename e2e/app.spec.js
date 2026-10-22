@@ -194,8 +194,11 @@ test('analysis is inline, normalized values are real calculations and mapless co
     await expect(page.locator('#chartContainer svg')).toBeVisible();
     expect(await page.locator('#chartContainer circle').count()).toBeLessThan(15);
     await screenshot(page, 'atlas-analysis-desktop');
-    await page.locator('#analysisCloseBtn').click();
+    await page.getByRole('button', { name: 'Close country data', exact: true }).click();
     await expect(page.locator('#visualizationPanel')).toBeHidden();
+    await expect(page.locator('#seeMoreBtn')).toBeFocused();
+    await expect(page.locator('#countryName')).toContainText('Tunisia');
+    await expect(page.locator('#unitSelector')).toHaveValue('per100k');
     await selectCountry(page, 'Singapore');
     await expect(page.locator('#countryName')).toContainText('Singapore');
     await page.locator('#seeMoreBtn').click();

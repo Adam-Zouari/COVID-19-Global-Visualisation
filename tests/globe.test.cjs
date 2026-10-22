@@ -175,27 +175,6 @@ test('rebuilding the date slider replaces listeners and preserves the selected d
     assert.equal(elements.get('nextDateBtn').disabled, true);
 });
 
-test('country availability counts zero values and keeps the sample-data label', () => {
-    const { globe, elements } = harness();
-    const status = { style: {} };
-    elements.set('dataStatus', status);
-    globe.dataService = {
-        currentColumn: 'new_confirmed', dataSource: 'sample',
-        getCountryData: code => ({ new_confirmed: code === 'zero' ? 0 : null }),
-        getCountryColor: () => '#123456', getDefaultColor: () => '#000000'
-    };
-    globe.getCountryCode = feature => feature;
-    globe.globeGroup = { selectAll: () => ({ attr(name, callback) { ['zero', 'missing'].forEach(callback); } }) };
-    globe.tooltip = { style() {} };
-    globe.updateGlobeColors();
-    assert.match(status.textContent, /Sample data/);
-    assert.match(status.textContent, /fictional/);
-    assert.match(status.textContent, /1 mapped country with data/);
-    globe.dataService.dataSource = 'upload';
-    globe.updateGlobeColors();
-    assert.match(status.textContent, /Uploaded CSV data/);
-});
-
 test('reset preserves the selected country, metric, and date', () => {
     const { context, globe } = harness();
     context.d3 = { zoomIdentity: { k: 1 } };

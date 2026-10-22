@@ -96,8 +96,6 @@ function updateAtlasPresentation() {
     const metricName = document.getElementById('selectedMetricName');
     if (metricName) { metricName.textContent = metric.label; metricName.hidden = metric.label.length < 33; }
     setText('mapUnitsLabel', `${unitText}${service.smoothing === '7day' ? ' · 7-day average' : ''}`);
-    setText('metricDescription', metric.kind === 'daily' ? 'New observations reported each day.' : metric.kind === 'occupancy' ?
-        service.smoothing === '7day' ? 'Average reported daily number of patients in care over the selected seven-day window.' : 'Reported number of patients receiving care on the selected day.' : 'Reported total up to the selected day.');
     setText('timelineMeasure', service.smoothing === '7day' ? 'Trailing 7-day average' : 'Observation date');
     const units = document.getElementById('unitSelector');
     if (units) {
@@ -109,8 +107,6 @@ function updateAtlasPresentation() {
         }
         units.value = service.displayUnit || 'count';
     }
-    const selected = window.globeInstance?.selectedCountryCode;
-    setText('populationNote', !hasPopulation() ? 'Population data is unavailable; counts remain available.' : selected && !service.getPopulation?.(selected) ? 'No population estimate for this country.' : service.dataSource === 'sample' ? 'Population estimates in this demo are fictional.' : 'Rates use the available population estimate.');
     for (const [id, value] of [['rawBtn', 'raw'], ['averageBtn', '7day']]) {
         const button = document.getElementById(id);
         if (!button) continue;
@@ -118,10 +114,6 @@ function updateAtlasPresentation() {
         button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active));
         button.disabled = value === '7day' && !metric.smoothingAllowed;
     }
-    setText('smoothingNote', metric.smoothingAllowed ?
-        'The selected day and previous six days are averaged. A full seven-day window, at least five reports, and a report on the selected day are required; missing days are never zero. Daily shows the original report.' +
-        (metric.kind === 'occupancy' ? ' This averages daily patient snapshots, not new admissions or unique patients.' : '') :
-        'This metric uses its reported value; averaging is not applied.');
     const smoothingGroup = document.querySelector('.smoothing-group');
     if (smoothingGroup) smoothingGroup.hidden = !metric.smoothingAllowed;
     if (dates.length) {
@@ -270,7 +262,7 @@ function initializeUI() {
         } else if (event.key === 'Escape' && !document.getElementById('methodologyDialog')?.open) {
             stopTimeline();
             if (window.CompareMode?.state.active) CompareMode.exit();
-            else if (!document.getElementById('visualizationPanel')?.hidden) restoreGlobe();
+            else if (!document.getElementById('visualizationPanel')?.hidden) closeCountryAnalysis();
         }
     });
 }

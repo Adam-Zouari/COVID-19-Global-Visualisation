@@ -67,7 +67,6 @@ try {
     restoring = false;
     console.error('Unable to initialize atlas:', error);
     document.getElementById('loader').style.display = 'none';
-    document.getElementById('dataStatus').textContent = 'The atlas could not initialize';
     document.getElementById('errorMessage').textContent = error.message;
     document.getElementById('errorDisplay').style.display = 'flex';
     document.getElementById('errorClose').onclick = () => { document.getElementById('errorDisplay').style.display = 'none'; };
