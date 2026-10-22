@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { pipeline } from 'node:stream/promises';
 import { parse } from 'csv-parse';
 import { stringify } from 'csv-stringify';
-import { isValidDate, MIN_OBSERVATION_DATE, COUNTRY_IDENTIFIER_FIELDS, countryKey, isCountryRow } from '../dataService/utils.js';
+import { isValidDate, MIN_OBSERVATION_DATE, COUNTRY_IDENTIFIER_FIELDS, countryKey, isCountryRow } from '../src/dataService/utils.js';
 
 const files = {
     'country_level_epidem.csv': ['epidemiology.csv', 'country_level_epidem.csv'],

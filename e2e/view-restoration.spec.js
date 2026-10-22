@@ -100,8 +100,8 @@ test('Compare is the first painted view before app and data load, and reload pre
     const path = '/?view=compare&category=hospitalizations&metric=current_hospitalized_patients&unit=per100k&smooth=raw&date=2020-01-10&country=tn&compare=tn,us&layout=separate&chart=bar&scale=independent&range=20,80';
     const expectedState = {
         view: 'compare', category: 'hospitalizations', metric: 'current_hospitalized_patients', unit: 'per100k',
-        smoothing: 'raw', selectedDate: '2020-01-10', selectedCountry: 'tn', compareCountries: ['tn', 'us'],
-        compareRange: { start: 20, end: 80 }, compareLayout: 'separate', compareChartType: 'bar', compareScale: 'independent', dataMode: 'csv'
+        smoothing: 'raw', selectedDate: '2020-01-10', selectedCountry: 'tn', analysisOpen: false, compareCountries: ['tn', 'us'],
+        compareRange: { start: 20, end: 80 }, compareLayout: 'separate', compareChartType: 'bar', compareScale: 'independent', compareChartOptions: {}, dataMode: 'csv'
     };
     try {
         for (const reload of [false, true]) {
@@ -170,6 +170,88 @@ test('default Explore paints correctly and keyboard entry into Compare still pro
     expect(errors).toEqual([]);
 });
 
+for (const width of [1440, 390]) {
+    test(`country analysis stays open across refresh and stays closed after explicit dismissal at ${width}px`, async ({ page }) => {
+        const errors = errorsOn(page);
+        await page.setViewportSize({ width, height: 1000 });
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await page.addInitScript(() => {
+            window.__analysisScrollCalls = 0;
+            const scroll = Element.prototype.scrollIntoView;
+            Element.prototype.scrollIntoView = function(...args) {
+                if (this.id === 'visualizationPanel') window.__analysisScrollCalls++;
+                return scroll.apply(this, args);
+            };
+        });
+        await installCSVFixtures(page);
+        await page.goto('/?country=tn&category=hospitalizations&metric=current_hospitalized_patients&unit=per100k&smooth=raw&date=2020-01-10');
+        await waitForData(page);
+        await expect.poll(() => page.evaluate(() => AtlasView.restoring)).toBe(false);
+        await page.locator('#seeMoreBtn').click();
+        await expect(page.locator('#visualizationPanel')).toBeVisible();
+        await expect.poll(() => new URL(page.url()).searchParams.get('analysis')).toBe('1');
+        await page.reload();
+        await waitForData(page);
+        await expect.poll(() => page.evaluate(() => AtlasView.restoring)).toBe(false);
+        await expect(page.locator('#visualizationPanel')).toBeVisible();
+        await expect(page.locator('#viz-country-name')).toHaveText('Tunisia');
+        await expect(page.locator('#analysisMetricLabel')).toHaveText('Currently hospitalized patients');
+        await expect(page.locator('#analysisValue')).toHaveText('1.9');
+        await expect(page.locator('#analysisValueDate')).toContainText('Jan 10, 2020');
+        await expect(page.locator('#chartContainer .data-line')).toBeVisible();
+        await expect(page.locator('#unitSelector')).toHaveValue('per100k');
+        expect(await page.evaluate(() => AtlasStore.getState().analysisOpen)).toBe(true);
+        expect(await page.evaluate(() => window.__analysisScrollCalls)).toBe(0);
+        await expect(page.locator('#vizTypeSelector')).not.toBeFocused();
+        await page.locator('#analysisCloseBtn').click();
+        await expect.poll(() => new URL(page.url()).searchParams.has('analysis')).toBe(false);
+        await page.reload();
+        await waitForData(page);
+        await expect.poll(() => page.evaluate(() => AtlasView.restoring)).toBe(false);
+        await expect(page.locator('#visualizationPanel')).toBeHidden();
+        expect(await page.evaluate(() => AtlasStore.getState().analysisOpen)).toBe(false);
+        expect(errors).toEqual([]);
+    });
+}
+
+test('Compare refresh retains the open country-analysis context for returning to Explore', async ({ page }) => {
+    const errors = errorsOn(page);
+    await page.setViewportSize({ width: 390, height: 1000 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await installCSVFixtures(page);
+    await page.goto('/?view=compare&analysis=1&country=tn&compare=tn,us&date=2020-01-10&smooth=raw');
+    for (const reload of [false, true]) {
+        if (reload) await page.reload();
+        await waitForData(page);
+        await expect.poll(() => page.evaluate(() => AtlasView.restoring)).toBe(false);
+        await expect(page.locator('#comparePanel')).toBeVisible();
+        expect(await page.evaluate(() => AtlasStore.getState().analysisOpen)).toBe(true);
+        await page.locator('#navExplore').click();
+        await expect(page.locator('#visualizationPanel')).toBeVisible();
+        await expect(page.locator('#analysisValue')).toHaveText('9');
+        await expect(page.locator('#chartContainer .data-line')).toBeVisible();
+        expect(await page.locator('#chartContainer svg').evaluate(node => Number(node.getAttribute('viewBox').split(' ')[2])))
+            .toBeLessThan(400);
+        if (!reload) await page.locator('#navCompare').click();
+    }
+    expect(errors).toEqual([]);
+});
+
+test('analysis links without a loaded valid country safely remain closed', async ({ page }) => {
+    const errors = errorsOn(page);
+    await installCSVFixtures(page);
+    for (const query of ['analysis=1', 'analysis=1&country=zz']) {
+        await page.goto(`/?${query}`);
+        await waitForData(page);
+        await expect.poll(() => page.evaluate(() => AtlasView.restoring)).toBe(false);
+        await expect(page.locator('#visualizationPanel')).toBeHidden();
+        expect(await page.evaluate(() => AtlasStore.getState().analysisOpen)).toBe(false);
+        expect(new URL(page.url()).searchParams.has('analysis')).toBe(false);
+        await expect(page.locator('#errorDisplay')).toBeHidden();
+    }
+    expect(errors).toEqual([]);
+});
+
 test('an initial Compare shell does not hide CSV failure recovery or block switching to the demo', async ({ page }) => {
     const errors = errorsOn(page);
     await installCSVFixtures(page, { failEpidemiology: true });
@@ -196,7 +278,7 @@ for (const initialView of ['explore', 'compare']) {
         await page.route('**/app.js', async route => { await app.promise; await route.continue(); });
         await installCSVFixtures(page, { dataGate: () => data, onDataRequest: () => requests++ });
         try {
-            await page.goto(`/?view=${initialView}&country=tn&compare=tn,us&unit=per100k&smooth=raw`, { waitUntil: 'commit' });
+            await page.goto(`/?view=${initialView}&country=tn&analysis=1&compare=tn,us&unit=per100k&smooth=raw`, { waitUntil: 'commit' });
             await page.locator(selectedView === 'compare' ? '#navCompare' : '#navExplore').click();
             await expect(page.locator('html')).toHaveAttribute('data-view', selectedView);
             app.release();
@@ -209,11 +291,12 @@ for (const initialView of ['explore', 'compare']) {
             await expect.poll(() => page.evaluate(() => window.AtlasView.restoring)).toBe(false);
             await expect(page.locator('html')).toHaveAttribute('data-view', selectedView);
             const state = await page.evaluate(() => window.AtlasStore.getState());
-            expect(state).toMatchObject({ view: selectedView, selectedCountry: 'tn', compareCountries: ['tn', 'us'], unit: 'per100k', smoothing: 'raw' });
+            expect(state).toMatchObject({ view: selectedView, selectedCountry: 'tn', analysisOpen: true, compareCountries: ['tn', 'us'], unit: 'per100k', smoothing: 'raw' });
             expect(new URL(page.url()).searchParams.get('view')).toBe(selectedView === 'compare' ? 'compare' : null);
             if (selectedView === 'compare') await page.locator('#navExplore').click();
             await expect(page.locator('#countryInfo')).toBeVisible();
             await expect(page.locator('#countryInfo')).toContainText('Tunisia');
+            await expect(page.locator('#visualizationPanel')).toBeVisible();
             await expect(page.locator('#globe svg')).toBeVisible();
         } finally { app.release(); data.release(); }
         expect(errors).toEqual([]);

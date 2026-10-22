@@ -16,7 +16,7 @@ function harness() {
         cancelAnimationFrame: id => frames.delete(id)
     });
     for (const file of ['GlobeVis.js', 'GlobeEvents.js', 'GlobeRendering.js', 'GlobeCountries.js', 'GlobeAnimation.js']) {
-        vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'globe', file), 'utf8'), context, { filename: file });
+        vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'globe', file), 'utf8'), context, { filename: file });
     }
     let rotation = [0, 0, 0];
     const globe = Object.assign(Object.create(context.window.GlobeVis.prototype), {
@@ -47,6 +47,63 @@ test('rotation has one scheduled frame and stopping cancels it', () => {
     globe.stopAutoRotation();
     assert.equal(frames.size, 0);
     assert.equal(globe.autoRotate, false);
+});
+
+test('default rotation stays suspended for hidden, reduced-motion, and Compare views', () => {
+    const { context, globe, frames } = harness();
+    context.document.hidden = true;
+    globe.startAutoRotation();
+    assert.equal(frames.size, 0);
+    context.document.hidden = false;
+    context.window.matchMedia = () => ({ matches: true });
+    globe.startAutoRotation();
+    assert.equal(frames.size, 0);
+    context.window.matchMedia = () => ({ matches: false });
+    context.window.CompareMode = { state: { active: true } };
+    globe.startAutoRotation();
+    assert.equal(frames.size, 0);
+});
+
+test('Reset resumes rotation after returning to its initial view', () => {
+    const { context, globe, frames, tick } = harness();
+    context.d3 = { zoomIdentity: { k: 1 } };
+    globe.svg = { interrupt() {}, call() {} };
+    globe.zoom = { transform() {} };
+    globe.stopAutoRotation();
+    globe.resetView();
+    assert.equal(globe.autoRotate, false);
+    tick(0); tick(1000);
+    assert.equal(globe.autoRotate, true);
+    assert.equal(frames.size, 1);
+    tick(1016); tick(1032);
+    assert.ok(globe.currentRotation[0] > -10);
+});
+
+test('interacting during Reset cancels its pending rotation restart', () => {
+    const { context, globe, frames, tick } = harness();
+    context.d3 = { zoomIdentity: { k: 1 } };
+    globe.svg = { interrupt() {}, call() {} };
+    globe.zoom = { transform() {} };
+    globe.tooltip = { style() {} };
+    globe.resetView();
+    tick(0);
+    globe.dragstarted({ x: 10, y: 20 });
+    globe.dragended();
+    tick(1000);
+    assert.equal(globe.autoRotate, false);
+    assert.equal(frames.size, 0);
+});
+
+test('Reset respects reduced motion instead of restarting automatic rotation', () => {
+    const { context, globe, frames, tick } = harness();
+    context.window.matchMedia = () => ({ matches: true });
+    context.d3 = { zoomIdentity: { k: 1 } };
+    globe.svg = { interrupt() {}, call() {} };
+    globe.zoom = { transform() {} };
+    globe.resetView();
+    tick(0);
+    assert.equal(globe.autoRotate, false);
+    assert.equal(frames.size, 0);
 });
 
 test('a new country animation cancels the old callback and follows shortest rotation', () => {
@@ -388,13 +445,19 @@ test('changing globe appearance recolors existing paths and legend even when chr
     dom.window.close();
 });
 
-test('a newly created globe remains still', async () => {
+test('a newly created globe enables slow rotation unless motion is reduced or Compare is open', async () => {
     const { context, frames } = harness();
     context.window.GlobeVis.prototype.initVis = async function() {};
     const globe = new context.window.GlobeVis({});
     await globe.ready;
-    assert.equal(globe.autoRotate, false);
+    assert.equal(globe.autoRotate, true);
+    assert.ok(globe.autoRotateSpeed > 0 && globe.autoRotateSpeed <= 0.05);
     assert.equal(frames.size, 0);
+    context.window.matchMedia = () => ({ matches: true });
+    assert.equal(new context.window.GlobeVis({}).autoRotate, false);
+    context.window.matchMedia = () => ({ matches: false });
+    context.window.AtlasView = { current: 'compare' };
+    assert.equal(new context.window.GlobeVis({}).autoRotate, false);
 });
 
 test('selected metric formatting distinguishes missing observations, zero, and negative corrections', () => {

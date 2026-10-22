@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { existsSync } from 'node:fs';
 
+test.use({ reducedMotion: 'reduce' });
+
 test.beforeEach(async ({ page }) => {
     await page.route('https://flagcdn.com/**', route => route.fulfill({ contentType: 'image/svg+xml',
         body: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="16"><rect width="24" height="16" fill="#8ca5b7"/></svg>' }));
@@ -164,7 +166,7 @@ test('desktop exploration keeps the still globe and communicates metric, source,
     await page.locator('#dateSlider').focus(); await page.keyboard.press('Home');
     await expect(page.locator('#currentDate')).toHaveText('Jan 1, 2020');
     await expect(page.locator('#prevDateBtn')).toBeDisabled();
-    await expect(page.locator('.primary-metric-value')).toHaveText('0');
+    await expect(page.locator('#countryPrimary .primary-metric-value')).toHaveText('0');
     await page.locator('#nextDateBtn').click();
     await expect(page.locator('#currentDate')).toHaveText('Jan 2, 2020');
     await page.locator('#resetBtn').click();
@@ -259,6 +261,8 @@ test('mobile explorer, expandable details, keyboard search and charts fit the vi
     await ready(page);
     await expect(page.locator('#dataSourceSelector')).toBeVisible();
     await expect(page.locator('#dataSourceSelector option:checked')).toHaveText('Fictional demo');
+    await page.locator('#filtersToggle').click();
+    await expect(page.locator('#unitSelector')).toBeHidden();
     await page.locator('#filtersToggle').click();
     await expect(page.locator('#unitSelector')).toBeVisible();
     await page.locator('#filtersToggle').click();

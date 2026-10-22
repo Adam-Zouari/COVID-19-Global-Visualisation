@@ -6,7 +6,7 @@ const ChartControls = {
     initialize(container, countryCode, vizType, data = ChartFactory.prepareDataForCountry(countryCode)) {
         if (!data) return this.getSettings();
         const service = window.globeInstance.dataService;
-        const timeline = service.getAvailableDates?.(data.column) || data.dates;
+        const timeline = data.timeline || service.getAvailableDates?.(data.column) || data.dates;
         this.timeline = timeline;
         this.context = { container, countryCode, vizType };
         let controls = document.getElementById('chartControlsContainer');

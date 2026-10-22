@@ -57,10 +57,7 @@ export function createApp({ dataDirectory = process.env.DATA_DIR || path.join(pr
 
     // Expose only browser assets. Never serve the repository, server, or raw datasets.
     app.get('/', (_req, res) => res.sendFile(path.join(projectRoot, 'index.html')));
-    for (const name of ['app.js', 'styles.css']) {
-        app.get(`/${name}`, (_req, res) => res.sendFile(path.join(projectRoot, name)));
-    }
-    for (const directory of ['assets', 'styles', 'ui', 'charts', 'globe', 'dataService']) {
+    for (const directory of ['src', 'assets', 'styles']) {
         app.use(`/${directory}`, express.static(path.join(projectRoot, directory), { dotfiles: 'deny', index: false }));
     }
     const vendors = {

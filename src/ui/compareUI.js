@@ -1,4 +1,29 @@
 window.CompareUI = {
+    preserveScroll(render) {
+        const panel = document.getElementById('comparePanel');
+        if (!panel || this.preservingScroll) return render();
+        const position = { left: window.scrollX, top: window.scrollY };
+        const minimum = this.scrollMinimumActive ? this.originalMinimum : panel.style.minHeight;
+        panel.style.minHeight = `${panel.getBoundingClientRect().height}px`;
+        this.preservingScroll = true;
+        try { return render(); }
+        finally {
+            panel.style.minHeight = minimum;
+            // A shorter chart still needs enough page height to retain the
+            // current viewport. Recalculate this floor on the next update.
+            const shortage = position.top + window.innerHeight - document.documentElement.scrollHeight;
+            this.scrollMinimumActive = shortage > 0;
+            this.originalMinimum = minimum;
+            if (shortage > 0) panel.style.minHeight = `${panel.getBoundingClientRect().height + shortage}px`;
+            window.scrollTo({ ...position, behavior: 'instant' });
+            this.preservingScroll = false;
+        }
+    },
+
+    clearScrollMinimum() {
+        if (this.scrollMinimumActive) document.getElementById('comparePanel').style.minHeight = this.originalMinimum;
+        this.scrollMinimumActive = false;
+    },
     initialize({ focus = true } = {}) {
         this.initializeDateRangeSlider(); this.updateCountryList();
         if (focus) document.getElementById('compareTitle')?.focus();
@@ -52,7 +77,10 @@ window.CompareUI = {
             item.ondragend = () => item.classList.remove('dragging'); list.appendChild(item);
         }
         const add = document.createElement('button'); add.id = 'addCountryBtn'; add.className = 'add-country-btn'; add.textContent = '+ Add country';
-        add.setAttribute('aria-label', 'Add a country to compare'); add.onclick = () => { if (CompareMode.state.countries.length >= 4) CompareMode.message('Compare up to 4 countries. Remove a country before adding another.'); else openSearch(); };
+        add.setAttribute('aria-label', 'Add a country to compare'); add.onclick = () => {
+            if (CompareMode.state.countries.length >= CompareMode.countryLimit()) CompareMode.message(`Compare up to ${CompareMode.countryLimit()} countries in this chart. Remove a country before adding another.`);
+            else openSearch();
+        };
         list.appendChild(add);
     },
 

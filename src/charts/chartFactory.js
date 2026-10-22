@@ -6,7 +6,6 @@ const ChartFactory = {
     comparisonCountrySlots: new Map(),
     chartSequence: 0,
     palette: ['#59b5ff', '#ffb23f', '#ef73cb', '#79d17d', '#f48ba1', '#8fd2e1', '#d3cd77', '#9db0ff'],
-    lineDashes: [null, '9 4', '2 4', '9 4 2 4'],
 
     // Browsing a country must not consume one of the four comparison colors.
     // Retain surviving selections in their slots and reuse only vacated slots.
@@ -32,8 +31,6 @@ const ChartFactory = {
         const index = this.countryStyleIndex(code);
         return window.AtlasTheme?.getSeriesColor(index) || this.palette[index] || `hsl(${(index * 137.508 % 360).toFixed(2)} 65% 70%)`;
     },
-
-    countryLineDash(code) { return this.lineDashes[this.countryStyleIndex(code) % this.lineDashes.length]; },
 
     themeColor(token, fallback) {
         return window.AtlasTheme?.getColor(token) || fallback;
@@ -125,16 +122,17 @@ const ChartFactory = {
 
     createChart(container, countryCode, vizType = 'line', settings) {
         container.replaceChildren();
+        if (window.ChartTypes && !ChartTypes[vizType]?.country) return this.showError(container, 'Choose a supported chart type.');
+        if (window.AnalyticsCharts?.isAnalytical(vizType)) return AnalyticsCharts.renderCountry(container, countryCode, vizType, settings);
+        const extraControls = document.getElementById('analysisChartOptions');
+        if (extraControls) { extraControls.hidden = true; extraControls.replaceChildren(); delete extraControls.dataset.fields; }
+        delete container.dataset.chartType;
+        const range = document.getElementById('chartControlsContainer'); if (range) range.hidden = false;
         const data = this.prepareDataForCountry(countryCode, settings);
         if (!data) return this.showError(container, 'No observations available for this country and dataset.');
         settings = settings || ChartControls.initialize(container, countryCode, vizType, data);
-        if (!['line', 'bar'].includes(vizType)) return this.showError(container, 'Choose a line or bar chart.');
+        if (!['line', 'bar', 'area'].includes(vizType)) return this.showError(container, 'Choose a supported chart type.');
         const filtered = this.applySettings(data, settings);
-        const context = `${this.axisUnitLabel(data.column, data.unit)}${data.metric.smoothingAllowed && data.smoothing === '7day' ? ' · 7-day average' : ''}`;
-        const metricLabel = document.getElementById('analysisMetricLabel');
-        if (metricLabel) metricLabel.textContent = data.metric.label;
-        const units = document.getElementById('analysisUnits');
-        if (units) units.textContent = context;
         this.renderCartesian(container, filtered.dates, [{ key: data.countryCode, label: data.countryName,
             color: this.countryColor(data.countryCode), values: filtered.series[data.column], missingReasons: filtered.missingReasons, reported: filtered.reported }], vizType,
         { title: `${data.metric.label} — ${data.countryName}`, column: data.column, unit: data.unit,
@@ -348,16 +346,25 @@ const ChartFactory = {
                     .on('mouseover focus', (event, point) => this.showTooltip(container, event, tooltipLines(point)))
                     .on('mouseout blur', () => this.hideTooltip(container));
             } else {
-                const line = d3.line().defined(point => this.isValue(point.value)).x(point => xAt(point.date)).y(point => y(point.value));
+                if (type === 'area') {
+                    const area = d3.area().defined(point => this.isValue(point.value)).curve(d3.curveMonotoneX).x(point => xAt(point.date))
+                        .y0(y(0)).y1(point => y(point.value));
+                    plot.append('path').datum(points).attr('class', 'data-area').attr('d', area)
+                        .attr('fill', color).attr('fill-opacity', 0.16).attr('pointer-events', 'none');
+                }
+                // Shape-preserving curves join consecutive reports without overshooting
+                // their values. Defined segments still stop at every missing day.
+                const line = d3.line().defined(point => this.isValue(point.value)).curve(d3.curveMonotoneX)
+                    .x(point => xAt(point.date)).y(point => y(point.value));
                 plot.append('path').datum(points).attr('class', 'data-line').attr('d', line).attr('fill', 'none').attr('stroke', color).attr('stroke-width', 2.25)
-                    .attr('stroke-dasharray', item.lineDash ?? this.countryLineDash(item.key)).attr('stroke-linecap', 'round');
+                    .attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round');
                 // Isolated reports have no visible line segment, even in long histories.
                 plot.append('g').selectAll('circle').data(points.filter(point => this.isValue(point.value) && (dates.length <= 30 ||
                     !this.isValue(item.values[point.index - 1]) && !this.isValue(item.values[point.index + 1])))).join('circle')
                     .attr('class', 'data-point').attr('cx', point => xAt(point.date)).attr('cy', point => y(point.value)).attr('r', 2.5).attr('fill', color);
             }
         });
-        if (type === 'line') {
+        if (type === 'line' || type === 'area') {
             const crosshair = plot.append('line').attr('class', 'chart-crosshair').attr('y1', 0).attr('y2', plotHeight).attr('visibility', 'hidden');
             const cursorPoints = plot.append('g').attr('class', 'cursor-points'), dateNumbers = dates.map(date => +new Date(`${date}T00:00:00Z`));
             const overlay = plot.append('rect').attr('class', 'chart-hit-area').attr('width', plotWidth).attr('height', plotHeight)
@@ -373,14 +380,18 @@ const ChartFactory = {
                 const lines = [date, ...active.map(item => `${item.label}: ${this.isValue(item.values[index]) ? this.formatValue(item.values[index]) : item.missingReasons?.[index] || 'No observation'}`), unitLabel];
                 overlay.attr('aria-valuenow', index).attr('aria-valuetext', lines.join(', ')); this.showTooltip(container, event, lines);
             };
+            const inspectFromKeyboard = index => {
+                const bounds = svg.node().getBoundingClientRect(), scale = bounds.width / width || 1;
+                inspect(index, { clientX: bounds.left + (margin.left + xAt(dates[index])) * scale, clientY: bounds.top + (margin.top + 60) * scale });
+            };
             overlay.on('pointermove', event => { const [x] = d3.pointer(event, plot.node()); inspect(d3.bisectCenter(dateNumbers, +time.invert(x)), event); })
+                .on('focus', () => inspectFromKeyboard(Number(overlay.attr('aria-valuenow'))))
                 .on('pointerleave blur', () => { crosshair.attr('visibility', 'hidden'); cursorPoints.selectAll('circle').remove(); this.hideTooltip(container); })
                 .on('keydown', event => {
                     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
                     event.preventDefault(); const current = Number(overlay.attr('aria-valuenow'));
                     const index = event.key === 'Home' ? 0 : event.key === 'End' ? dates.length - 1 : Math.max(0, Math.min(dates.length - 1, current + (event.key === 'ArrowRight' ? 1 : -1)));
-                    const bounds = svg.node().getBoundingClientRect(), scale = bounds.width / width || 1;
-                    inspect(index, { clientX: bounds.left + (margin.left + xAt(dates[index])) * scale, clientY: bounds.top + (margin.top + 60) * scale });
+                    inspectFromKeyboard(index);
                 });
         }
         if (options.showLegend !== false && series.length > 1) {
@@ -388,15 +399,13 @@ const ChartFactory = {
             for (const item of series) {
                 const entry = document.createElement('span'); entry.className = 'legend-item';
                 let swatch;
-                if (type === 'line') {
+                if (type === 'line' || type === 'area') {
                     swatch = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
                     swatch.setAttribute('class', 'legend-line'); swatch.setAttribute('width', '28'); swatch.setAttribute('height', '10');
                     swatch.setAttribute('viewBox', '0 0 28 10'); swatch.setAttribute('aria-hidden', 'true');
                     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
                     line.setAttribute('x1', '2'); line.setAttribute('x2', '26'); line.setAttribute('y1', '5'); line.setAttribute('y2', '5');
                     line.setAttribute('stroke', item.color || this.countryColor(item.key)); line.setAttribute('stroke-width', '2.25'); line.setAttribute('stroke-linecap', 'round');
-                    const dash = item.lineDash ?? this.countryLineDash(item.key);
-                    if (dash) line.setAttribute('stroke-dasharray', dash);
                     swatch.appendChild(line);
                 } else { swatch = document.createElement('i'); swatch.style.backgroundColor = item.color || this.countryColor(item.key); }
                 entry.append(swatch, document.createTextNode(item.label)); legend.appendChild(entry);

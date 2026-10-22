@@ -1,24 +1,28 @@
 const DEFAULTS = {
     view: 'explore', category: 'epidem', metric: 'new_confirmed', unit: 'count',
-    smoothing: '7day', selectedDate: null, selectedCountry: null,
+    smoothing: '7day', selectedDate: null, selectedCountry: null, analysisOpen: false,
     compareCountries: [], compareRange: { start: 0, end: 100 }, compareLayout: 'combined',
-    compareChartType: 'line', compareScale: 'shared', dataMode: 'csv'
+    compareChartType: 'line', compareScale: 'shared', compareChartOptions: {}, dataMode: 'csv'
 };
 
 import { UNIT_DEFINITIONS } from '../dataService/metrics.js';
+import { CHART_TYPES, readChartOptions } from '../charts/chartTypes.js';
 
 export function createStore(initial = {}) {
-    let state = Object.freeze({ ...DEFAULTS, ...initial,
+    let state = Object.freeze({ ...DEFAULTS, ...initial, analysisOpen: initial.analysisOpen === true,
         compareCountries: Object.freeze([...(initial.compareCountries || [])]),
-        compareRange: Object.freeze({ ...(initial.compareRange || DEFAULTS.compareRange) }) });
+        compareRange: Object.freeze({ ...(initial.compareRange || DEFAULTS.compareRange) }),
+        compareChartOptions: Object.freeze(readChartOptions(initial.compareChartOptions)) });
     const subscribers = new Set();
     return {
         getState: () => state,
         setState(patch) {
             const changes = typeof patch === 'function' ? patch(state) : patch;
             const next = { ...state, ...changes };
+            next.analysisOpen = next.analysisOpen === true;
             if (Array.isArray(next.compareCountries)) next.compareCountries = Object.freeze([...next.compareCountries]);
             if (next.compareRange) next.compareRange = Object.freeze({ ...next.compareRange });
+            if (next.compareChartOptions) next.compareChartOptions = Object.freeze(readChartOptions(next.compareChartOptions));
             if (Object.keys(next).every(key => JSON.stringify(next[key]) === JSON.stringify(state[key]))) return state;
             const previous = state;
             state = Object.freeze(next);
@@ -35,18 +39,23 @@ export function readURLState(search) {
     const unit = Object.hasOwn(UNIT_DEFINITIONS, params.get('unit')) ? params.get('unit') : 'count';
     const compareCountries = [...new Set((params.get('compare') || '').toLowerCase().split(',').filter(code => /^[a-z]{2}$/.test(code)))].slice(0, 4);
     const country = params.get('country')?.toLowerCase();
+    const selectedCountry = /^[a-z]{2}$/.test(country || '') ? country : null;
     const range = (params.get('range') || '0,100').split(',').map(Number);
     const validRange = range.length === 2 && range.every(value => Number.isFinite(value) && value >= 0 && value <= 100);
+    let chartOptions = {};
+    try { if ((params.get('chartOptions') || '').length <= 1500) chartOptions = readChartOptions(JSON.parse(params.get('chartOptions') || '{}')); } catch { /* Ignore invalid shared chart options. */ }
     return {
         category, unit, metric: params.get('metric') || null,
         smoothing: params.get('smooth') === 'raw' ? 'raw' : '7day',
         view: params.get('view') === 'compare' ? 'compare' : 'explore',
         selectedDate: /^\d{4}-\d{2}-\d{2}$/.test(params.get('date') || '') ? params.get('date') : null,
-        selectedCountry: /^[a-z]{2}$/.test(country || '') ? country : null,
+        selectedCountry,
+        analysisOpen: params.get('analysis') === '1' && selectedCountry !== null,
         compareCountries,
         compareRange: validRange ? { start: Math.min(...range), end: Math.max(...range) } : { start: 0, end: 100 },
         compareLayout: params.get('layout') === 'separate' ? 'separate' : 'combined',
-        compareChartType: params.get('chart') === 'bar' ? 'bar' : 'line',
+        compareChartType: Object.hasOwn(CHART_TYPES, params.get('chart')) && CHART_TYPES[params.get('chart')].compare ? params.get('chart') : 'line',
+        compareChartOptions: chartOptions,
         compareScale: params.get('scale') === 'independent' ? 'independent' : 'shared',
         dataMode: params.get('data') === 'sample' ? 'sample' : 'csv'
     };
@@ -61,9 +70,11 @@ export function stateToURL(state, currentURL) {
         metric: state.metric, unit: state.unit === 'count' ? null : state.unit,
         smooth: state.smoothing === 'raw' ? 'raw' : null,
         date: state.selectedDate, country: state.selectedCountry,
+        analysis: state.analysisOpen === true && typeof state.selectedCountry === 'string' && /^[a-z]{2}$/i.test(state.selectedCountry) ? '1' : null,
         compare: state.compareCountries?.length ? state.compareCountries.join(',') : null,
         layout: state.compareLayout === 'separate' ? 'separate' : null,
-        chart: state.compareChartType === 'bar' ? 'bar' : null,
+        chart: state.compareChartType !== 'line' && Object.hasOwn(CHART_TYPES, state.compareChartType) && CHART_TYPES[state.compareChartType].compare ? state.compareChartType : null,
+        chartOptions: state.compareChartOptions && Object.keys(state.compareChartOptions).length ? JSON.stringify(readChartOptions(state.compareChartOptions)) : null,
         scale: state.compareScale === 'independent' ? 'independent' : null,
         range: state.compareRange && (state.compareRange.start !== 0 || state.compareRange.end !== 100)
             ? `${state.compareRange.start},${state.compareRange.end}` : null

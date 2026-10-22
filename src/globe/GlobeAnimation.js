@@ -1,9 +1,10 @@
 GlobeVis.prototype.startAutoRotation = function() {
-    if (!this.autoRotate || this.destroyed || this.animationFrameId !== null) return;
+    if (!this.autoRotate || this.destroyed || this.animationFrameId !== null || document.hidden ||
+        window.CompareMode?.state.active || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     this.lastFrameTime = null;
     const animate = timestamp => {
         this.animationFrameId = null;
-        if (!this.autoRotate || this.destroyed) return;
+        if (!this.autoRotate || this.destroyed || document.hidden || window.CompareMode?.state.active) return;
         const elapsed = this.lastFrameTime === null ? 0 : Math.min(timestamp - this.lastFrameTime, 33);
         this.lastFrameTime = timestamp;
         this.currentRotation[0] = (this.currentRotation[0] + this.autoRotateSpeed * elapsed / 16) % 360;
@@ -30,7 +31,10 @@ GlobeVis.prototype.resetView = function() {
     this.stopAutoRotation();
     this.svg.interrupt();
     this.svg.call(this.zoom.transform, d3.zoomIdentity);
-    this.animateToRotation([-10, -15, 0]);
+    this.animateToRotation([-10, -15, 0], () => {
+        this.autoRotate = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches && !window.CompareMode?.state.active;
+        this.startAutoRotation();
+    });
 };
 
 GlobeVis.prototype.animateToRotation = function(targetRotation, callback) {

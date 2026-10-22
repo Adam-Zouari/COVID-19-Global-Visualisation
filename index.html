@@ -6,28 +6,35 @@
         <meta name="description" content="Explore historical COVID-19 observations across countries and time with an interactive globe.">
         <title>COVID-19 Atlas — A world of perspective</title>
         <link rel="icon" href="assets/icons/atlas.svg" type="image/svg+xml">
-        <script src="ui/theme.js"></script>
-        <script src="ui/view.js"></script>
-        <link rel="stylesheet" href="styles.css">
+        <script src="src/ui/theme.js"></script>
+        <script src="src/ui/view.js"></script>
+        <link rel="stylesheet" href="styles/main.css">
+        <link rel="stylesheet" href="styles/charts.css">
         <link rel="stylesheet" href="styles/compare.css">
         <script src="vendor/d3.min.js" defer></script>
         <script src="vendor/topojson-client.min.js" defer></script>
-        <script src="app.js" type="module"></script>
-        <script src="globe/GlobeVis.js" defer></script>
-        <script src="globe/GlobeEvents.js" defer></script>
-        <script src="globe/GlobeRendering.js" defer></script>
-        <script src="globe/GlobeCountries.js" defer></script>
-        <script src="globe/GlobeAnimation.js" defer></script>
-        <script src="globe/main.js" defer></script>
-        <script src="ui/uiUtils.js" defer></script>
-        <script src="ui/search.js" defer></script>
-        <script src="ui/visualizations.js" defer></script>
-        <script src="charts/chartFactory.js" defer></script>
-        <script src="ui/dateRange.js" defer></script>
-        <script src="charts/chartControls.js" defer></script>
-        <script src="charts/compareCharts.js" defer></script>
-        <script src="ui/compare.js" defer></script>
-        <script src="ui/compareUI.js" defer></script>
+        <script src="src/app.js" type="module"></script>
+        <script src="src/globe/GlobeVis.js" defer></script>
+        <script src="src/globe/GlobeEvents.js" defer></script>
+        <script src="src/globe/GlobeRendering.js" defer></script>
+        <script src="src/globe/GlobeCountries.js" defer></script>
+        <script src="src/globe/GlobeAnimation.js" defer></script>
+        <script src="src/globe/main.js" defer></script>
+        <script src="src/ui/uiUtils.js" defer></script>
+        <script src="src/ui/search.js" defer></script>
+        <script src="src/ui/visualizations.js" defer></script>
+        <script src="src/ui/globeWorkspace.js" defer></script>
+        <script src="src/charts/chartFactory.js" defer></script>
+        <script src="src/charts/analyticsData.js" defer></script>
+        <script src="src/charts/analyticsRendering.js" defer></script>
+        <script src="src/charts/analyticsComparisons.js" defer></script>
+        <script src="src/charts/analyticsDistributions.js" defer></script>
+        <script src="src/ui/analytics.js" defer></script>
+        <script src="src/ui/dateRange.js" defer></script>
+        <script src="src/charts/chartControls.js" defer></script>
+        <script src="src/charts/compareCharts.js" defer></script>
+        <script src="src/ui/compare.js" defer></script>
+        <script src="src/ui/compareUI.js" defer></script>
     </head>
     <body>
         <a class="skip-link" href="#dataSelector">Skip to explorer</a>
@@ -106,10 +113,10 @@
                     </div>
                 </section>
                 <section class="explore-workspace" id="exploreWorkspace" aria-label="Interactive country explorer" tabindex="-1">
-                    <aside class="control-panel panel">
+                    <aside id="explorerSettings" class="control-panel panel" aria-label="Explorer settings">
                         <div class="panel-label">
                             <span>EXPLORER SETTINGS</span>
-                            <button id="filtersToggle" class="icon-btn" aria-label="Toggle filters" aria-expanded="false">⌄</button>
+                            <button id="filtersToggle" class="icon-btn" aria-label="Collapse explorer settings" aria-controls="filterContent" aria-expanded="true" title="Collapse explorer settings"><span aria-hidden="true">‹</span></button>
                         </div>
                         <div class="filter-content" id="filterContent">
                             <div class="control-group metric-control">
@@ -139,7 +146,7 @@
                             </div>
                         </div>
                     </aside>
-                    <div class="globe-stage panel">
+                    <div class="globe-stage panel" id="globeStage">
                         <div class="stage-topline">
                             <div>
                                 <span class="eyebrow">GLOBAL VIEW</span>
@@ -159,6 +166,7 @@
                                 <button id="zoomOutBtn" class="icon-btn" aria-label="Zoom out">−</button>
                                 <button id="zoomInBtn" class="icon-btn" aria-label="Zoom in">+</button>
                                 <button id="resetBtn" class="icon-btn" aria-label="Reset globe view" title="Reset globe view"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 7M4 4v6h6"/></svg></button>
+                                <button id="expandGlobeBtn" class="icon-btn" aria-label="Expand globe to full screen" aria-expanded="false" aria-controls="globeStage" title="Expand globe to full screen"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button>
                             </div>
                         </div>
                     </div>
@@ -186,7 +194,9 @@
                     </aside>
                 </section>
                 <section id="visualizationPanel" class="country-analysis panel" aria-label="Country analysis" hidden>
-                    <button id="analysisCloseBtn" class="icon-btn analysis-close" onclick="closeCountryAnalysis()" aria-label="Close country data" title="Close country data">×</button>
+                    <div class="analysis-toolbar">
+                        <button id="analysisCloseBtn" class="icon-btn analysis-close" onclick="closeCountryAnalysis()" aria-label="Close country data" title="Close country data">×</button>
+                    </div>
                     <div class="analysis-header">
                         <div>
                             <p class="eyebrow">A CLOSER LOOK</p>
@@ -196,15 +206,24 @@
                             </div>
                             <p id="analysisMetricLabel">Selected metric over time</p>
                         </div>
+                    </div>
+                    <p id="analysisUnits" class="chart-description"></p>
+                    <div class="analysis-value-row">
+                        <p id="analysisValue" class="primary-metric-value analysis-value"></p>
                         <div class="viz-controls">
-                            <label class="sr-only" for="vizTypeSelector">Visualization type</label>
+                            <label for="vizTypeSelector">Chart</label>
                             <select id="vizTypeSelector" aria-label="Visualization type" onchange="changeVisualization()">
                                 <option value="line">Trend line</option>
                                 <option value="bar">Bars</option>
+                                <option value="area">Area</option>
+                                <option value="heatmap">Calendar heatmap</option>
+                                <option value="scatter">Scatter plot</option>
+                                <option value="box">Box plot</option>
                             </select>
                         </div>
                     </div>
-                    <p id="analysisUnits" class="chart-description"></p>
+                    <p id="analysisValueDate" class="analysis-value-date"></p>
+                    <div id="analysisChartOptions" class="analytics-controls" hidden></div>
                     <div class="viz-content">
                         <div id="chartContainer" class="chart-container"></div>
                     </div>
@@ -246,6 +265,11 @@
                             <select id="compareChartType" aria-label="Comparison chart type" onchange="CompareMode.changeChartType(this.value)">
                                 <option value="line">Trend lines</option>
                                 <option value="bar">Bars</option>
+                                <option value="horizontal">Horizontal bars</option>
+                                <option value="heatmap">Heatmap</option>
+                                <option value="scatter">Scatter plot</option>
+                                <option value="dumbbell">Dumbbell</option>
+                                <option value="box">Box plot</option>
                             </select>
                             <label for="compareScaleSelector" class="sr-only">Chart scales</label>
                             <select id="compareScaleSelector" aria-label="Chart scales">
@@ -254,6 +278,7 @@
                             </select>
                         </div>
                     </div>
+                    <div id="compareChartOptions" class="analytics-controls" hidden></div>
                     <div class="date-selection-panel"><div id="dateRangeSlider"></div></div>
                 </div>
                 <div id="compareMessage" class="inline-message" role="status" aria-live="polite"></div>
@@ -310,6 +335,10 @@
                 <section>
                     <h3>Reading the map</h3>
                     <p>Six ordered color bands stay fixed across the loaded period for the selected metric, unit, and smoothing. Counts and rates use a logarithmic scale to reveal smaller values; vaccination percentages use a linear scale. Gray means no displayable value: a report, sufficient averaging history, or population may be missing. Amber identifies negative corrections.</p>
+                </section>
+                <section>
+                    <h3>Comparing charts</h3>
+                    <p>Country analysis shows one country's history. Its scatter plot pairs two metrics on shared reporting dates. In Compare, scatter axes represent two or three selected countries using the same metric and shared dates. Horizontal bars show the selected date. Heatmaps preserve missing reports and identify partial periods; occupancy uses means and cumulative values use endpoint snapshots. Box plots summarize reported observations, not uncertainty or a distribution of people.</p>
                 </section>
             </div>
             <p id="dataQualityNote" class="quality-note" hidden></p>

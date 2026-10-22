@@ -10,7 +10,7 @@ const CompareCharts = {
     createCombinedChart(container, countryCodes, chartType = 'line', settings = {}) {
         container.replaceChildren(); const countries = this.prepare(countryCodes, settings);
         if (!countries.length) return ChartFactory.showError(container, 'No observations available for the selected countries.');
-        if (!['line', 'bar'].includes(chartType)) return ChartFactory.showError(container, 'Choose a line or bar chart.');
+        if (!['line', 'bar'].includes(chartType)) return ChartFactory.showError(container, 'Choose a supported chart type.');
         const first = countries[0];
         ChartFactory.renderCartesian(container, first.dates, countries.map(country => ({
             key: country.countryCode, label: country.countryName, color: ChartFactory.countryColor(country.countryCode), values: country.series[first.column], missingReasons: country.missingReasons, reported: country.reported

@@ -7,7 +7,7 @@ import { JSDOM } from 'jsdom';
 function control(t, dates = ['2020-01-01', '2020-01-02', '2020-01-03'], range) {
     const dom = new JSDOM('<div id="control"></div>', { runScripts: 'outside-only' });
     t.after(() => dom.window.close());
-    vm.runInContext(readFileSync(new URL('../ui/dateRange.js', import.meta.url), 'utf8'), dom.getInternalVMContext());
+    vm.runInContext(readFileSync(new URL('../src/ui/dateRange.js', import.meta.url), 'utf8'), dom.getInternalVMContext());
     const changes = [];
     const instance = new dom.window.DateRangeControl(dom.window.document.getElementById('control'), {
         dates, range, onChange: (value, selected) => changes.push({ value, selected })

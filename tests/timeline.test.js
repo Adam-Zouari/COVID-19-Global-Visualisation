@@ -47,7 +47,7 @@ function harness(t, { value = 0, max = 20 } = {}) {
         if (type === 'input') sliderListeners.push(listener);
         listen(type, listener, options);
     };
-    vm.runInContext(readFileSync(new URL('../ui/uiUtils.js', import.meta.url), 'utf8'), dom.getInternalVMContext());
+    vm.runInContext(readFileSync(new URL('../src/ui/uiUtils.js', import.meta.url), 'utf8'), dom.getInternalVMContext());
     window.initializeUI();
     listen('input', () => inputCount++);
     const button = document.getElementById('playTimelineBtn'), speed = document.getElementById('timelineSpeed');

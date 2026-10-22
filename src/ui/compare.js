@@ -1,6 +1,6 @@
 window.CompareMode = {
     state: { active: false, countries: [], displayMode: 'combined', chartType: 'line',
-        dateRange: { start: 0, end: 100 }, scale: 'shared' },
+        dateRange: { start: 0, end: 100 }, scale: 'shared', chartOptions: {} },
 
     enter({ focus = true } = {}) {
         const globe = window.globeInstance;
@@ -9,7 +9,7 @@ window.CompareMode = {
         this.state.active = true;
         globe.stopAutoRotation?.(); globe.cancelRotationAnimation?.();
         const code = globe.selectedCountryCode;
-        if (code && !this.state.countries.includes(code) && this.state.countries.length < 4) this.state.countries.push(code);
+        if (code && !this.state.countries.includes(code) && this.state.countries.length < this.countryLimit()) this.state.countries.push(code);
         CompareUI.matchExploreBottomSpacing();
         AtlasView.render('compare');
         CompareUI.initialize({ focus }); this.updateComparisonView();
@@ -19,8 +19,10 @@ window.CompareMode = {
     exit() {
         if (!this.state.active) return;
         this.state.active = false;
+        CompareUI.clearScrollMinimum();
         AtlasView.render('explore');
         window.globeInstance?.resize();
+        if (document.getElementById('visualizationPanel')?.hidden === false) window.changeVisualization?.();
         document.getElementById('navExplore')?.focus();
         window.syncAtlasState?.();
     },
@@ -30,10 +32,12 @@ window.CompareMode = {
         if (element) { element.textContent = text; element.hidden = !text; }
     },
 
+    countryLimit() { return this.state.chartType === 'scatter' ? 3 : 4; },
+
     addCountry(code) {
         code = String(code).toLowerCase();
         if (!window.globeInstance.dataService.getAllCountries().some(country => country.countryCode === code) || this.state.countries.includes(code)) return;
-        if (this.state.countries.length >= 4) { this.message('Compare up to 4 countries. Remove a country before adding another.'); return; }
+        if (this.state.countries.length >= this.countryLimit()) { this.message(`Compare up to ${this.countryLimit()} countries in this chart. Remove a country before adding another.`); return; }
         this.state.countries.push(code);
         this.message(); CompareUI.updateCountryList(); this.updateComparisonView(); window.syncAtlasState?.();
     },
@@ -45,11 +49,14 @@ window.CompareMode = {
 
     changeDisplayMode(mode) {
         if (!['separate', 'combined'].includes(mode)) return;
+        if (mode === 'separate' && window.ChartTypes?.[this.state.chartType]?.separate === false) return;
+        if (mode === 'separate' && window.AnalyticsCharts?.isAnalytical(this.state.chartType)) return;
         this.state.displayMode = mode; this.updateComparisonView(); window.syncAtlasState?.();
     },
 
     changeChartType(type) {
-        if (!['bar', 'line'].includes(type)) return;
+        if (!Object.hasOwn(window.ChartTypes || { line: {}, bar: {} }, type) || (window.ChartTypes && !ChartTypes[type].compare)) return;
+        window.AnalyticsCharts?.select(type);
         this.state.chartType = type; this.updateComparisonView(); window.syncAtlasState?.();
     },
 
@@ -59,6 +66,7 @@ window.CompareMode = {
     },
 
     updateDateRange(start, end) {
+        window.AnalyticsCharts?.preserveRange();
         const clamp = value => Math.max(0, Math.min(100, Number(value) || 0));
         this.state.dateRange = { start: Math.min(clamp(start), clamp(end)), end: Math.max(clamp(start), clamp(end)) };
         this.updateComparisonView(); window.syncAtlasState?.();
@@ -67,9 +75,18 @@ window.CompareMode = {
     syncControls() {
         const service = window.globeInstance?.dataService;
         if (!service) return;
+        if (window.ChartTypes && !ChartTypes[this.state.chartType]?.compare) this.state.chartType = 'line';
+        const description = document.querySelector('.compare-heading p');
+        if (description) description.textContent = this.state.chartType === 'scatter' ?
+            'One measure over time · Two or three countries as axes' : 'Shared metrics, dates, and units · Up to four countries';
         const options = document.querySelector('.compare-options'); if (options) options.hidden = !this.state.countries.length;
         const columns = service.availableColumns[service.currentDataset] || [];
         const column = service.currentColumn, metric = ChartFactory.metadata(column);
+        const definition = window.ChartTypes?.[this.state.chartType] || { metric: true, period: true, separate: true };
+        if (!definition.separate) this.state.displayMode = 'combined';
+        const metricControls = document.querySelector('.controls-row'); if (metricControls) metricControls.hidden = !definition.metric;
+        const layoutControls = document.querySelector('.display-mode-buttons'); if (layoutControls) layoutControls.hidden = !definition.separate;
+        const scaleLabel = document.querySelector('label[for="compareScaleSelector"]'); if (scaleLabel) scaleLabel.hidden = !definition.separate;
         const selector = document.getElementById('compareMetricSelector');
         if (selector) {
             updateSelectOptions(selector, columns.map(value => ({ value, label: ChartFactory.metadata(value).label })));
@@ -92,16 +109,27 @@ window.CompareMode = {
             smoothing.onchange = () => atlasActions.setSmoothing(smoothing.value);
         }
         const type = document.getElementById('compareChartType'); if (type) type.value = this.state.chartType;
+        if (window.AnalyticsCharts) this.state.chartOptions = AnalyticsCharts.normalizedOptions(service, this.state.chartType, this.state.chartOptions);
+        window.AnalyticsCharts?.controls(document.getElementById('compareChartOptions'), this.state.chartType, this.state.chartOptions, options => {
+            this.state.chartOptions = options; this.updateComparisonView(); window.syncAtlasState?.();
+        });
+        const period = document.querySelector('.date-selection-panel');
+        if (period) period.hidden = window.AnalyticsCharts ? !AnalyticsCharts.usesPeriod(this.state.chartType) : false;
         for (const mode of ['combined', 'separate']) {
             const button = document.getElementById(`${mode === 'combined' ? 'combinedChart' : 'separateCharts'}Btn`);
             if (button) { button.classList.toggle('active', this.state.displayMode === mode); button.setAttribute('aria-pressed', String(this.state.displayMode === mode)); }
+            if (button && mode === 'separate') button.disabled = !definition.separate;
         }
         const scale = document.getElementById('compareScaleSelector');
-        if (scale) { scale.value = this.state.scale; scale.disabled = this.state.displayMode !== 'separate'; scale.onchange = () => this.changeScale(scale.value); }
+        if (scale) { scale.hidden = !definition.separate; scale.value = this.state.scale; scale.disabled = this.state.displayMode !== 'separate'; scale.onchange = () => this.changeScale(scale.value); }
     },
 
     updateComparisonView() {
         if (!this.state.active) return;
+        return CompareUI.preserveScroll(() => this.renderComparisonView());
+    },
+
+    renderComparisonView() {
         ChartFactory.reconcileComparisonCountries(this.state.countries);
         const container = document.getElementById('compareChartContainer');
         container.replaceChildren(); this.syncControls();
@@ -110,6 +138,10 @@ window.CompareMode = {
         else if (document.getElementById('compareMessage')?.textContent.startsWith('Add another')) this.message();
         const settings = { dateRange: this.state.dateRange, selectedColumn: window.globeInstance.dataService.currentColumn,
             unit: window.globeInstance.dataService.displayUnit || 'count', smoothing: window.globeInstance.dataService.smoothing || 'raw' };
+        if (window.AnalyticsCharts?.isAnalytical(this.state.chartType)) {
+            return AnalyticsCharts.render(container, this.state.chartType, { scope: 'compare', countries: this.state.countries,
+                dateRange: this.state.dateRange, options: this.state.chartOptions });
+        }
         if (this.state.displayMode === 'combined') {
             const chart = document.createElement('div'); chart.className = 'combined-chart-container'; container.appendChild(chart);
             CompareCharts.createCombinedChart(chart, this.state.countries, this.state.chartType, settings); return;

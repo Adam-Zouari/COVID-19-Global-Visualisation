@@ -16,12 +16,17 @@ test('server serves app assets and CSV aliases without exposing repository or da
     const base = `http://127.0.0.1:${server.address().port}`;
     const index = await fetch(base);
     assert.equal(index.status, 200);
-    assert.match(await index.text(), /app.js/);
+    assert.match(await index.text(), /src\/app\.js/);
     assert.equal(index.headers.get('x-content-type-options'), 'nosniff');
-    for (const asset of ['/vendor/d3.min.js', '/vendor/topojson-client.min.js', '/assets/world/countries-110m.json', '/app.js']) {
+    for (const asset of ['/vendor/d3.min.js', '/vendor/topojson-client.min.js', '/assets/world/countries-110m.json',
+        '/assets/icons/atlas.svg', '/src/app.js', '/src/ui/theme.js', '/src/ui/view.js', '/src/dataService/DataService.js',
+        '/styles/main.css', '/styles/charts.css', '/styles/compare.css']) {
         assert.equal((await fetch(base + asset)).status, 200, asset);
     }
-    for (const hidden of ['/.git/config', '/package.json', '/server/server.js', '/tests/server.test.js', '/data/secret.csv', '/api/list-files', '/api/toString', '/missing.js']) {
+    for (const hidden of ['/.git/config', '/package.json', '/server/server.js', '/tests/server.test.js', '/data/secret.csv',
+        '/docs/AUDIT.md', '/docs/design/', '/scripts/prepare-data.js', '/src/',
+        '/app.js', '/styles.css', '/ui/theme.js', '/charts/chartFactory.js', '/globe/GlobeVis.js', '/dataService/index.js',
+        '/api/list-files', '/api/toString', '/missing.js']) {
         const result = await fetch(base + hidden);
         assert.equal(result.status, 404, hidden);
         assert.match(result.headers.get('content-type'), /json/);

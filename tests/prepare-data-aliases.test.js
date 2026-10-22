@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { csvParse } from 'd3';
 import { prepareData } from '../scripts/prepare-data.js';
-import DataService from '../dataService/index.js';
+import DataService from '../src/dataService/index.js';
 
 test('preprocessing legacy country_key exports produces files accepted by the data service', async t => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'covid-prepare-aliases-'));

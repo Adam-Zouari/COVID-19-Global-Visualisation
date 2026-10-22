@@ -33,6 +33,8 @@ async function screenshot(page, name) {
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
     if (name.startsWith('appearance-explore-')) {
+        // Mobile settings and the globe are separate stacked panels.
+        await page.locator('#globeStage').scrollIntoViewIfNeeded();
         await expect(page.locator('#mapMetricLabel')).toBeInViewport();
         await expect(page.locator('#globe .ocean')).toBeInViewport();
         await expect(page.locator('#zoomInBtn')).toBeInViewport();
@@ -41,7 +43,7 @@ async function screenshot(page, name) {
 }
 
 async function assertTextContrast(page, selector, minimum = 4.5) {
-    const ratio = await page.locator(selector).first().evaluate(node => {
+    const ratio = () => page.locator(selector).first().evaluate(node => {
         const channels = color => color.match(/[\d.]+/g).map(Number);
         const luminance = color => channels(color).slice(0, 3).map(channel => {
             const value = channel / 255;
@@ -58,7 +60,7 @@ async function assertTextContrast(page, selector, minimum = 4.5) {
         const light = luminance(foreground), dark = luminance(background);
         return (Math.max(light, dark) + 0.05) / (Math.min(light, dark) + 0.05);
     });
-    expect(ratio, `${selector} text contrast`).toBeGreaterThanOrEqual(minimum);
+    await expect.poll(ratio, { message: `${selector} text contrast` }).toBeGreaterThanOrEqual(minimum);
 }
 
 function luminance(color) {
@@ -279,7 +281,7 @@ test('four comparison countries stay distinct after browsing history, reordering
             [...new Set(nodes.map(node => node.getAttribute('stroke')))].sort())).toEqual(
                 await page.evaluate(() => Array.from({ length: 4 }, (_, index) => AtlasTheme.getSeriesColor(index)).sort()));
         const styles = await readStyles();
-        expect(new Set(Object.values(styles).map(style => style.dash)).size).toBe(4);
+        expect(Object.values(styles).every(style => style.dash === 'solid')).toBe(true);
         const patterns = Object.fromEntries(Object.entries(styles).map(([code, style]) => [code, style.dash]));
         if (previousPatterns) expect(patterns).toEqual(previousPatterns);
         previousPatterns = patterns;

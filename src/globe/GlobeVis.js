@@ -9,8 +9,8 @@ class GlobeVis {
         this.selectedCountryCode = null;
         this.worldData = null;
         this.countryFeatures = [];
-        this.autoRotate = false;
-        this.autoRotateSpeed = 0.2;
+        this.autoRotate = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches && window.AtlasView?.current !== 'compare';
+        this.autoRotateSpeed = 0.035;
         this.lastFrameTime = null;
         this.animationFrameId = null;
         this.rotationFrameId = null;

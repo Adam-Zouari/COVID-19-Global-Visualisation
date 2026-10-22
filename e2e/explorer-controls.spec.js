@@ -134,10 +134,10 @@ test('hospital occupancy supports daily snapshots and seven-day means without sm
     });
     await ready(page, '/?category=hospitalizations&metric=current_hospitalized_patients&date=2020-01-10&country=tn&smooth=raw');
     await expect(page.locator('.smoothing-group')).toBeVisible();
-    await expect(page.locator('.primary-metric-value')).toHaveText('100');
+    await expect(page.locator('#countryPrimary .primary-metric-value')).toHaveText('100');
     await expect(page.locator('#coverageCount')).toHaveText('1 country with data');
     await page.locator('#averageBtn').click();
-    await expect(page.locator('.primary-metric-value')).toHaveText('70');
+    await expect(page.locator('#countryPrimary .primary-metric-value')).toHaveText('70');
     await expect(page.locator('#mapUnitsLabel')).toContainText('7-day average');
     await page.locator('#seeMoreBtn').click();
     await expect(page.locator('#chartContainer .chart-subtitle')).toContainText('7-day average of daily patient snapshots');
@@ -153,12 +153,12 @@ test('hospital occupancy supports daily snapshots and seven-day means without sm
     await expect(page.locator('#compareChartContainer .chart-subtitle')).toContainText('Reported cumulative values');
     await page.locator('#navExplore').click();
     await expect(page.locator('.smoothing-group')).toBeHidden();
-    await expect(page.locator('.primary-metric-value')).toHaveText('1,000');
+    await expect(page.locator('#countryPrimary .primary-metric-value')).toHaveText('1,000');
     await page.locator('#dataSelector').selectOption('new_hospitalized_patients');
     await expect(page.locator('.smoothing-group')).toBeVisible();
-    await expect(page.locator('.primary-metric-value')).toHaveText('30');
+    await expect(page.locator('#countryPrimary .primary-metric-value')).toHaveText('30');
     await page.locator('#averageBtn').click();
-    await expect(page.locator('.primary-metric-value')).toHaveText('21');
+    await expect(page.locator('#countryPrimary .primary-metric-value')).toHaveText('21');
     await coverage(page);
     await page.locator('#dateSlider').focus();
     await page.keyboard.press('Home');

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { JSDOM } from 'jsdom';
-import { DataService } from '../dataService/DataService.js';
+import { DataService } from '../src/dataService/DataService.js';
 
 function fixture() {
     const service = new DataService({ useSampleData: true });
@@ -67,7 +67,7 @@ test('country search shows accessible availability and filters names and codes, 
     context.window.globeInstance = { dataService: fixture(), selectedCountryCode: 'tn', goToCountry() {} };
     context.stopTimeline = () => {};
     for (const file of ['ui/uiUtils.js', 'ui/search.js'])
-        vm.runInContext(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), context, { filename: file });
+        vm.runInContext(readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8'), context, { filename: file });
     dom.window.openSearch();
     const document = dom.window.document;
     const tunisia = document.querySelector('[aria-label="Tunisia"]');

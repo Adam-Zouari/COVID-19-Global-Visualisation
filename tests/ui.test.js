@@ -11,6 +11,7 @@ function harness(t) {
     const dom = new JSDOM(readFileSync(new URL('../index.html', import.meta.url), 'utf8'), { runScripts: 'outside-only', url: 'http://localhost/' });
     t.after(() => dom.window.close());
     const context = dom.getInternalVMContext(); context.d3 = d3;
+    context.window.scrollTo = () => {};
     const dates = Array.from({ length: 1001 }, (_, index) => new Date(Date.UTC(2020, 0, index + 1)).toISOString().slice(0, 10));
     const names = { us: importedName, tn: 'Tunisia', sg: 'Singapore', fr: 'France', de: 'Germany', ca: 'Canada' };
     const rows = Object.fromEntries(Object.keys(names).map((code, countryIndex) => [code,
@@ -34,7 +35,7 @@ function harness(t) {
         stopAutoRotation() {}, cancelRotationAnimation() {}, resize() { resizeCount++; }, resetView() { resetCount++; }, goToCountry: code => navigations.push(code) };
     context.window.dataService = service; context.window.globeInstance = globe;
     for (const file of ['ui/view.js', 'ui/uiUtils.js', 'ui/search.js', 'ui/dateRange.js', 'ui/compare.js', 'ui/compareUI.js', 'charts/chartFactory.js', 'charts/compareCharts.js'])
-        vm.runInContext(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), context, { filename: file });
+        vm.runInContext(readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8'), context, { filename: file });
     dom.window.AtlasView.initialize(); dom.window.AtlasView.finish('explore');
     context.window.syncAtlasState = () => {};
     context.window.stopTimeline = () => { stopCount++; };

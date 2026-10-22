@@ -1,6 +1,7 @@
 import { DataService } from './dataService/DataService.js';
 import * as MetricRegistry from './dataService/metrics.js';
 import { createStore, readURLState, stateToURL } from './ui/store.js';
+import { CHART_TYPES } from './charts/chartTypes.js';
 
 if (document.readyState !== 'complete') {
     await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
@@ -9,6 +10,7 @@ if (document.readyState !== 'complete') {
 const requestedState = readURLState(window.location.search);
 window.AtlasStore = createStore(requestedState);
 window.MetricRegistry = MetricRegistry;
+window.ChartTypes = CHART_TYPES;
 function persistURL(state) {
     if (window.AtlasView.restoring) return;
     const url = stateToURL(state, window.location.href);
@@ -31,9 +33,13 @@ function applyRequestedState(state) {
     CompareMode.state.displayMode = state.compareLayout || 'combined';
     CompareMode.state.dateRange = state.compareRange;
     CompareMode.state.chartType = state.compareChartType;
+    CompareMode.state.chartOptions = state.compareChartOptions;
     CompareMode.state.scale = state.compareScale;
     window.globeInstance.refreshData();
-    if (state.selectedCountry && valid.has(state.selectedCountry)) window.globeInstance.goToCountry(state.selectedCountry);
+    if (state.selectedCountry && valid.has(state.selectedCountry)) {
+        window.globeInstance.goToCountry(state.selectedCountry);
+        if (state.analysisOpen) window.showVisualizations({ scroll: false });
+    }
     if (window.AtlasView.current === 'compare') CompareMode.enter({ focus: false });
 }
 

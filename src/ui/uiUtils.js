@@ -67,12 +67,16 @@ function changeDataset(dataset) {
 function refreshAtlasViews() {
     const globe = window.globeInstance;
     if (!globe?.worldData) return;
-    validateDisplaySettings();
-    globe.refreshData();
-    if (window.CompareMode?.state.active) {
-        CompareUI.initializeDateRangeSlider();
-        CompareMode.updateComparisonView();
-    } else if (document.getElementById('visualizationPanel')?.hidden === false) changeVisualization();
+    const refresh = () => {
+        validateDisplaySettings();
+        globe.refreshData();
+        if (window.CompareMode?.state.active) {
+            CompareUI.initializeDateRangeSlider();
+            CompareMode.updateComparisonView();
+        } else if (document.getElementById('visualizationPanel')?.hidden === false) changeVisualization();
+    };
+    if (window.CompareMode?.state.active) CompareUI.preserveScroll(refresh);
+    else refresh();
 }
 
 function syncAtlasState() {
@@ -83,9 +87,11 @@ function syncAtlasState() {
         view: window.AtlasView?.restoring ? AtlasView.current : comparison?.active ? 'compare' : 'explore', category: service.currentDataset,
         metric: service.currentColumn, unit: service.displayUnit || 'count', smoothing: service.smoothing || 'raw',
         selectedDate: service.currentDate, selectedCountry: window.globeInstance?.selectedCountryCode || null,
+        analysisOpen: Boolean(window.globeInstance?.selectedCountryCode && document.getElementById('visualizationPanel')?.hidden === false),
         compareCountries: comparison?.countries || [], compareRange: comparison?.dateRange || { start: 0, end: 100 },
         compareLayout: comparison?.displayMode || 'combined', compareChartType: comparison?.chartType || 'line',
-        compareScale: comparison?.scale || 'shared', dataMode: service.dataSource === 'sample' ? 'sample' : 'csv'
+        compareScale: comparison?.scale || 'shared', compareChartOptions: comparison?.chartOptions || {},
+        dataMode: service.dataSource === 'sample' ? 'sample' : 'csv'
     });
     updateAtlasPresentation();
 }
@@ -226,10 +232,6 @@ function initializeUI() {
     document.getElementById('countrySearchInput')?.addEventListener('input', filterCountries);
     document.getElementById('searchModal')?.addEventListener('click', event => { if (event.target.id === 'searchModal') closeSearch(); });
     document.getElementById('errorClose')?.addEventListener('click', () => { document.getElementById('errorDisplay').style.display = 'none'; });
-    document.getElementById('filtersToggle')?.addEventListener('click', event => {
-        const open = document.querySelector('.control-panel').classList.toggle('filters-open');
-        event.currentTarget.setAttribute('aria-expanded', String(open));
-    });
     document.getElementById('countryExpandBtn')?.addEventListener('click', event => {
         const expanded = document.getElementById('countryInfo').classList.toggle('expanded');
         event.currentTarget.setAttribute('aria-expanded', String(expanded));

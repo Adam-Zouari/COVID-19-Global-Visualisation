@@ -1,5 +1,18 @@
 GlobeVis.prototype.setupEventListeners = function() {
     const options = { signal: this.listeners.signal };
+    // A click, pen touch, pinch, or wheel on any part of the globe stops motion
+    // immediately, even when the gesture does not become a D3 drag or zoom.
+    const stopInteraction = () => {
+        this.stopAutoRotation();
+        this.cancelRotationAnimation();
+    };
+    const surface = this.svg.node();
+    for (const type of ['pointerdown', 'touchstart', 'wheel']) {
+        surface.addEventListener(type, stopInteraction, { ...options, passive: true });
+    }
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').addEventListener?.('change', event => {
+        if (event.matches) stopInteraction();
+    }, options);
     document.getElementById('dataSelector')?.addEventListener('change', event => {
         if (window.atlasActions?.setMetric) {
             window.atlasActions.setMetric(event.target.value);
@@ -466,5 +479,6 @@ GlobeVis.prototype.refreshData = function() {
     this.updateGlobeColors();
     this.refreshSelectedCountry();
     this.setControlsDisabled(false);
+    this.startAutoRotation();
     this.dispatchStateEvent('atlas-data-updated');
 };

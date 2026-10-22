@@ -7,7 +7,7 @@
 .header-country-item span { min-width: 0; overflow-wrap: anywhere; }
 .header-country-item.dragging { opacity: .5; }
 .country-color { display: inline-block; width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; }
-.header-country-flag, .chart-title-flag { width: 22px; height: 15px; object-fit: cover; flex: 0 0 auto; border-radius: 2px; }
+.header-country-flag { width: 22px; height: 15px; object-fit: cover; flex: 0 0 auto; border-radius: 2px; }
 .remove-country-btn { border: 0; background: transparent; color: var(--muted); width: 24px; height: 24px; border-radius: 4px; padding: 0; font-size: 21px; line-height: 1; }
 .remove-country-btn:hover { color: var(--text); background: var(--surface-hover); }
 .add-country-btn { border: 1px dashed var(--control-border); border-radius: 6px; padding: 8px 11px; color: var(--dataset-color); background: transparent; font-size: 12px; }
@@ -30,31 +30,13 @@
 .compare-charts-wrapper { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .country-chart-container { min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 7px; }
 .country-chart-container:only-child { grid-column: 1 / -1; }
-.chart-title { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 15px; }
-.chart-div { min-width: 0; }
-.chart-div svg, .combined-chart-container svg, #chartContainer svg { display: block; max-width: 100%; }
-.chart-heading { margin-bottom: 6px; }
-.chart-heading-title { font-size: 15px; line-height: 1.5; letter-spacing: -.02em; }
-.chart-subtitle { color: var(--muted); font-size: 11px; margin-top: 2px; }
-.x-axis, .y-axis { color: var(--chart-axis); font-size: 11px; }
-.x-axis .domain, .y-axis .domain { stroke: var(--chart-axis-border); }
-.x-axis .tick line, .y-axis .tick line { display: none; }
-.grid-lines line { stroke: var(--chart-grid); stroke-dasharray: 3 5; }
-.axis-unit-label { fill: var(--chart-axis-unit); font-size: 11px; }
-.chart-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 7px 0; color: var(--chart-legend); font-size: 12px; }
-.chart-legend .legend-item { display: inline-flex; align-items: center; gap: 8px; }
-.chart-legend .legend-line { width: 28px; height: 10px; flex-shrink: 0; }
-.chart-crosshair { stroke: var(--chart-zero); stroke-width: 1; stroke-dasharray: 4 4; pointer-events: none; }
-.chart-tooltip { position: absolute; z-index: 30; pointer-events: none; padding: 10px 12px; border: 1px solid var(--chart-tooltip-border); border-radius: 7px; background: var(--chart-tooltip-bg); color: var(--chart-tooltip-text); font-size: 12px; line-height: 1.6; box-shadow: 0 6px 20px var(--shadow); max-width: 300px; }
-.chart-tooltip div:first-child { color: var(--muted); margin-bottom: 3px; }
-.chart-note, .chart-error { color: var(--muted); font-size: 11px; line-height: 1.65; }
-.chart-warning { color: var(--warning); border-left: 2px solid var(--warning-border); padding: 3px 10px; margin: 6px 0; font-size: 11px; line-height: 1.5; }
-.chart-error { padding: 14px; }
-.missing-bar-marker, .reported-zero-marker { cursor: help; }
-.data-bar:focus-visible, .missing-bar-marker:focus-visible { outline: none; stroke: var(--text); stroke-width: 2; }
 .no-countries-message { display: grid; gap: 4px; padding: 8px 0; text-align: left; }
 .no-countries-message h3 { font-size: 16px; }
 .no-countries-message p { color: var(--muted); font-size: 12px; }
+.analytics-controls .control-group:has(#compare-date-slider) { flex-basis: 360px; max-width: none; }
+#compare-date-slider { display: block; width: 100%; min-width: 0; accent-color: var(--dataset-color); }
+.compare-presentation:has(#compareScaleSelector[hidden]) { width: min(100%, 230px); }
+.compare-presentation:has(#compareScaleSelector[hidden]) > #compareChartType { width: 100%; flex: 1; }
 @media (max-width: 1250px) {
     .compare-options { grid-template-columns: 1fr; }
     .compare-display-row { justify-content: space-between; }
@@ -78,7 +60,4 @@
     .compare-presentation select { flex: 1; width: 0; }
     .compare-chart-container { padding: 10px 6px; }
     .country-chart-container { padding: 9px 4px; }
-    .chart-title, .chart-heading, .chart-note, .chart-warning { margin-left: 6px; margin-right: 6px; }
-    .chart-heading-title { font-size: 14px; }
-    .chart-legend { padding: 7px 6px; }
 }

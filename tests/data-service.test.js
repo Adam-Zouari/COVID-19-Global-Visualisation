@@ -1,8 +1,8 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { csvParse, csvParseRows } from 'd3';
-import DataService from '../dataService/index.js';
-import { formatDate, formatNumber } from '../dataService/utils.js';
+import DataService from '../src/dataService/index.js';
+import { formatDate, formatNumber } from '../src/dataService/utils.js';
 
 globalThis.d3 = { csvParse, csvParseRows };
 

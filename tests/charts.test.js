@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { JSDOM } from 'jsdom';
 import * as d3 from 'd3';
-import DataService from '../dataService/index.js';
+import DataService from '../src/dataService/index.js';
 
 function harness(t, { fullUI = false } = {}) {
     const dom = new JSDOM(fullUI ? readFileSync(new URL('../index.html', import.meta.url), 'utf8') :
@@ -12,6 +12,7 @@ function harness(t, { fullUI = false } = {}) {
     t.after(() => dom.window.close());
     const context = dom.getInternalVMContext();
     context.d3 = d3; context.requestAnimationFrame = callback => { callback(); return 1; }; context.cancelAnimationFrame = () => {};
+    context.window.scrollTo = () => {};
     const rows = {
         us: { '2020-01-01': { new_confirmed: 5, new_deceased: 0, new_tested: 2 }, '2020-01-02': { new_confirmed: 5, new_deceased: 0, new_tested: null }, '2020-01-03': { new_confirmed: -2, new_deceased: 0, new_tested: 3 } },
         fr: { '2020-01-02': { new_confirmed: 7, new_deceased: 0, new_tested: 3 }, '2020-01-03': { new_confirmed: 0, new_deceased: 0, new_tested: 4 } }
@@ -29,7 +30,7 @@ function harness(t, { fullUI = false } = {}) {
         getUnitLabel: (_column, unit) => ({ per100k: 'Per 100,000 people', per1m: 'Per 1,000,000 people' })[unit] || 'Count'
     } };
     for (const file of ['charts/chartFactory.js', 'ui/dateRange.js', 'charts/chartControls.js', 'charts/compareCharts.js', 'ui/uiUtils.js'])
-        vm.runInContext(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), context, { filename: file });
+        vm.runInContext(readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8'), context, { filename: file });
     return { dom, context, window: dom.window, document: dom.window.document, factory: vm.runInContext('ChartFactory', context),
         controls: vm.runInContext('ChartControls', context), comparison: vm.runInContext('CompareCharts', context),
         service: context.window.globeInstance.dataService, container: dom.window.document.getElementById('chartContainer') };
@@ -294,25 +295,24 @@ test('combined charts keep common dates, exact metrics and stable country colors
     assert.equal(container.querySelectorAll('.chart-legend .legend-item').length, 2);
 });
 
-test('four comparison colors and line patterns are independent of previous country browsing', t => {
+test('four comparison colors are independent of previous country browsing', t => {
     const { factory } = harness(t);
     for (let index = 0; index < 30; index++) factory.countryColor(`previous-${index}`);
     for (const code of ['us', 'fr', 'de', 'ca']) factory.countryColor(code);
     factory.reconcileComparisonCountries(['us', 'fr', 'de', 'ca']);
-    const styles = codes => Object.fromEntries(codes.map(code => [code, [factory.countryColor(code), factory.countryLineDash(code)]]));
+    const styles = codes => Object.fromEntries(codes.map(code => [code, factory.countryColor(code)]));
     const original = styles(['us', 'fr', 'de', 'ca']);
-    assert.deepEqual(Object.values(original).map(([color]) => color), ['#59b5ff', '#ffb23f', '#ef73cb', '#79d17d']);
-    assert.equal(new Set(Object.values(original).map(([, dash]) => dash)).size, 4);
+    assert.deepEqual(Object.values(original), ['#59b5ff', '#ffb23f', '#ef73cb', '#79d17d']);
     factory.reconcileComparisonCountries(['ca', 'fr', 'us', 'de']);
     assert.deepEqual(styles(['us', 'fr', 'de', 'ca']), original);
     factory.reconcileComparisonCountries(['ca', 'us', 'de']);
     factory.reconcileComparisonCountries(['ca', 'us', 'de', 'tn']);
     for (const code of ['us', 'de', 'ca']) assert.deepEqual(styles([code])[code], original[code]);
     assert.deepEqual(styles(['tn']).tn, original.fr, 'A replacement reuses only the vacated slot');
-    assert.equal(factory.countryColor('US'), original.us[0], 'Analysis shares the comparison identity');
+    assert.equal(factory.countryColor('US'), original.us, 'Analysis shares the comparison identity');
 });
 
-test('four-country charts keep matching colors, patterns and legends across themes and display modes', t => {
+test('four-country charts keep continuous lines and matching color legends across themes and display modes', t => {
     const { context, window, document, factory, service } = harness(t, { fullUI: true });
     service.indexedData.epidem.de = service.indexedData.epidem.us;
     service.indexedData.epidem.ca = service.indexedData.epidem.fr;
@@ -324,7 +324,7 @@ test('four-country charts keep matching colors, patterns and legends across them
     window.AtlasTheme = { getSeriesColor: index => palettes[theme][index], getColor: () => '' };
     context.appendCountryLabel = (container, _code, name) => container.appendChild(document.createTextNode(name));
     for (const file of ['ui/compare.js', 'ui/compareUI.js'])
-        vm.runInContext(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), context, { filename: file });
+        vm.runInContext(readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8'), context, { filename: file });
     for (let index = 0; index < 30; index++) factory.countryColor(`previous-${index}`);
     Object.assign(window.CompareMode.state, { active: true, countries: ['us', 'fr', 'de', 'ca'] });
     window.CompareUI.updateCountryList();
@@ -334,7 +334,7 @@ test('four-country charts keep matching colors, patterns and legends across them
             window.CompareMode.state.displayMode = displayMode; window.CompareMode.updateComparisonView();
             const lines = [...document.querySelectorAll('#compareChartContainer .data-line')];
             assert.deepEqual(lines.map(line => line.getAttribute('stroke')), palettes[theme]);
-            assert.deepEqual(lines.map(line => line.getAttribute('stroke-dasharray')), [null, '9 4', '2 4', '9 4 2 4']);
+            assert.deepEqual(lines.map(line => line.getAttribute('stroke-dasharray')), [null, null, null, null]);
             if (displayMode === 'combined') {
                 const legendLines = [...document.querySelectorAll('.chart-legend .legend-line line')];
                 assert.deepEqual(legendLines.map(line => line.getAttribute('stroke')), palettes[theme]);
@@ -345,7 +345,7 @@ test('four-country charts keep matching colors, patterns and legends across them
         const analysis = document.createElement('div');
         factory.createChart(analysis, 'de', 'line', {});
         assert.equal(analysis.querySelector('.data-line').getAttribute('stroke'), palettes[theme][2]);
-        assert.equal(analysis.querySelector('.data-line').getAttribute('stroke-dasharray'), '2 4');
+        assert.equal(analysis.querySelector('.data-line').getAttribute('stroke-dasharray'), null);
     }
 });
 
@@ -362,7 +362,7 @@ test('appearance updates redraw visible analysis once and preserve source observ
     assert.equal(container.querySelector('.data-line').getAttribute('stroke'), '#70b7ff');
     const frames = [];
     context.requestAnimationFrame = callback => { frames.push(callback); return frames.length; };
-    vm.runInContext(readFileSync(new URL('../ui/visualizations.js', import.meta.url), 'utf8'), context);
+    vm.runInContext(readFileSync(new URL('../src/ui/visualizations.js', import.meta.url), 'utf8'), context);
     theme = 'light';
     document.dispatchEvent(new window.CustomEvent('atlas:themechange', { detail: { theme } }));
     document.dispatchEvent(new window.CustomEvent('atlas:themechange', { detail: { theme } }));
@@ -385,7 +385,7 @@ test('appearance updates recolor comparison charts and existing country chips wi
     window.AtlasTheme = { getSeriesColor: index => (theme === 'dark' ? ['#70b7ff', '#f5b85e'] : ['#1464ad', '#875300'])[index], getColor: () => '' };
     context.appendCountryLabel = (container, _code, name) => container.appendChild(document.createTextNode(name));
     for (const file of ['ui/compare.js', 'ui/compareUI.js', 'ui/visualizations.js'])
-        vm.runInContext(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), context, { filename: file });
+        vm.runInContext(readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8'), context, { filename: file });
     Object.assign(window.CompareMode.state, { active: true, countries: ['us', 'fr'], dateRange: { start: 50, end: 100 } });
     window.CompareUI.updateCountryList(); window.CompareMode.updateComparisonView();
     const chip = document.querySelector('#headerCountriesList .header-country-item');
@@ -442,7 +442,8 @@ for (const view of ['analysis', 'combined', 'separate']) test(`${view} charts re
     window.globeInstance.dataService = service;
     if (view === 'separate') {
         context.appendCountryLabel = (container, _code, name) => { container.textContent = name; };
-        vm.runInContext(readFileSync(new URL('../ui/compare.js', import.meta.url), 'utf8'), context, { filename: 'ui/compare.js' });
+        for (const file of ['ui/compare.js', 'ui/compareUI.js'])
+            vm.runInContext(readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8'), context, { filename: file });
         Object.assign(window.CompareMode.state, { active: true, countries: ['us', 'fr'], displayMode: 'separate', scale: 'shared' });
     }
     for (const [unit, expected, label, compact] of [
@@ -498,7 +499,61 @@ test('a single-day line view remains finite and unsupported charts explain valid
     assert.ok(container.querySelectorAll('.data-point').length > 0);
     assert.doesNotMatch(container.innerHTML, /NaN|Infinity/);
     factory.createChart(container, 'us', 'pie', {});
-    assert.match(container.querySelector('.chart-error').textContent, /line or bar/);
+    assert.match(container.querySelector('.chart-error').textContent, /supported chart type/);
+});
+
+test('area charts preserve signed observations and calendar gaps with a zero baseline', t => {
+    const { factory, container, service } = harness(t);
+    service.indexedData.epidem.us['2020-01-02'].new_confirmed = null;
+    factory.createChart(container, 'us', 'area', { dateRange: { start: 0, end: 100 } });
+    const fill = container.querySelector('.data-area');
+    assert.ok(fill);
+    assert.equal(fill.getAttribute('fill-opacity'), '0.16');
+    assert.equal((fill.getAttribute('d').match(/M/g) || []).length, 2, 'missing days split the filled shape');
+    assert.equal(container.querySelectorAll('.data-point').length, 2);
+    assert.doesNotMatch(container.innerHTML, /NaN|Infinity/);
+});
+
+test('country line and area charts reveal observation values on hover and initial keyboard focus', t => {
+    const { factory, container, window } = harness(t);
+    const dates = ['2020-01-01', '2020-01-02', '2020-01-03', '2020-01-04'];
+    for (const type of ['line', 'area']) {
+        factory.renderCartesian(container, dates, [{ key: 'us', label: 'United States', values: [5, 0, null, -2] }], type,
+            { column: 'new_confirmed', title: 'New confirmed cases — United States' });
+        const inspector = container.querySelector('.chart-hit-area');
+        assert.ok(inspector, `${type} has a dated observation inspector`);
+        inspector.dispatchEvent(new window.MouseEvent('pointermove', { clientX: 0, clientY: 50 }));
+        assert.match(container.querySelector('.chart-tooltip').textContent, /2020-01-01.*United States: 5.*Cases/);
+        inspector.dispatchEvent(new window.MouseEvent('pointerleave'));
+        assert.equal(container.querySelector('.chart-tooltip'), null);
+        inspector.focus();
+        assert.match(container.querySelector('.chart-tooltip').textContent, /2020-01-01.*United States: 5.*Cases/,
+            'Tab focus reveals the current date immediately');
+        for (const [key, value] of [['ArrowRight', '0'], ['ArrowRight', 'No observation'], ['End', '-2']]) {
+            inspector.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true }));
+            assert.ok(container.querySelector('.chart-tooltip').textContent.includes(`United States: ${value}`));
+            assert.ok(inspector.getAttribute('aria-valuetext').includes(`United States: ${value}`));
+        }
+        assert.equal(container.querySelectorAll('.cursor-points circle').length, 1);
+        inspector.blur();
+        assert.equal(container.querySelector('.chart-tooltip'), null);
+        assert.equal(container.querySelector('.chart-crosshair').getAttribute('visibility'), 'hidden');
+    }
+});
+
+test('line and area paths use smooth continuous segments without joining unavailable reports', t => {
+    const { factory, container } = harness(t);
+    const dates = Array.from({ length: 9 }, (_, index) => `2020-01-${String(index + 1).padStart(2, '0')}`);
+    const values = [0, 2, 1, 3, null, -1, 2, 0, 4];
+    for (const type of ['line', 'area']) {
+        factory.renderCartesian(container, dates, [{ key: 'fr', label: 'France', values }], type, { column: 'new_confirmed' });
+        const line = container.querySelector('.data-line'), path = line.getAttribute('d');
+        assert.match(path, /C/, 'Consecutive reports use shape-preserving curves');
+        assert.equal((path.match(/M/g) || []).length, 2, 'A missing report still splits the path');
+        assert.equal(line.getAttribute('stroke-dasharray'), null, 'Every country has a continuous stroke');
+        assert.deepEqual(Array.from(line.__data__, point => point.value), values, 'Drawing does not alter observations');
+        assert.doesNotMatch(container.innerHTML, /NaN|Infinity/);
+    }
 });
 
 test('tiny population rates remain distinguishable from zero without changing compact counts', t => {

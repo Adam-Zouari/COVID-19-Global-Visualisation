@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { csvParseRows } from 'd3';
-import DataService from '../dataService/index.js';
-import { METRICS, UNIT_DEFINITIONS, getMetricMetadata, getUnitLabel } from '../dataService/metrics.js';
+import DataService from '../src/dataService/index.js';
+import { METRICS, UNIT_DEFINITIONS, getMetricMetadata, getUnitLabel } from '../src/dataService/metrics.js';
 
 globalThis.d3 = { csvParseRows };
 
