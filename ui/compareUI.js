@@ -1,7 +1,7 @@
 window.CompareUI = {
     show() {
         const panel = document.getElementById('comparePanel'); panel.hidden = false;
-        this.initializeDateRangeSlider(); this.updateCountryList(); document.getElementById('exitCompareBtn')?.focus();
+        this.initializeDateRangeSlider(); this.updateCountryList(); document.getElementById('compareTitle')?.focus();
     },
     hide() { document.getElementById('comparePanel').hidden = true; },
 

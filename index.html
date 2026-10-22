@@ -209,13 +209,10 @@
                     </div>
                 </section>
             </div>
-            <section id="comparePanel" class="compare-panel" aria-label="Compare countries" hidden>
+            <section id="comparePanel" class="compare-panel" aria-labelledby="compareTitle" hidden>
                 <div class="compare-heading">
-                    <div>
-                        <h2>Compare countries</h2>
-                        <p>Shared metrics, dates, and units · Up to four countries</p>
-                    </div>
-                    <button id="exitCompareBtn" class="secondary-btn" onclick="CompareMode.exit()">← Explore on globe</button>
+                    <h2 id="compareTitle" tabindex="-1">Compare countries</h2>
+                    <p>Shared metrics, dates, and units · Up to four countries</p>
                 </div>
                 <div class="compare-country-row panel">
                     <div id="headerCountriesList" class="header-countries"></div>

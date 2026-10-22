@@ -236,7 +236,7 @@ test('comparison uses shared controls, stable colors, readable small multiples a
     await expect(page.locator('#compareMetricSelector')).toHaveValue('current_hospitalized_patients');
     await expect(page.locator('#compareSmoothingSelector')).toBeEnabled();
     await page.locator('#epidemBtn').click();
-    await page.locator('#exitCompareBtn').click();
+    await page.locator('#navExplore').click();
     await expect(page.locator('#exploreView')).toBeVisible();
     await expect(page.locator('#countryName')).toContainText('Tunisia');
     await expect(page.locator('#currentDate')).toHaveText(selectedDate);

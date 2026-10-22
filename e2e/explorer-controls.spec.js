@@ -110,7 +110,7 @@ test('hospital occupancy supports daily snapshots and seven-day means without sm
     await expect(page.locator('#compareSmoothingSelector')).toBeDisabled();
     await expect(page.locator('#compareSmoothingSelector')).toHaveValue('raw');
     await expect(page.locator('#compareChartContainer .chart-subtitle')).toContainText('Reported cumulative values');
-    await page.locator('#exitCompareBtn').click();
+    await page.locator('#navExplore').click();
     await expect(page.locator('.smoothing-group')).toBeHidden();
     await expect(page.locator('.primary-metric-value')).toHaveText('1,000');
     await page.locator('#dataSelector').selectOption('new_hospitalized_patients');

@@ -1,5 +1,4 @@
 .compare-panel { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.compare-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .compare-heading h2 { margin: 0 0 2px; font-size: 22px; }
 .compare-heading p { color: var(--muted); font-size: 12px; }
 .compare-country-row { display: flex; align-items: center; padding: 9px 12px; }
@@ -64,10 +63,8 @@
 @media (max-width: 900px) { .compare-charts-wrapper { grid-template-columns: 1fr; } }
 @media (max-width: 600px) {
     .compare-panel { gap: 10px; }
-    .compare-heading { align-items: flex-start; gap: 10px; }
     .compare-heading h2 { font-size: 20px; }
-    .compare-heading p { max-width: 190px; font-size: 11px; }
-    .compare-heading .secondary-btn { font-size: 10px; padding: 7px 9px; min-height: 34px; }
+    .compare-heading p { font-size: 11px; }
     .compare-country-row { padding: 8px; }
     .header-countries { gap: 6px; }
     .header-country-item { gap: 6px; padding: 3px 6px; font-size: 11px; }
