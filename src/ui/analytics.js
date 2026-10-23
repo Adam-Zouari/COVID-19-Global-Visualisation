@@ -122,7 +122,7 @@ window.AnalyticsCharts = {
             smoothing: type === 'scatter' && settings.scope === 'country' ? options.smoothing : service.smoothing,
             date: options.date || service.currentDate
         });
-        container.replaceChildren();
+        ChartFactory.clearChart(container);
         if (model.emptyMessage) {
             const title = document.createElement('h3'); title.className = 'chart-heading-title'; title.textContent = model.title;
             container.appendChild(title); ChartFactory.showError(container, model.emptyMessage);

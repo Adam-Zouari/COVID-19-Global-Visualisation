@@ -121,12 +121,11 @@ const ChartFactory = {
     },
 
     createChart(container, countryCode, vizType = 'line', settings) {
-        container.replaceChildren();
+        this.clearChart(container);
         if (window.ChartTypes && !ChartTypes[vizType]?.country) return this.showError(container, 'Choose a supported chart type.');
         if (window.AnalyticsCharts?.isAnalytical(vizType)) return AnalyticsCharts.renderCountry(container, countryCode, vizType, settings);
         const extraControls = document.getElementById('analysisChartOptions');
         if (extraControls) { extraControls.hidden = true; extraControls.replaceChildren(); delete extraControls.dataset.fields; }
-        delete container.dataset.chartType;
         const range = document.getElementById('chartControlsContainer'); if (range) range.hidden = false;
         const data = this.prepareDataForCountry(countryCode, settings);
         if (!data) return this.showError(container, 'No observations available for this country and dataset.');
@@ -152,6 +151,12 @@ const ChartFactory = {
         return min === max ? [0, 1] : [min < 0 ? min * 1.1 : 0, max > 0 ? max * 1.1 : 0];
     },
 
+    clearChart(container) {
+        container.replaceChildren();
+        container.classList.remove('analytics-chart');
+        delete container.dataset.chartType;
+    },
+
     showError(container, message) {
         const error = document.createElement('div'); error.className = 'chart-error'; error.setAttribute('role', 'status');
         error.textContent = message; container.appendChild(error);
@@ -162,6 +167,13 @@ const ChartFactory = {
         const tooltip = document.createElement('div'); tooltip.className = 'chart-tooltip';
         for (const line of lines) { const row = document.createElement('div'); row.textContent = line; tooltip.appendChild(row); }
         container.appendChild(tooltip);
+        // Keyboard focus has no pointer coordinates. Anchor its details to the
+        // inspected mark instead of placing every focused bar in the same corner.
+        if (!Number.isFinite(event?.clientX) || !Number.isFinite(event?.clientY)) {
+            const bounds = event?.currentTarget?.getBoundingClientRect();
+            event = { clientX: bounds ? bounds.left + bounds.width / 2 : NaN,
+                clientY: bounds ? bounds.top + bounds.height / 2 : NaN };
+        }
         const pointer = d3.pointer(event, container);
         const x = Number.isFinite(pointer[0]) ? pointer[0] : 16, y = Number.isFinite(pointer[1]) ? pointer[1] : 90;
         tooltip.style.left = `${Math.max(0, Math.min(x + 12, container.clientWidth - tooltip.offsetWidth))}px`;
@@ -169,6 +181,19 @@ const ChartFactory = {
     },
 
     hideTooltip(container) { container.querySelectorAll('.chart-tooltip').forEach(tooltip => tooltip.remove()); },
+
+    bindTooltip(selection, container, describe) {
+        return selection.attr('tabindex', 0).attr('role', 'img')
+            .attr('aria-label', datum => describe(datum).filter(value => value != null).join('. '))
+            .on('pointerenter.analytics pointermove.analytics mouseover.analytics focus.analytics', (event, datum) =>
+                this.showTooltip(container, event, describe(datum)))
+            .on('pointerleave.analytics mouseout.analytics blur.analytics', () => this.hideTooltip(container))
+            .on('keydown.analytics', event => {
+                if (event.key === 'Escape' && container.querySelector('.chart-tooltip')) {
+                    event.preventDefault(); event.stopPropagation(); this.hideTooltip(container);
+                }
+            });
+    },
 
     periodLabel(dates) {
         const format = date => new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
@@ -246,7 +271,7 @@ const ChartFactory = {
     },
 
     renderCartesian(container, dates, series, type, options = {}) {
-        container.replaceChildren();
+        this.clearChart(container);
         if (!dates.length) return this.showError(container, 'No dates available.');
         options = { ...options, smoothing: this.smoothingMode(options.metric, options.smoothing) };
         const selectedDates = dates;
@@ -274,7 +299,7 @@ const ChartFactory = {
         const plotWidth = width - margin.left - margin.right, plotHeight = height - margin.top - margin.bottom;
         container.style.position = 'relative';
         const svg = d3.select(container).append('svg').attr('viewBox', `0 0 ${width} ${height}`)
-            .attr('width', '100%').attr('height', height).attr('role', 'img')
+            .attr('width', '100%').attr('height', height).attr('role', 'group')
             .attr('aria-label', `${options.title || 'Observations over time'}. ${subtitle}. ${unitLabel}. ${note || 'Missing observations appear as gaps.'}`);
         svg.append('title').text(options.title || 'Observations over time');
         svg.append('desc').text(`${subtitle}. ${note || 'Missing observations remain gaps and are never treated as zero.'}`);
@@ -320,31 +345,25 @@ const ChartFactory = {
                     }
                     return lines;
                 };
-                plot.append('g').selectAll('rect').data(points.filter(point => this.isValue(point.value) && point.value !== 0)).join('rect')
+                const bars = plot.append('g').selectAll('rect').data(points.filter(point => this.isValue(point.value) && point.value !== 0)).join('rect')
                     .attr('class', point => incomplete(point) ? 'data-bar incomplete-bar' : 'data-bar')
                     .attr('x', point => band(point.date) + seriesIndex * barWidth)
                     .attr('width', barWidth).attr('y', point => y(Math.max(0, point.value)))
                     .attr('height', point => Math.abs(y(point.value) - y(0))).attr('fill', point => incomplete(point) ? `url(#${patternId})` : color)
-                    .attr('stroke', point => incomplete(point) ? color : 'none').attr('stroke-width', 0.8).attr('rx', 1)
-                    .attr('tabindex', 0).attr('role', 'img').attr('aria-label', point => tooltipLines(point).join('. '))
-                    .on('mouseover focus', (event, point) => this.showTooltip(container, event, tooltipLines(point)))
-                    .on('mouseout blur', () => this.hideTooltip(container));
+                    .attr('stroke', point => incomplete(point) ? color : 'none').attr('stroke-width', 0.8).attr('rx', 1);
+                this.bindTooltip(bars, container, tooltipLines);
                 // Zero-height rectangles are invisible. A short solid mark
                 // distinguishes a reported zero from the hollow missing mark.
-                plot.append('g').selectAll('line').data(points.filter(point => point.value === 0)).join('line')
+                const zeros = plot.append('g').selectAll('line').data(points.filter(point => point.value === 0)).join('line')
                     .attr('class', 'reported-zero-marker').attr('x1', point => center(point) - Math.max(2, barWidth / 3))
                     .attr('x2', point => center(point) + Math.max(2, barWidth / 3)).attr('y1', y(0)).attr('y2', y(0))
-                    .attr('stroke', color).attr('stroke-width', 2).attr('tabindex', 0).attr('role', 'img')
-                    .attr('aria-label', point => tooltipLines(point).join('. '))
-                    .on('mouseover focus', (event, point) => this.showTooltip(container, event, tooltipLines(point)))
-                    .on('mouseout blur', () => this.hideTooltip(container));
-                plot.append('g').selectAll('path').data(points.filter(point => !this.isValue(point.value))).join('path')
+                    .attr('stroke', color).attr('stroke-width', 2);
+                this.bindTooltip(zeros, container, tooltipLines);
+                const missing = plot.append('g').selectAll('path').data(points.filter(point => !this.isValue(point.value))).join('path')
                     .attr('class', 'missing-bar-marker').attr('d', 'M0,-4L4,0L0,4L-4,0Z')
                     .attr('transform', point => `translate(${center(point)},${plotHeight - 8})`)
-                    .attr('fill', 'none').attr('stroke', color).attr('stroke-width', 1.5).attr('tabindex', 0).attr('role', 'img')
-                    .attr('aria-label', point => tooltipLines(point).join('. '))
-                    .on('mouseover focus', (event, point) => this.showTooltip(container, event, tooltipLines(point)))
-                    .on('mouseout blur', () => this.hideTooltip(container));
+                    .attr('fill', 'none').attr('stroke', color).attr('stroke-width', 1.5);
+                this.bindTooltip(missing, container, tooltipLines);
             } else {
                 if (type === 'area') {
                     const area = d3.area().defined(point => this.isValue(point.value)).curve(d3.curveMonotoneX).x(point => xAt(point.date))
@@ -384,10 +403,14 @@ const ChartFactory = {
                 const bounds = svg.node().getBoundingClientRect(), scale = bounds.width / width || 1;
                 inspect(index, { clientX: bounds.left + (margin.left + xAt(dates[index])) * scale, clientY: bounds.top + (margin.top + 60) * scale });
             };
+            const dismiss = () => { crosshair.attr('visibility', 'hidden'); cursorPoints.selectAll('circle').remove(); this.hideTooltip(container); };
             overlay.on('pointermove', event => { const [x] = d3.pointer(event, plot.node()); inspect(d3.bisectCenter(dateNumbers, +time.invert(x)), event); })
                 .on('focus', () => inspectFromKeyboard(Number(overlay.attr('aria-valuenow'))))
-                .on('pointerleave blur', () => { crosshair.attr('visibility', 'hidden'); cursorPoints.selectAll('circle').remove(); this.hideTooltip(container); })
+                .on('pointerleave blur', dismiss)
                 .on('keydown', event => {
+                    if (event.key === 'Escape' && container.querySelector('.chart-tooltip')) {
+                        event.preventDefault(); event.stopPropagation(); dismiss(); return;
+                    }
                     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
                     event.preventDefault(); const current = Number(overlay.attr('aria-valuenow'));
                     const index = event.key === 'Home' ? 0 : event.key === 'End' ? dates.length - 1 : Math.max(0, Math.min(dates.length - 1, current + (event.key === 'ArrowRight' ? 1 : -1)));

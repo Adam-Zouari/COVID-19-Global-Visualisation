@@ -132,7 +132,7 @@ window.CompareMode = {
     renderComparisonView() {
         ChartFactory.reconcileComparisonCountries(this.state.countries);
         const container = document.getElementById('compareChartContainer');
-        container.replaceChildren(); this.syncControls();
+        ChartFactory.clearChart(container); this.syncControls();
         if (!this.state.countries.length) { this.message(); return CompareUI.showNoCountriesMessage(); }
         if (this.state.countries.length === 1) this.message('Add another country to compare trends on the same dates.');
         else if (document.getElementById('compareMessage')?.textContent.startsWith('Add another')) this.message();

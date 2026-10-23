@@ -29,8 +29,7 @@
 .analytics-chart { min-width: 0; }
 .analytics-chart svg { display: block; max-width: 100%; overflow: visible; }
 .analytics-chart svg text { font-family: inherit; }
-.analytics-axis-label, .analytics-country-label, .analytics-value-label { fill: var(--chart-axis-unit); font-size: 11px; }
-.analytics-country-label { fill: var(--text); }
+.analytics-axis-label, .analytics-value-label { fill: var(--chart-axis-unit); font-size: 11px; }
 .analytics-value-label { font-variant-numeric: tabular-nums; }
 .analytics-chart [tabindex="0"]:focus-visible { outline: none; stroke: var(--interactive); stroke-width: 2; }
 .heatmap-selection { fill: none; stroke: var(--text); stroke-width: 2; pointer-events: none; }

@@ -62,8 +62,19 @@ for (const fallback of [false, true]) {
         await ready(page, '/?data=sample&country=tn');
         await page.locator('#seeMoreBtn').click();
         await expect(page.locator('#visualizationPanel')).toBeVisible();
+        await page.evaluate(() => {
+            const existing = document.createElement('button');
+            existing.id = 'previouslyInert'; existing.inert = true;
+            document.body.appendChild(existing);
+        });
         await page.locator('#expandGlobeBtn').click();
         await expect(page.locator('#expandedGlobe')).toBeVisible();
+        await expect(page.locator('#header')).toHaveAttribute('inert', '');
+        await page.locator('#navCompare').evaluate(node => node.focus());
+        await expect(page.locator('#navCompare')).not.toBeFocused();
+        expect(await page.locator('#exitExpandedGlobe').evaluate(node => node.inert)).toBe(false);
+        await page.keyboard.press('/');
+        await expect(page.locator('#searchModal')).toBeHidden();
         await expect(page.locator('#expandedGlobe #globeStage')).toHaveClass(/globe-expanded/);
         await expect(page.locator('#expandGlobeBtn')).toHaveAttribute('aria-expanded', 'true');
         await expect(page.locator('#expandedGlobe #dateSlider')).toBeVisible();
@@ -107,6 +118,8 @@ for (const fallback of [false, true]) {
         await expect(page.locator('#expandedGlobe')).toHaveCount(0);
         await expect(page.locator('#globeStage')).not.toHaveClass(/globe-expanded/);
         await expect(page.locator('#expandGlobeBtn')).toBeFocused();
+        await expect(page.locator('#header')).not.toHaveAttribute('inert');
+        await expect(page.locator('#previouslyInert')).toHaveAttribute('inert', '');
         await expect(page.locator('#visualizationPanel')).toBeVisible();
         expect(await page.evaluate(() => document.body.classList.contains('globe-expanded-open'))).toBe(false);
         expect(await page.evaluate(() => globeInstance.selectedCountryCode)).toBe('tn');

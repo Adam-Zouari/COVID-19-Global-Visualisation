@@ -96,6 +96,74 @@ test('line gaps remain gaps and keyboard crosshair exposes missing observations'
     assert.doesNotMatch(container.innerHTML, /NaN|Infinity/);
 });
 
+test('bar, zero and missing details anchor to keyboard focus and Escape dismisses only the tooltip', t => {
+    const { factory, service, container, document, window } = harness(t);
+    service.getCountrySeries = () => [
+        { date: '2020-01-01', value: 4 }, { date: '2020-01-02', value: 0 }, { date: '2020-01-03', value: null }
+    ];
+    factory.createChart(container, 'us', 'bar', {});
+    assert.equal(container.querySelector('svg').getAttribute('role'), 'group', 'Interactive chart children remain exposed to assistive technology');
+    container.getBoundingClientRect = () => ({ left: 100, top: 50, width: 700, height: 400 });
+    Object.defineProperty(container, 'clientWidth', { value: 700 });
+    let escapedToPage = 0;
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') escapedToPage++; });
+    for (const selector of ['.data-bar', '.reported-zero-marker', '.missing-bar-marker']) {
+        const mark = container.querySelector(selector);
+        mark.getBoundingClientRect = () => ({ left: 300, top: 200, width: 20, height: 40 });
+        mark.focus();
+        const tooltip = container.querySelector('.chart-tooltip');
+        assert.equal(tooltip.style.left, '222px');
+        assert.equal(tooltip.style.top, '158px');
+        const escape = new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+        mark.dispatchEvent(escape);
+        assert.equal(escape.defaultPrevented, true);
+        assert.equal(container.querySelector('.chart-tooltip'), null);
+        assert.equal(document.activeElement, mark, 'Dismissing details keeps the inspected observation focused');
+        mark.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    }
+    assert.equal(escapedToPage, 3, 'Escape reaches the page after details are already dismissed');
+});
+
+test('line and area inspectors dismiss details with Escape and remain keyboard-operable', t => {
+    const { factory, container, document, window } = harness(t);
+    for (const type of ['line', 'area']) {
+        factory.createChart(container, 'us', type, {});
+        assert.equal(container.querySelector('svg').getAttribute('role'), 'group');
+        const inspector = container.querySelector('.chart-hit-area');
+        inspector.focus();
+        assert.ok(container.querySelector('.chart-tooltip'));
+        const escape = new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+        inspector.dispatchEvent(escape);
+        assert.equal(escape.defaultPrevented, true);
+        assert.equal(container.querySelector('.chart-tooltip'), null);
+        assert.equal(container.querySelector('.chart-crosshair').getAttribute('visibility'), 'hidden');
+        assert.equal(container.querySelectorAll('.cursor-points circle').length, 0);
+        assert.equal(document.activeElement, inspector);
+        inspector.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+        assert.match(container.querySelector('.chart-tooltip').textContent, /2020-01-03/);
+    }
+});
+
+test('reused chart containers discard analytical state before Cartesian charts or errors', t => {
+    const { factory, comparison, container, context, window } = harness(t);
+    vm.runInContext(readFileSync(new URL('../src/charts/analyticsRendering.js', import.meta.url), 'utf8'), context);
+    for (const render of [
+        () => factory.createChart(container, 'us', 'line', {}),
+        () => comparison.createCombinedChart(container, ['us', 'fr'], 'bar'),
+        () => factory.createChart(container, 'us', 'unsupported', {})
+    ]) {
+        window.AnalyticsPlot.frame(container, { type: 'scatter', title: 'Relationships', note: 'Old chart description' });
+        container.classList.add('retained-layout-class');
+        assert.equal(container.dataset.chartType, 'scatter');
+        assert.equal(container.classList.contains('analytics-chart'), true);
+        render();
+        assert.equal(container.classList.contains('analytics-chart'), false);
+        assert.equal(container.dataset.chartType, undefined);
+        assert.equal(container.classList.contains('retained-layout-class'), true);
+        assert.doesNotMatch(container.textContent, /Old chart description|Relationships/);
+    }
+});
+
 test('filtering to metric coverage dates retains unreported calendar days inside the range', t => {
     const { factory } = harness(t);
     const data = factory.prepareDataForCountry('us', { selectedColumn: 'new_tested' });

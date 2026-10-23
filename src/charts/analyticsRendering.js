@@ -1,7 +1,7 @@
 /** Shared presentation for analytical charts; observations come from AnalyticsData. */
 window.AnalyticsPlot = {
     frame(container, model, { height = 360, margin = {} } = {}) {
-        container.replaceChildren();
+        ChartFactory.clearChart(container);
         container.classList.add('analytics-chart');
         container.dataset.chartType = model.type || '';
         container.style.position = 'relative';
@@ -43,20 +43,6 @@ window.AnalyticsPlot = {
     tip(container, event, lines) { ChartFactory.showTooltip(container, event, lines); },
     hideTip(container) { ChartFactory.hideTooltip(container); },
     bind(selection, container, describe) {
-        const plot = this;
-        selection.attr('tabindex', 0).attr('role', 'img')
-            .attr('aria-label', datum => describe(datum).filter(value => value != null).join('. '))
-            .on('pointerenter.analytics pointermove.analytics', (event, datum) => plot.tip(container, event, describe(datum)))
-            .on('focus.analytics', function(event, datum) {
-                const bounds = this.getBoundingClientRect();
-                plot.tip(container, { clientX: bounds.left + bounds.width / 2, clientY: bounds.top + bounds.height / 2 }, describe(datum));
-            })
-            .on('pointerleave.analytics blur.analytics', () => plot.hideTip(container))
-            .on('keydown.analytics', event => {
-                if (event.key === 'Escape' && container.querySelector('.chart-tooltip')) {
-                    event.preventDefault(); event.stopPropagation(); plot.hideTip(container);
-                }
-            });
-        return selection;
+        return ChartFactory.bindTooltip(selection, container, describe);
     }
 };

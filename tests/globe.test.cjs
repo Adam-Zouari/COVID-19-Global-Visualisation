@@ -371,6 +371,40 @@ test('the larger default sphere retains a safe drawing inset on small and large 
     }
 });
 
+test('unchanged globe chrome avoids refitting and redrawing while real layout changes retain zoom', () => {
+    const { context, globe, elements } = harness();
+    let width = 900, headingWidth = 180, redraws = 0, fittedScale;
+    const heading = { classList: { contains: () => false } };
+    const stage = { querySelectorAll: () => [heading] };
+    elements.set('globe', {
+        getBoundingClientRect: () => ({ left: 10, top: 20, width, height: 520 }),
+        closest: () => stage
+    });
+    context.document.createRange = () => ({ selectNodeContents() {}, getClientRects: () => [
+        { left: 30, right: 30 + headingWidth, top: 40, bottom: 80, width: headingWidth, height: 40 }
+    ] });
+    context.d3 = { zoomTransform: () => ({ k: 2 }) };
+    const selection = { attr() { return this; }, node: () => ({}) };
+    globe.svg = globe.globeGroup = selection;
+    globe.projection.scale = value => { fittedScale = value; };
+    globe.render = () => { redraws++; };
+    globe.measure();
+    const originalRadius = globe.radius;
+    globe.resize(); globe.resize();
+    assert.equal(redraws, 0, 'Repeated header notifications with identical bounds do not redraw paths');
+    assert.equal(globe.radius, originalRadius);
+    assert.equal(fittedScale, undefined);
+    headingWidth = 350;
+    globe.resize();
+    assert.equal(redraws, 1, 'New text bounds invalidate the fitted layout');
+    assert.equal(fittedScale, globe.radius * 2);
+    width = 1100;
+    globe.resize();
+    assert.equal(globe.width, 1100);
+    assert.equal(redraws, 2);
+    assert.equal(fittedScale, globe.radius * 2);
+});
+
 test('white coastlines exclude internal borders, reuse topology, and preserve country interaction across themes', async () => {
     const { JSDOM } = await import('jsdom');
     const d3 = await import('d3');

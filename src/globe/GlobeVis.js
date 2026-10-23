@@ -25,19 +25,17 @@ class GlobeVis {
     measure() {
         const container = document.getElementById('globe');
         const bounds = container?.getBoundingClientRect?.();
-        this.width = Math.max(120, bounds?.width || container?.clientWidth || 360);
-        this.height = Math.max(180, bounds?.height || container?.clientHeight || 420);
-        // Approximately one normal mouse-wheel step below the maximum fit.
-        const defaultScale = 0.87;
-        this.center = [this.width / 2, this.height / 2];
-        this.radius = (Math.min(this.width, this.height) / 2 - 8) * defaultScale;
+        const width = Math.max(120, bounds?.width || container?.clientWidth || 360);
+        const height = Math.max(180, bounds?.height || container?.clientHeight || 420);
         const stage = container?.closest?.('.globe-stage');
-        if (!stage || !bounds?.width || !bounds?.height) return;
 
         // The canvas fills the panel. Reserve the actual corner text and
         // controls, rather than discarding their entire horizontal rows.
         const obstacles = [];
-        for (const node of stage.querySelectorAll('.stage-topline .eyebrow, #mapMetricLabel, #mapUnitsLabel, .coverage-status, .globe-hint, .globe-controls')) {
+        const chrome = stage && bounds?.width && bounds?.height ? stage.querySelectorAll(
+            '.stage-topline .eyebrow, #mapMetricLabel, #mapUnitsLabel, .coverage-status, .globe-hint, .globe-controls'
+        ) : [];
+        for (const node of chrome) {
             const range = document.createRange(); range.selectNodeContents(node);
             const rectangles = node.classList.contains('globe-controls') ? [node.getBoundingClientRect()] : range.getClientRects();
             for (const rect of rectangles) if (rect.width && rect.height) obstacles.push({
@@ -45,6 +43,18 @@ class GlobeVis {
                 top: rect.top - bounds.top, bottom: rect.bottom - bounds.top
             });
         }
+        // Timeline and coverage updates often replace text without changing its
+        // bounds. Keep the existing fit and paths when the layout is identical.
+        const layout = [width, height, ...obstacles.flatMap(rect => [rect.left, rect.right, rect.top, rect.bottom])].join(',');
+        if (layout === this.measuredLayout) return false;
+        this.measuredLayout = layout;
+        this.width = width;
+        this.height = height;
+        // Approximately one normal mouse-wheel step below the maximum fit.
+        const defaultScale = 0.87;
+        this.center = [width / 2, height / 2];
+        this.radius = (Math.min(width, height) / 2 - 8) * defaultScale;
+        if (!obstacles.length) return true;
         let bestScore = -Infinity;
         for (let dx = 0; dx <= Math.min(80, this.width * 0.12); dx += 4) {
             for (let dy = 0; dy <= Math.min(80, this.height * 0.2); dy += 4) {
@@ -58,6 +68,7 @@ class GlobeVis {
                 if (score > bestScore) { bestScore = score; this.radius = Math.max(1, radius) * defaultScale; this.center = [x, y]; }
             }
         }
+        return true;
     }
 
     async initVis() {
@@ -171,7 +182,7 @@ class GlobeVis {
     resize() {
         if (this.destroyed) return;
         const zoomScale = d3.zoomTransform(this.svg.node()).k;
-        this.measure();
+        if (!this.measure()) return;
         this.svg.attr('width', this.width).attr('height', this.height)
             .attr('viewBox', `0 0 ${this.width} ${this.height}`);
         this.globeGroup.attr('transform', `translate(${this.center[0]}, ${this.center[1]})`);

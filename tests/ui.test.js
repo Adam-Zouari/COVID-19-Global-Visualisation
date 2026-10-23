@@ -72,6 +72,43 @@ test('repeated initialization and search opening keep one filter handler and one
     assert.deepEqual(navigations, ['tn']); assert.equal(document.getElementById('searchModal').hidden, true);
 });
 
+test('search cannot open behind another modal and repeated opening retains its return focus', t => {
+    const { window, document } = harness(t);
+    window.initializeUI();
+    const trigger = document.getElementById('search'), modal = document.getElementById('searchModal');
+    trigger.focus();
+    const expanded = document.createElement('section'); expanded.id = 'expandedGlobe'; document.body.appendChild(expanded);
+    window.openSearch(); assert.equal(modal.hidden, true); assert.equal(document.activeElement, trigger);
+    expanded.remove();
+    const methodology = document.getElementById('methodologyDialog'); methodology.open = true;
+    window.openSearch(); assert.equal(modal.hidden, true);
+    methodology.open = false;
+    const error = document.getElementById('errorDisplay'); error.style.display = 'flex';
+    window.openSearch(); assert.equal(modal.hidden, true);
+    error.style.display = 'none';
+    window.openSearch(); window.openSearch(); window.closeSearch();
+    assert.equal(modal.hidden, true); assert.equal(document.activeElement, trigger);
+});
+
+test('clearing the selected country closes its stale analysis without stealing focus', t => {
+    const { window, document, context } = harness(t);
+    let cleared = 0;
+    window.ChartControls = { clearContext() { cleared++; } };
+    vm.runInContext(readFileSync(new URL('../src/ui/visualizations.js', import.meta.url), 'utf8'), context);
+    const panel = document.getElementById('visualizationPanel'), chart = document.getElementById('chartContainer');
+    panel.hidden = false; chart.appendChild(document.createElement('svg'));
+    const trigger = document.getElementById('search'); trigger.focus();
+    window.changeVisualization();
+    assert.equal(panel.hidden, true); assert.equal(chart.childElementCount, 0);
+    assert.equal(cleared, 1); assert.equal(document.activeElement, trigger);
+});
+
+test('empty scatter comparisons describe their three-country limit', t => {
+    const { compare, document } = harness(t);
+    compare.state.chartType = 'scatter'; compare.enter();
+    assert.match(document.querySelector('.no-countries-message').textContent, /2–3 countries/);
+});
+
 test('comparison sliders reach every active metric date and labels agree with filtered chart endpoints', t => {
     const { window, document, service, compare, comparison } = harness(t);
     service.metricDates = service.availableDates.slice(100, 201);

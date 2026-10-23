@@ -28,11 +28,11 @@ function showVisualizations({ scroll = true } = {}) {
     window.syncAtlasState?.();
 }
 
-function closeCountryAnalysis() {
+function closeCountryAnalysis({ focus = true } = {}) {
     const panel = document.getElementById('visualizationPanel');
     if (panel) panel.hidden = true;
     ChartControls.clearContext();
-    document.getElementById('seeMoreBtn')?.focus({ preventScroll: true });
+    if (focus) document.getElementById('seeMoreBtn')?.focus({ preventScroll: true });
     window.syncAtlasState?.();
 }
 
@@ -40,7 +40,7 @@ function changeVisualization() {
     const container = document.getElementById('chartContainer');
     if (!container) return;
     const code = selectedVisualizationCountry();
-    if (!code) { ChartControls.clearContext(); container.replaceChildren(); ChartFactory.showError(container, 'Select a country to explore its history.'); return; }
+    if (!code) { closeCountryAnalysis({ focus: false }); ChartFactory.clearChart(container); return; }
     const name = window.globeInstance.dataService.getCountryName(code);
     const title = document.getElementById('viz-country-name');
     if (title) title.textContent = name;
@@ -48,7 +48,7 @@ function changeVisualization() {
     if (flag) { flag.src = `https://flagcdn.com/${code.toLowerCase()}.svg`; flag.alt = ''; }
     updateCountryAnalysisSummary();
     try { ChartFactory.createChart(container, code, document.getElementById('vizTypeSelector')?.value || 'line'); }
-    catch (error) { console.error('Error creating visualization:', error); container.replaceChildren(); ChartFactory.showError(container, 'Unable to create this visualization.'); }
+    catch (error) { console.error('Error creating visualization:', error); ChartFactory.clearChart(container); ChartFactory.showError(container, 'Unable to create this visualization.'); }
 }
 
 let visualizationResizeFrame = null;

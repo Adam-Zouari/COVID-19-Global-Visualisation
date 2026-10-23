@@ -2,6 +2,22 @@
 
 The project now presents a coherent historical COVID-19 atlas around the original interactive 3D globe. The redesign keeps the D3/TopoJSON and Express stack, introduces a consistent interface with the original dark and optional light appearances, and connects exploration, inline country analysis, and a dedicated comparison workspace.
 
+## Code audit — October 23, 2026
+
+Repeated the review across data ingestion, preprocessing and downloads, server routes, charts, globe rendering, navigation, UI state, styles and tests. A second review of the fixes found no further actionable defects. The current design, chart choices, data calculations and interactions were preserved.
+
+| Area | Confirmed problems repaired |
+| --- | --- |
+| CSV integrity | D3 accepted incomplete quoted numbers and invalid text around quotes. Loading now rejects malformed quoting before parsing or replacing usable data; quoted commas, newlines and escaped quotes remain supported. Failed uploads preserve observations and caches. |
+| Chart lifecycle | Switching away from analytical charts could retain their CSS class and type metadata. One cleanup helper now covers country, combined and separate comparisons, empty results and rendering errors. |
+| Chart keyboard access | Cartesian SVG image semantics hid interactive descendants; focused bar details lacked useful coordinates; Escape could close analysis instead of dismissing details. Interactive charts expose their controls, focus tooltips anchor to the inspected mark, and Escape dismisses details locally. Keyboard inspection also reveals zoom-clipped 3D scatter points without resetting rotation or changing values. |
+| Modal navigation | Search could open behind fullscreen, methodology or error dialogs, and repeated opening could overwrite its return-focus target. Those overlaps are blocked. Expanded globe backgrounds are inert until exit, with pre-existing inert states retained. |
+| Selection consistency | Dismissing a selected country could leave its old analysis heading visible. Dependent analysis and saved country/analysis state now clear together without moving unrelated focus. Empty scatter instructions also respect the three-country limit. |
+| Globe performance | Repeated heading updates triggered fitting and geographic redraws even when geometry was unchanged. Text updates now skip identical content, and the globe retains its fit until measured layout bounds change. Actual resizing preserves zoom. |
+| Redundancy | Shared chart cleanup and tooltip binding replace repeated handlers. Removed two unused CSS selectors and their obsolete rule without changing active styling. |
+
+Validation passed `npm run check`, all **182 Node regression tests**, and the complete **83 Chrome workflows**. Browser checks include the original Google archive, both appearances, desktop/mobile layouts, charts and comparisons, upload recovery, native/fallback fullscreen, keyboard handling and saved-view restoration. Generated globe screenshots were also inspected. A read-only `npm audit` reported **zero known dependency vulnerabilities**; dependencies were unchanged.
+
 ## Code audit — October 22, 2026
 
 Reviewed the bootstrap, URL/store state, UI, charts, globe, data service, preparation/downloader scripts, server routes, styles, and regression coverage. The feature boundaries remain appropriate. Application code is consolidated under `src/`; all CSS lives under `styles/`, with shared chart rules separated from comparison layout; audit and design references live under `docs/`. HTML references, server mounts, preprocessing imports and test source paths follow these locations. The current layout, appearances, original datasets, statistical rules, and compact magnitude labels were preserved.

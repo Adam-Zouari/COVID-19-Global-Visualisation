@@ -1,9 +1,33 @@
 ﻿import { setStatus } from './utils.js';
 
+function validateQuotedFields(csv, name) {
+    // D3 deliberately accepts incomplete quotes and text after a closing quote.
+    // Reject those records before they can silently alter imported observations.
+    let quoted = false, fieldStart = true, closed = false;
+    for (let index = 0; index < csv.length; index++) {
+        const character = csv[index];
+        if (quoted) {
+            if (character === '"') {
+                if (csv[index + 1] === '"') index++;
+                else { quoted = false; closed = true; }
+            }
+        } else if (character === ',' || character === '\n' || character === '\r') {
+            fieldStart = true; closed = false;
+        } else if (character === '"' && fieldStart) {
+            quoted = true; fieldStart = false;
+        } else {
+            if (closed || character === '"') throw new Error(`${name} contains an invalid quoted field.`);
+            fieldStart = false;
+        }
+    }
+    if (quoted) throw new Error(`${name} contains an unterminated quoted field.`);
+}
+
 function parseCSVText(text, name) {
     if (!globalThis.d3?.csvParseRows) throw new Error('The CSV library did not load.');
     const csv = text.replace(/^\uFEFF/, '');
     if (!csv.trim()) throw new Error(`${name} is empty.`);
+    if (csv.includes('"')) validateQuotedFields(csv, name);
     let columns;
     const parsed = globalThis.d3.csvParseRows(csv, (values, index) => {
         if (index === 0) {

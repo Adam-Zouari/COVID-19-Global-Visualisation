@@ -300,7 +300,7 @@ input[type="range"]::-moz-range-thumb { width: 9px; height: 9px; border: 2px sol
 .chart-error, .chart-message, .no-countries-message { padding: 40px 24px; color: var(--muted); text-align: center; font-size: 13px; }
 .chart-tooltip, .tooltip { position: fixed; z-index: 700; pointer-events: none; max-width: 320px; padding: 13px 15px; border-radius: 8px; border: 1px solid var(--tooltip-border); background: var(--tooltip-bg); box-shadow: 0 10px 32px var(--shadow); color: var(--text); font-size: 11px; line-height: 1.6; }
 .tooltip-header { font-size: 13px; margin-bottom: 5px; }
-.tooltip-date, .tooltip-unit, .tooltip-hint { color: var(--muted); font-size: 10px; }
+.tooltip-date, .tooltip-unit { color: var(--muted); font-size: 10px; }
 .tooltip-value { font-size: 22px; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .search-modal { position: fixed; inset: 0; z-index: 1100; background: var(--overlay); }
 .search-container { position: absolute; top: 72px; right: 35px; width: 410px; max-height: min(620px, calc(100dvh - 100px)); display: flex; flex-direction: column; background: var(--search-surface); border: 1px solid var(--search-border); border-radius: 11px; box-shadow: 0 24px 80px var(--shadow); overflow: hidden; }

@@ -322,6 +322,16 @@
         const changeZoom = factor => { zoom = clampZoom(zoom * factor); AnalyticsPlot.hideTip(container); redraw(); };
         const resetView = () => { yaw = initial.yaw; pitch = initial.pitch; zoom = 1; redraw(); };
         const updateZoom = scatterViewControls(frame, 'Drag to rotate · Scroll or pinch to zoom', changeZoom, resetView);
+        cloud.points.on('focus.zoom', function(event, item) {
+            const [x, y] = project(keys.map((key, index) => scales[index](item[key])));
+            const fit = Math.min(1, (frame.innerWidth / 2 - 7) / Math.abs(x - frame.innerWidth / 2),
+                (frame.innerHeight / 2 - 7) / Math.abs(y - frame.innerHeight / 2));
+            if (fit >= 1) return;
+            // Keep a keyboard-inspected date visible after zooming, without
+            // resetting the user's chosen rotation or the data's axis scales.
+            zoom = clampZoom(zoom * fit); redraw();
+            cloud.points.on('focus.analytics').call(this, event, item);
+        });
         const pointerId = event => event.pointerId ?? 0;
         const distance = () => {
             const [first, second] = [...pointers.values()];

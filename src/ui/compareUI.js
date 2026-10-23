@@ -96,7 +96,7 @@ window.CompareUI = {
     showNoCountriesMessage() {
         const wrapper = document.createElement('div'); wrapper.className = 'no-countries-message';
         const heading = document.createElement('h3'); heading.textContent = 'Choose countries to compare';
-        const text = document.createElement('p'); text.textContent = 'Use Add country above to compare 2–4 countries on the same dates.';
+        const text = document.createElement('p'); text.textContent = `Use Add country above to compare 2–${CompareMode.countryLimit()} countries on the same dates.`;
         wrapper.append(heading, text); document.getElementById('compareChartContainer').replaceChildren(wrapper);
     }
 };

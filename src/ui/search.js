@@ -1,9 +1,13 @@
 let searchReturnFocus;
 
 function openSearch() {
+    const modal = document.getElementById('searchModal');
+    const error = document.getElementById('errorDisplay');
+    if (!modal?.hidden || document.getElementById('expandedGlobe') || document.getElementById('methodologyDialog')?.open ||
+        (error && getComputedStyle(error).display !== 'none')) return;
     stopTimeline();
     searchReturnFocus = document.activeElement;
-    const modal = document.getElementById('searchModal'); modal.hidden = false;
+    modal.hidden = false;
     const input = document.getElementById('countrySearchInput'); input.value = '';
     populateCountryList(); input.focus();
     if (window.matchMedia?.('(max-width: 760px)').matches) document.body.style.overflow = 'hidden';

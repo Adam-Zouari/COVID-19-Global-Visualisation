@@ -28,6 +28,20 @@ async function screenshot(page, name) {
     await page.screenshot({ path: `test-results/${name}.png`, fullPage: true });
 }
 
+test('dismissing the selected country also closes its analysis and clears the saved selection', async ({ page }) => {
+    await ready(page, '/?data=sample&country=tn&analysis=1');
+    await expect(page.locator('#visualizationPanel')).toBeVisible();
+    await expect(page.locator('#viz-country-name')).toHaveText('Tunisia');
+    const date = await page.evaluate(() => dataService.currentDate);
+    await page.locator('#closeCountryBtn').click();
+    await expect(page.locator('#countryInfo')).toBeHidden();
+    await expect(page.locator('#visualizationPanel')).toBeHidden();
+    expect(await page.evaluate(() => ({ country: globeInstance.selectedCountryCode, date: dataService.currentDate })))
+        .toEqual({ country: null, date });
+    const params = new URL(page.url()).searchParams;
+    expect(params.has('country')).toBe(false); expect(params.has('analysis')).toBe(false);
+});
+
 test('laptop exploration exposes the globe immediately and comparisons keep results close to their controls', async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
     await ready(page);

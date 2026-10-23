@@ -8,7 +8,7 @@ const CompareCharts = {
         return countries.map(country => ChartFactory.applySettings(country, { ...settings, timeline }));
     },
     createCombinedChart(container, countryCodes, chartType = 'line', settings = {}) {
-        container.replaceChildren(); const countries = this.prepare(countryCodes, settings);
+        ChartFactory.clearChart(container); const countries = this.prepare(countryCodes, settings);
         if (!countries.length) return ChartFactory.showError(container, 'No observations available for the selected countries.');
         if (!['line', 'bar'].includes(chartType)) return ChartFactory.showError(container, 'Choose a supported chart type.');
         const first = countries[0];

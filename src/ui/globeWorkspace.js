@@ -24,6 +24,7 @@
     let shell = null, nativeFullscreen = false, savedScroll = null;
     let fullscreenRequest = null, closingExpansion = null, pendingCountryAction = null;
     const placements = [];
+    const background = [];
     function move(node, parent) {
         if (!node) return;
         const marker = document.createComment('Expanded globe placement');
@@ -41,6 +42,8 @@
         placements.length = 0;
         shell.remove();
         shell = null;
+        for (const node of background) node.inert = false;
+        background.length = 0;
         stage.classList.remove('globe-expanded');
         document.body.classList.remove('globe-expanded-open');
         expandButton.setAttribute('aria-expanded', 'false');
@@ -97,6 +100,12 @@
         if (tooltip?.parentNode) {
             tooltip.style.opacity = '0';
             move(tooltip, shell);
+        }
+        // The CSS fallback is modal too: background controls must be absent
+        // from keyboard navigation and assistive technology until it closes.
+        for (const node of document.body.children) if (node !== shell && !node.inert) {
+            node.inert = true;
+            background.push(node);
         }
         expandButton.setAttribute('aria-expanded', 'true');
         expandButton.setAttribute('aria-label', 'Exit full screen globe');

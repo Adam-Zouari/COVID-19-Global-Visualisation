@@ -292,6 +292,27 @@ test('3D scatter zoom scales cube axes and observations about their center while
     assert.doesNotMatch(container.innerHTML, /NaN|Infinity/);
 });
 
+test('3D scatter keyboard inspection reveals zoom-clipped dates while preserving rotation and exact values', t => {
+    const { window, container, renderers } = harness(t, 390);
+    renderers.scatter(container, { ...common, dimensions: 3, axes: ['Tunisia', 'United States', 'France'].map(label => ({ label, unitLabel: 'Cases' })),
+        items: [{ date: '2021-01-01', x: 0, y: 0, z: 0 }, { date: '2021-01-02', x: 10, y: 20, z: 30 }] });
+    const svg = container.querySelector('svg'), points = [...container.querySelectorAll('.scatter-point')];
+    svg.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    for (let index = 0; index < 8; index++) container.querySelector('[data-scatter-action="in"]').click();
+    assert.equal(Number(svg.dataset.zoom), 4);
+    assert.ok(points.some(point => Number(point.getAttribute('cy')) < 0 || Number(point.getAttribute('cy')) > 302));
+    const yaw = svg.dataset.yaw, pitch = svg.dataset.pitch;
+    for (const point of points) {
+        point.focus();
+        assert.ok(Number(point.getAttribute('cx')) >= 7 - 1e-8 && Number(point.getAttribute('cx')) <= 343 + 1e-8);
+        assert.ok(Number(point.getAttribute('cy')) >= 7 - 1e-8 && Number(point.getAttribute('cy')) <= 295 + 1e-8);
+        assert.equal(svg.dataset.yaw, yaw); assert.equal(svg.dataset.pitch, pitch);
+        assert.ok(container.querySelector('.chart-tooltip').textContent.includes(point.__data__.date));
+    }
+    assert.deepEqual(points.map(point => [point.__data__.x, point.__data__.y, point.__data__.z]), [[0, 0, 0], [10, 20, 30]]);
+    assert.ok(Number(svg.dataset.zoom) < 4);
+});
+
 test('3D scatter drag prevents native selection, releases canceled pointers, and supports pinch without changing rotation', t => {
     const { window, document, container, renderers } = harness(t, 390);
     renderers.scatter(container, { ...common, dimensions: 3, axes: ['Tunisia', 'United States', 'France'].map(label => ({ label })),

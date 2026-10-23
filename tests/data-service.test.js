@@ -161,10 +161,33 @@ test('CSV loading rejects surplus or missing fields and preserves quoted multili
     await assert.rejects(service.readCSVFile(file('date,location_key,new_confirmed\n2020-01-01,US,5,999\n')), /record 2 has 4 fields; expected 3/);
     await assert.rejects(service.readCSVFile(file('date,location_key,new_confirmed\n2020-01-01,US\n')), /record 2 has 2 fields; expected 3/);
     await assert.rejects(service.readCSVFile(file('date,,new_confirmed\n2020-01-01,US,5\n')), /empty column header/);
-    const rows = await service.readCSVFile(file('location_key,country_name\n\nUS,"United\nStates, example"\n\n'));
+    const rows = await service.readCSVFile(file('location_key,country_name\n\nUS,"United\nStates, ""example"""\n\n'));
     assert.equal(rows.length, 1);
-    assert.equal(rows[0].country_name, 'United\nStates, example');
+    assert.equal(rows[0].country_name, 'United\nStates, "example"');
     assert.deepEqual(rows.columns, ['location_key', 'country_name']);
+});
+
+test('CSV loading rejects malformed quoted fields instead of silently changing their values', async () => {
+    const service = new DataService();
+    const file = text => ({ name: 'broken.csv', text: async () => text });
+    for (const record of ['2020-01-01,US,"5', '2020-01-01,US,"5"x', '2020-01-01,US,5"']) {
+        await assert.rejects(service.readCSVFile(file(`date,location_key,new_confirmed\n${record}`)), /quoted field/i);
+    }
+});
+
+test('malformed quoted uploads preserve the previously loaded observations and caches', async () => {
+    const service = await prepare(fixture());
+    const records = service.epidemData, index = service.indexedData;
+    const color = service.getCountryColor('US');
+    const file = text => ({ name: 'test.csv', text: async () => text });
+    const good = file('date,location_key,new_confirmed\n2021-01-01,US,5\n');
+    const broken = file('date,location_key,new_confirmed\n2021-01-01,US,"500');
+    const countries = file('location_key,country_name\nUS,United States\n');
+    await assert.rejects(service.processUploadedFiles(broken, good, good, countries), /quoted field/);
+    assert.equal(service.epidemData, records);
+    assert.equal(service.indexedData, index);
+    assert.equal(service.getDataValue('US'), 10);
+    assert.equal(service.getCachedColor('US', service.currentDate), color);
 });
 
 test('replacement uploads preserve a supported selected metric and unit, and reset incompatible transformations', async () => {

@@ -110,7 +110,10 @@ function updateAtlasPresentation() {
     if (!service) return;
     const metric = currentMetric(), dates = service.getAvailableDates?.() || service.availableDates || [];
     applyDatasetTheme(service.currentDataset);
-    const setText = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
+    const setText = (id, value) => {
+        const element = document.getElementById(id);
+        if (element && element.textContent !== String(value)) element.textContent = value;
+    };
     const unit = service.getUnitLabel?.() || 'Count';
     const unitText = unit === 'Count' ? 'Absolute count' : unit;
     setText('mapMetricLabel', metric.label);
