@@ -5,13 +5,13 @@ GlobeVis.prototype.createGlobe = function() {
     this.globeGroup.append('circle')
         .attr('class', 'ocean').attr('r', this.projection.scale())
         .attr('fill', palette.ocean).attr('stroke', palette.rim)
-        .attr('stroke-width', 1)
+        .attr('stroke-width', 1.1)
         .on('click', () => this.clearCountrySelection());
     this.globeGroup.append('path')
         .datum(d3.geoGraticule10()).attr('class', 'graticule')
         .attr('d', this.path).attr('fill', 'none')
-        .attr('stroke', palette.grid).attr('stroke-opacity', 0.1)
-        .attr('stroke-width', 0.5).attr('pointer-events', 'none');
+        .attr('stroke', palette.grid).attr('stroke-opacity', 0.4)
+        .attr('stroke-width', 0.6).attr('pointer-events', 'none');
     this.globeGroup.selectAll('.country')
         .data(this.countryFeatures, feature => feature.id).join('path')
         .attr('class', 'country')
@@ -23,13 +23,24 @@ GlobeVis.prototype.createGlobe = function() {
         .on('mousemove', event => this.positionTooltip(event))
         .on('mouseout', (event, feature) => this.handleMouseOut(event, feature))
         .on('click', (event, feature) => this.handleCountryClick(event, feature));
+    if (this.coastlineTopology !== this.worldData) {
+        // Exterior arcs trace land against water without painting internal
+        // country borders or the projection's clipped polygon edges.
+        this.coastlineGeometry = topojson.mesh(this.worldData, this.worldData.objects.countries, (a, b) => a === b);
+        this.coastlineTopology = this.worldData;
+    }
+    this.globeGroup.append('path')
+        .datum(this.coastlineGeometry).attr('class', 'coastline')
+        .attr('d', this.path).attr('fill', 'none')
+        .attr('stroke', '#ffffff').attr('stroke-opacity', 0.88)
+        .attr('stroke-width', 0.7).attr('pointer-events', 'none');
 };
 
 GlobeVis.prototype.readGlobePalette = function() {
     // UI tokens own the globe's chrome; the data service owns its data palettes.
     const defaults = {
-        ocean: '#101d30', rim: '#345074', grid: '#90abc9',
-        border: '#17283b', hover: '#f3f7fe', selection: '#f3f7fe'
+        ocean: '#101f33', rim: '#4d6c8e', grid: '#607f9f',
+        border: '#243952', hover: '#f3f7fe', selection: '#f3f7fe'
     };
     return Object.fromEntries(Object.entries(defaults).map(([name, fallback]) =>
         [name, globalThis.window?.AtlasTheme?.getColor?.(`--globe-${name}`) || fallback]));

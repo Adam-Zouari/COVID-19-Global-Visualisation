@@ -217,7 +217,8 @@ test('live appearance changes recolor analysis without reloading data or rebuild
         colorScheme: getComputedStyle(document.querySelector('.globe-stage')).colorScheme
     }));
     expect(luminance(lightGlobe.stage)).toBeGreaterThan(0.75);
-    expect(luminance(lightGlobe.ocean)).toBeGreaterThan(0.75);
+    expect(lightGlobe.ocean).toBe('rgb(23, 48, 77)');
+    expect(luminance(lightGlobe.stage) - luminance(lightGlobe.ocean)).toBeGreaterThan(0.7);
     expect(lightGlobe.colorScheme).toBe('light');
     expect(lightGlobe.countryColors).not.toEqual(await page.evaluate(() => window.__appearanceBaseline.countryColors));
     expect(lightGlobe.legend).not.toBe(await page.evaluate(() => window.__appearanceBaseline.legend));

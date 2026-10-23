@@ -24,9 +24,10 @@
     --overlay: #050b16c7; --shadow: #00000033;
     --series-1: #59b5ff; --series-2: #ffb23f; --series-3: #ef73cb; --series-4: #79d17d;
     --series-5: #f48ba1; --series-6: #8fd2e1; --series-7: #d3cd77; --series-8: #9db0ff;
-    --globe-background: #0e1828; --globe-ocean: #101d30; --globe-rim: #345074;
-    --globe-backdrop: radial-gradient(ellipse at 50% 55%, #1b30434d, transparent 65%), var(--globe-background);
-    --globe-grid: #90abc9; --globe-border: #17283b;
+    --globe-background: #0d1829; --globe-ocean: #101f33; --globe-rim: #4d6c8e;
+    --globe-backdrop: radial-gradient(ellipse at 52% 51%, #173a5c 0%, #112d48 28%, #0e2036 53%, var(--globe-background) 83%), var(--globe-background);
+    --globe-atmosphere: drop-shadow(0 0 14px #64adea2b) drop-shadow(0 0 48px #2679c738);
+    --globe-grid: #607f9f; --globe-grid-opacity: 0.1; --globe-border: #243952;
     --globe-hover: #f3f7fe; --globe-selection: #f3f7fe;
     font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-synthesis: none; font-size: 14px; line-height: 1.5;
@@ -57,9 +58,10 @@
     --overlay: #17253a55; --shadow: #17253a1c;
     --series-1: #1765ab; --series-2: #9a5800; --series-3: #a23883; --series-4: #28723c;
     --series-5: #b13761; --series-6: #087488; --series-7: #68690d; --series-8: #a84f20;
-    --globe-background: #f2f5f8; --globe-ocean: #e5edf5; --globe-rim: #9aacbf;
-    --globe-backdrop: var(--globe-background);
-    --globe-grid: #879bb4; --globe-border: #73879f;
+    --globe-background: #e6eef7; --globe-ocean: #17304d; --globe-rim: #6485a5;
+    --globe-backdrop: radial-gradient(ellipse at 52% 51%, #bed3e9 0%, #d5e2f0 35%, var(--globe-background) 77%), var(--globe-background);
+    --globe-atmosphere: drop-shadow(0 8px 32px #2a639f42) drop-shadow(0 22px 60px #5085b929);
+    --globe-grid: #35536f; --globe-grid-opacity: 0.4; --globe-border: #687e96;
     --globe-hover: #243f60; --globe-selection: #0f253f;
 }
 :root {
@@ -190,7 +192,7 @@ input[type="file"]::file-selector-button { background: var(--control); color: va
 .secondary-btn:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--secondary-border-hover); color: var(--text); }
 .full-width { width: 100%; justify-content: space-between; }
 .globe-stage { min-width: 0; min-height: 400px; height: var(--explorer-panel-height); position: relative; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: var(--globe-backdrop); }
-.stage-topline { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 15px 20px 0; position: relative; z-index: 2; pointer-events: none; }
+.stage-topline { grid-row: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 15px 20px 0; position: relative; z-index: 2; pointer-events: none; }
 .stage-topline > div { display: contents; }
 .stage-topline .eyebrow { grid-column: 1; grid-row: 1; }
 .stage-topline h2 { grid-column: 1 / -1; grid-row: 2; }
@@ -199,12 +201,13 @@ input[type="file"]::file-selector-button { background: var(--control); color: va
 .coverage-status .coverage-dot { margin: 0; }
 .stage-topline h2 { font-size: 19px; font-weight: 500; letter-spacing: -.02em; margin-top: 5px; }
 .stage-topline p { font-size: 12px; color: var(--muted); margin-top: 4px; }
-#globe { width: 100%; height: 100%; min-height: 0; position: relative; }
+#globe { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; }
 #globe > svg { width: 100%; height: 100%; display: block; overflow: hidden; }
 .country { cursor: pointer; }
 .selected-country { stroke: var(--globe-selection) !important; stroke-width: 1.6px !important; }
-.ocean { cursor: grab; }
-.stage-bottomline { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 20px 17px; }
+#globe .ocean { cursor: grab; filter: var(--globe-atmosphere); }
+#globe .graticule { stroke-opacity: var(--globe-grid-opacity); }
+.stage-bottomline { grid-row: 3; position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 20px 17px; }
 .stage-bottomline > * { transform: translateY(10px); }
 .globe-hint { display: flex; align-items: center; gap: 8px; color: var(--subtle); font-size: 11px; }
 .globe-hint svg { width: 15px; height: 15px; color: var(--subtle); }

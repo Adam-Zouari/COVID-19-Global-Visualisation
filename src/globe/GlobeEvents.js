@@ -37,6 +37,11 @@ GlobeVis.prototype.setupEventListeners = function() {
     } else {
         window.addEventListener('resize', () => this.resize(), options);
     }
+    const heading = document.getElementById('globeStage')?.querySelector('.stage-topline');
+    if (heading && typeof MutationObserver !== 'undefined') {
+        this.chromeObserver = new MutationObserver(() => this.resize());
+        this.chromeObserver.observe(heading, { childList: true, characterData: true, subtree: true });
+    }
     document.addEventListener('data-loaded', () => this.recoverAfterDataLoad(), options);
     document.addEventListener('atlas:themechange', () => this.refreshGlobeAppearance(), options);
     document.addEventListener('visibilitychange', () => {

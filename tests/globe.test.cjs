@@ -274,7 +274,7 @@ test('an old destroyed initialization cannot hide the replacement globe loader',
     context.document = dom.window.document;
     const d3 = await import('d3');
     context.d3 = { ...d3, select: node => d3.select(typeof node === 'string' ? dom.window.document.querySelector(node) : node) };
-    Object.assign(globe, { width: 360, height: 420, radius: 150 });
+    Object.assign(globe, { width: 360, height: 420, radius: 150, center: [180, 210] });
     let resolveData;
     globe.dataService = { loadData: () => new Promise(resolve => { resolveData = resolve; }) };
     globe.ensureWorldData = async () => ({});
@@ -352,7 +352,79 @@ test('globe dimensions follow its container instead of the viewport', () => {
     globe.measure();
     assert.equal(globe.width, 900);
     assert.equal(globe.height, 520);
-    assert.equal(globe.radius, 232);
+    assert.equal(globe.radius, 252 * 0.87);
+});
+
+test('the larger default sphere retains a safe drawing inset on small and large containers', () => {
+    const { globe, elements } = harness();
+    for (const [width, height, radius] of [
+        [200, 400, 92],
+        [360, 420, 172],
+        [900, 520, 252],
+        [120, 180, 52]
+    ]) {
+        elements.set('globe', { getBoundingClientRect: () => ({ width, height }) });
+        globe.measure();
+        assert.equal(globe.radius, radius * 0.87);
+        assert.ok((width - globe.radius * 2) / 2 >= 8);
+        assert.ok((height - globe.radius * 2) / 2 >= 8);
+    }
+});
+
+test('white coastlines exclude internal borders, reuse topology, and preserve country interaction across themes', async () => {
+    const { JSDOM } = await import('jsdom');
+    const d3 = await import('d3');
+    const topojson = await import('topojson-client');
+    const dom = new JSDOM('<svg><g></g></svg>');
+    const { context, globe } = harness();
+    context.d3 = d3; context.document = dom.window.document;
+    let meshes = 0, theme = 'dark';
+    context.topojson = { mesh(...args) { meshes++; return topojson.mesh(...args); } };
+    context.window.AtlasTheme = { getResolvedTheme: () => theme, getColor: () => '' };
+    // Two adjacent countries share arc 1; only the outer six edges are coastline.
+    globe.worldData = {
+        type: 'Topology',
+        arcs: [[[0, 0], [0, 1], [1, 1]], [[1, 1], [1, 0]], [[1, 0], [0, 0]], [[1, 1], [2, 1], [2, 0], [1, 0]]],
+        objects: { countries: { type: 'GeometryCollection', geometries: [
+            { type: 'Polygon', id: 'left', arcs: [[0, 1, 2]] },
+            { type: 'Polygon', id: 'right', arcs: [[3, -2]] }
+        ] } }
+    };
+    globe.countryFeatures = topojson.feature(globe.worldData, globe.worldData.objects.countries).features;
+    globe.globeGroup = d3.select(dom.window.document.querySelector('g'));
+    globe.projection = d3.geoOrthographic().scale(100).translate([0, 0]);
+    globe.path = d3.geoPath(globe.projection);
+    delete globe.render;
+    globe.getCountryCode = feature => feature.id;
+    globe.dataService = { getCountryColor: () => '#ef9290' };
+    globe.updateCountryInfoPanel = globe.refreshSelectedCountry = globe.dispatchStateEvent = () => {};
+    globe.updateGlobeColors = () => {};
+    globe.createGlobe();
+    globe.createGlobe();
+    assert.equal(meshes, 1, 'Rebuilding SVG reuses the exterior geometry for the same world topology');
+    assert.equal(globe.globeGroup.selectAll('.coastline').size(), 1);
+    const coastline = dom.window.document.querySelector('.coastline');
+    assert.equal(coastline.__data__.type, 'MultiLineString', 'Lines do not add polygon edges at the horizon');
+    const edges = coastline.__data__.coordinates.flatMap(line => line.slice(1).map((point, index) =>
+        [line[index], point].map(coordinate => coordinate.join(',')).sort().join('|')));
+    assert.equal(edges.length, 6);
+    assert.ok(!edges.includes('1,0|1,1'), 'The shared country border is not part of the white coast');
+    assert.equal(coastline.getAttribute('fill'), 'none');
+    assert.equal(coastline.getAttribute('pointer-events'), 'none');
+    assert.equal(coastline.getAttribute('stroke'), '#ffffff');
+    assert.equal(globe.globeGroup.select('.country').attr('stroke'), globe.getGlobePalette().border);
+    globe.globeCreated = true;
+    theme = 'light'; globe.refreshGlobeAppearance();
+    assert.equal(dom.window.document.querySelector('.coastline'), coastline);
+    assert.equal(coastline.getAttribute('stroke'), '#ffffff');
+    assert.equal(meshes, 1);
+    const beforeRotation = coastline.getAttribute('d');
+    globe.projection.rotate([15, 10]); globe.render();
+    assert.notEqual(coastline.getAttribute('d'), beforeRotation, 'Rotation redraws the coastline with the countries');
+    dom.window.document.querySelector('.country').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    assert.equal(globe.selectedCountry, 'left');
+    assert.equal(globe.globeGroup.select('.selected-country').attr('stroke-width'), '1.8');
+    dom.window.close();
 });
 
 test('globe token changes update outlines without rebuilding geometry or recoloring observations', async () => {

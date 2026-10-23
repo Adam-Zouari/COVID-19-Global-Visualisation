@@ -27,7 +27,37 @@ class GlobeVis {
         const bounds = container?.getBoundingClientRect?.();
         this.width = Math.max(120, bounds?.width || container?.clientWidth || 360);
         this.height = Math.max(180, bounds?.height || container?.clientHeight || 420);
-        this.radius = Math.max(44, Math.min(this.width / 2 - 28, this.height / 2 - 28));
+        // Approximately one normal mouse-wheel step below the maximum fit.
+        const defaultScale = 0.87;
+        this.center = [this.width / 2, this.height / 2];
+        this.radius = (Math.min(this.width, this.height) / 2 - 8) * defaultScale;
+        const stage = container?.closest?.('.globe-stage');
+        if (!stage || !bounds?.width || !bounds?.height) return;
+
+        // The canvas fills the panel. Reserve the actual corner text and
+        // controls, rather than discarding their entire horizontal rows.
+        const obstacles = [];
+        for (const node of stage.querySelectorAll('.stage-topline .eyebrow, #mapMetricLabel, #mapUnitsLabel, .coverage-status, .globe-hint, .globe-controls')) {
+            const range = document.createRange(); range.selectNodeContents(node);
+            const rectangles = node.classList.contains('globe-controls') ? [node.getBoundingClientRect()] : range.getClientRects();
+            for (const rect of rectangles) if (rect.width && rect.height) obstacles.push({
+                left: rect.left - bounds.left, right: rect.right - bounds.left,
+                top: rect.top - bounds.top, bottom: rect.bottom - bounds.top
+            });
+        }
+        let bestScore = -Infinity;
+        for (let dx = 0; dx <= Math.min(80, this.width * 0.12); dx += 4) {
+            for (let dy = 0; dy <= Math.min(80, this.height * 0.2); dy += 4) {
+                const x = this.width / 2 + dx, y = this.height / 2 + dy;
+                let radius = Math.min(x, this.width - x, y, this.height - y) - 8;
+                for (const rect of obstacles) radius = Math.min(radius, Math.hypot(
+                    Math.max(rect.left - x, 0, x - rect.right), Math.max(rect.top - y, 0, y - rect.bottom)
+                ) - 6);
+                // Prefer the center when an offset offers little extra room.
+                const score = radius - Math.hypot(dx, dy) * 0.08;
+                if (score > bestScore) { bestScore = score; this.radius = Math.max(1, radius) * defaultScale; this.center = [x, y]; }
+            }
+        }
     }
 
     async initVis() {
@@ -41,7 +71,7 @@ class GlobeVis {
             .attr('aria-label', 'Interactive globe. Drag to rotate and scroll to zoom.')
             .style('touch-action', 'none');
         this.globeGroup = this.svg.append('g')
-            .attr('transform', `translate(${this.width / 2}, ${this.height / 2})`);
+            .attr('transform', `translate(${this.center[0]}, ${this.center[1]})`);
         // Clip each polygon at the horizon so far-side countries cannot cover
         // or intercept clicks on the visible hemisphere.
         this.projection = d3.geoOrthographic().scale(this.radius)
@@ -144,7 +174,7 @@ class GlobeVis {
         this.measure();
         this.svg.attr('width', this.width).attr('height', this.height)
             .attr('viewBox', `0 0 ${this.width} ${this.height}`);
-        this.globeGroup.attr('transform', `translate(${this.width / 2}, ${this.height / 2})`);
+        this.globeGroup.attr('transform', `translate(${this.center[0]}, ${this.center[1]})`);
         this.projection.scale(this.radius * zoomScale);
         this.render();
     }
@@ -175,6 +205,7 @@ class GlobeVis {
         this.dateListeners?.abort();
         this.worldRequest.abort();
         this.resizeObserver?.disconnect();
+        this.chromeObserver?.disconnect();
         this.svg?.interrupt().on('.drag', null).on('.zoom', null).remove();
         this.tooltip?.remove();
         if (window.globeInstance === this) window.globeInstance = null;
