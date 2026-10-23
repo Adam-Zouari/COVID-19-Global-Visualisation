@@ -27,6 +27,30 @@ function harness(t, width = 700, theme = 'dark') {
 
 const common = { title: 'A comparison', subtitle: 'Reported values', unitLabel: 'Cases per 100,000 people', date: '2021-01-01' };
 
+function assertDateLegend(container, dates) {
+    const legend = container.querySelector('.scatter-date-legend');
+    assert.ok(legend, 'Scatter plots explain their date colors with a continuous scale');
+    assert.match(legend.textContent, /Date/);
+    assert.match(legend.getAttribute('aria-label') || '', /Date/i);
+    assert.deepEqual([...legend.querySelectorAll('time')].map(node => node.getAttribute('datetime')), dates);
+    const bar = legend.querySelector('.scatter-date-bar');
+    assert.ok(bar);
+    const points = [...container.querySelectorAll('.scatter-point')];
+    const pointColor = date => d3.color(points.find(point => point.__data__.date === date).getAttribute('fill')).formatHex();
+    if (dates.length === 1) {
+        assert.equal(bar.style.backgroundImage, '');
+        assert.equal(d3.color(bar.style.backgroundColor).formatHex(), pointColor(dates[0]));
+    } else {
+        assert.match(bar.style.backgroundImage, /^linear-gradient\(/);
+        const colors = (bar.style.backgroundImage.match(/rgba?\([^)]+\)|#[\da-f]{3,8}\b/gi) || []).map(color => d3.color(color).formatHex());
+        assert.equal(colors[0], pointColor(dates[0]));
+        assert.equal(colors.at(-1), pointColor(dates.at(-1)));
+        const middle = points.find(point => Date.parse(point.__data__.date) === (Date.parse(dates[0]) + Date.parse(dates.at(-1))) / 2);
+        if (middle) assert.equal(colors[Math.floor(colors.length / 2)], d3.color(middle.getAttribute('fill')).formatHex());
+    }
+    assert.equal(legend.querySelectorAll('i').length, 0, 'Date colors use a bar rather than disconnected swatches');
+}
+
 test('horizontal comparisons preserve corrections, zeros, missing reports and country colors without changing the globe', t => {
     const { window, container, countries, renderers } = harness(t, 320);
     const label = '<img src=x onerror=alert(1)> Long country name';
@@ -134,10 +158,7 @@ test('scatter plots encode shared dates with color, retain tiny and negative val
     assert.equal(points.length, 3);
     assert.equal(new Set(points.map(point => point.getAttribute('fill'))).size, 3);
     assert.equal(new Set(points.map(point => point.getAttribute('r'))).size, 1);
-    const swatches = [...container.querySelectorAll('.chart-legend i')];
-    assert.equal(swatches.length, 2);
-    for (const [swatchIndex, pointIndex] of [[0, 0], [1, 2]])
-        assert.equal(d3.color(swatches[swatchIndex].style.backgroundColor).formatHex(), d3.color(points[pointIndex].getAttribute('fill')).formatHex());
+    assertDateLegend(container, ['2021-01-01', '2021-01-03']);
     assert.equal(container.querySelectorAll('[tabindex="0"]').length, 1);
     assert.match(points[0].getAttribute('aria-label'), new RegExp((-0.004).toLocaleString().replace('.', '\\.')));
     points[0].focus();
@@ -177,8 +198,26 @@ test('three-country scatter plots rotate actual XYZ observations with drag and k
     points[0].focus();
     assert.match(container.querySelector('.chart-tooltip').textContent, /2021-01-01.*Tunisia: -5 Cases.*United States: 0 Cases.*France: 4 Cases/);
     assert.match(svg.getAttribute('aria-label'), /Three-dimensional view/);
-    assert.match(container.querySelector('.chart-legend').textContent, /2021-01-01.*2021-01-03/);
+    assertDateLegend(container, ['2021-01-01', '2021-01-03']);
     assert.doesNotMatch(container.innerHTML, /NaN|Infinity/);
+});
+
+test('2D and 3D scatter date scales match points in each theme, redraw for new periods, and show one date without a false range', t => {
+    for (const theme of ['dark', 'light']) for (const dimensions of [2, 3]) {
+        const { container, renderers } = harness(t, 320, theme);
+        const model = { ...common, dimensions, xLabel: 'Cases', yLabel: 'Deaths',
+            axes: (dimensions === 3 ? ['Tunisia', 'United States', 'France'] : ['Cases', 'Deaths']).map(label => ({ label })),
+            items: [{ date: '2021-01-05', x: 5, y: 5, z: 5 }, { date: '2021-01-01', x: 1, y: 1, z: 1 },
+                { date: '2021-01-03', x: 3, y: 3, z: 3 }, { date: '2021-01-06', x: null, y: 6, z: 6 }] };
+        renderers.scatter(container, model);
+        assertDateLegend(container, ['2021-01-01', '2021-01-05']);
+        renderers.scatter(container, { ...model, items: model.items.filter(item => item.date === '2021-01-03') });
+        assert.equal(container.querySelectorAll('.scatter-date-legend').length, 1);
+        assertDateLegend(container, ['2021-01-03']);
+        renderers.scatter(container, { ...model, items: [] });
+        assert.equal(container.querySelector('.scatter-date-legend'), null);
+        assert.ok(container.querySelector('.analytics-empty'));
+    }
 });
 
 test('2D scatter zoom rescales axes and clipped points together, preserves observations and resets exactly', t => {
@@ -321,6 +360,7 @@ test('comparison renderers stay finite in both themes at narrow and desktop widt
             renderers[type](container, { ...common, type, items: [], rows: [], columns: [] });
             assert.equal(container.querySelectorAll('svg').length, 1);
             assert.ok(container.querySelector('.analytics-empty'));
+            assert.equal(container.querySelector('.scatter-date-legend'), null);
             assert.doesNotMatch(container.innerHTML, /NaN|Infinity/);
         }
     }

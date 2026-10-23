@@ -35,10 +35,19 @@ function hasPopulation() {
 }
 
 function updateSelectOptions(select, choices) {
-    if (select.options.length !== choices.length || choices.some((choice, index) => select.options[index].value !== choice.value)) {
-        select.replaceChildren(...choices.map(choice => {
-            const option = document.createElement('option'); option.value = choice.value; return option;
-        }));
+    if (select.options.length !== choices.length || choices.some((choice, index) => {
+        const option = select.options[index];
+        return option.value !== choice.value || (option.parentElement === select ? '' : option.parentElement.label) !== (choice.group || '');
+    })) {
+        select.replaceChildren();
+        let group = null;
+        for (const choice of choices) {
+            if (choice.group && group?.label !== choice.group) {
+                group = document.createElement('optgroup'); group.label = choice.group; select.appendChild(group);
+            } else if (!choice.group) group = null;
+            const option = document.createElement('option'); option.value = choice.value;
+            (group || select).appendChild(option);
+        }
     }
     choices.forEach((choice, index) => {
         const option = select.options[index];

@@ -134,6 +134,26 @@ test('single-country scatterplots pair arbitrary columns on exact dates and reta
     assert.equal(api.build('scatter', service, { ...settings, startDate: day(6), endDate: day(0) }).items.length, 0);
 });
 
+test('cross-dataset scatter joins actual reports by calendar date without borrowing adjacent values', async () => {
+    const service = await fixture(7), api = models();
+    service.hospitalizationsData = service.hospitalizationsData.filter(row => row.country_key !== 'tn' || ![day(1), day(6)].includes(row.date));
+    service.epidemData = service.epidemData.filter(row => row.country_key !== 'tn' || row.date !== day(5));
+    await service.indexAllData();
+    const settings = { scope: 'country', country: 'tn', xMetric: 'current_hospitalized_patients', xUnit: 'per100k',
+        yMetric: 'new_confirmed', yUnit: 'count', smoothing: 'raw', startDate: day(0), endDate: day(6) };
+    const result = api.build('scatter', service, settings);
+    assert.deepEqual(plain(result.items.map(({ date, y }) => ({ date, y }))), [
+        { date: day(0), y: 0 }, { date: day(3), y: 10 }, { date: day(4), y: -5 }
+    ]);
+    result.items.forEach((item, index) => assert.ok(Math.abs(item.x - (index ? 7000 : 0)) < 1e-8));
+    assert.match(result.xLabel, /Currently hospitalized patients.*Per 100,000 people.*Daily snapshot/);
+    assert.match(result.yLabel, /New confirmed cases.*Count.*Daily reports/);
+    assert.deepEqual(plain(api.build('scatter', service, { ...settings, startDate: day(1), endDate: day(5) }).items), plain(result.items.slice(1)));
+    const empty = api.build('scatter', service, { ...settings, startDate: day(5), endDate: day(6) });
+    assert.equal(empty.items.length, 0);
+    assert.match(empty.emptyMessage, /No exact shared dates/);
+});
+
 test('comparison scatterplots use countries as two or three axes and require exact shared calendar reports', async () => {
     const service = await fixture(), api = models(), settings = { scope: 'compare', countries: ['tn', 'us'], column: 'new_confirmed', unit: 'count', startDate: day(0), endDate: day(6) };
     const pair = api.build('scatter', service, settings);

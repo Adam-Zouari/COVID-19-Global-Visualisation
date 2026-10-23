@@ -43,11 +43,15 @@
 .scatter-zoom-controls { display: inline-flex; align-items: center; gap: 10px; }
 .scatter-zoom-controls output { min-width: 3.5ch; text-align: center; font-variant-numeric: tabular-nums; }
 .scatter-zoom-controls .text-btn { min-width: 28px; justify-content: center; }
+.scatter-date-legend { display: grid; gap: 5px; width: min(100%, 360px); min-width: 0; padding: 7px 0; color: var(--chart-legend); font-size: 11px; }
+.scatter-date-label { font-weight: 500; }
+.scatter-date-bar { height: 10px; border-radius: 3px; }
+.scatter-date-range { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
 .viz-controls select { width: 180px; }
 :root { --heatmap-low: #162c42; --heatmap-high: var(--series-1); --heatmap-negative: var(--warning); --heatmap-missing: #475569; }
 [data-theme="light"] { --heatmap-low: #e8eef6; --heatmap-missing: #d4dce6; }
 @media (max-width: 600px) {
     .chart-title, .chart-heading, .chart-note, .chart-warning { margin-left: 6px; margin-right: 6px; }
     .chart-heading-title { font-size: 14px; }
-    .chart-legend { padding: 7px 6px; }
+    .chart-legend, .scatter-date-legend { padding: 7px 6px; }
 }

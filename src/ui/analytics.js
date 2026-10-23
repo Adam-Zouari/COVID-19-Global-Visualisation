@@ -36,9 +36,12 @@ window.AnalyticsCharts = {
             return date ? { date } : {};
         }
         if (type !== 'scatter' || scope !== 'country') return {};
-        const options = {}, metrics = AnalyticsData.getMetricOptions(service, service.currentDataset), keys = metrics.map(metric => metric.value);
-        options.xMetric = keys.includes(supplied.xMetric) ? supplied.xMetric : service.currentColumn;
-        options.yMetric = keys.includes(supplied.yMetric) ? supplied.yMetric : keys.find(key => key !== options.xMetric) || options.xMetric;
+        const options = {}, metrics = AnalyticsData.getMetricOptions(service), keys = metrics.map(metric => metric.value);
+        const defaults = service.availableColumns[service.currentDataset] || [];
+        options.xMetric = keys.includes(supplied.xMetric) ? supplied.xMetric :
+            defaults.includes(service.currentColumn) ? service.currentColumn : defaults[0] || keys[0];
+        options.yMetric = keys.includes(supplied.yMetric) ? supplied.yMetric :
+            defaults.find(key => key !== options.xMetric) || defaults[0] || options.xMetric;
         for (const axis of ['x', 'y']) {
             const allowed = metrics.find(metric => metric.value === options[`${axis}Metric`])?.unitOptions || ['count'];
             options[`${axis}Unit`] = allowed.includes(supplied[`${axis}Unit`]) ? supplied[`${axis}Unit`] : 'count';
@@ -54,7 +57,7 @@ window.AnalyticsCharts = {
         if (type === 'horizontal') fields.push({ key: 'date', label: 'Observation date', kind: 'date' },
             { key: 'date-slider', label: 'Move through time', kind: 'range' });
         if (type === 'scatter' && scope === 'country') {
-            const metrics = AnalyticsData.getMetricOptions(service, service.currentDataset);
+            const metrics = AnalyticsData.getMetricOptions(service).map(metric => ({ ...metric, group: datasetNames[metric.dataset] || metric.dataset }));
             for (const axis of ['x', 'y']) {
                 fields.push({ key: `${axis}Metric`, label: `${axis.toUpperCase()} axis`, choices: metrics });
                 const allowed = metrics.find(metric => metric.value === options[`${axis}Metric`])?.unitOptions || ['count'];
@@ -130,6 +133,17 @@ window.AnalyticsCharts = {
     renderCountry(container, country, type, settings) {
         const service = window.dataService;
         this.controls(document.getElementById('analysisChartOptions'), type, this.countryOptions, options => {
+            if (type === 'scatter') {
+                const previous = ChartControls.timeline || [], timeline = this.timeline(service, type, 'country', options);
+                if (previous.length && timeline.length && (previous.length !== timeline.length || previous.some((date, index) => date !== timeline[index]))) {
+                    const dates = this.bounds(service, ChartControls.state.dateRange, previous);
+                    const nextStart = timeline.findIndex(date => date >= dates.startDate);
+                    const start = nextStart < 0 ? timeline.length - 1 : nextStart;
+                    const end = Math.max(start, timeline.findLastIndex(date => date <= dates.endDate));
+                    const last = timeline.length - 1;
+                    ChartControls.state.dateRange = { start: last ? start / last * 100 : 0, end: last ? end / last * 100 : 100 };
+                }
+            }
             this.countryOptions = options; changeVisualization();
         }, 'country');
         const options = this.normalizedOptions(service, type, this.countryOptions, 'country');

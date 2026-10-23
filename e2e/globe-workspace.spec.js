@@ -69,8 +69,8 @@ for (const fallback of [false, true]) {
         await expect(page.locator('#expandedGlobe #dateSlider')).toBeVisible();
         await expect(page.locator('#expandedGlobe #explorerSettings')).toBeVisible();
         await expect(page.locator('#expandedGlobe #countryInfo')).toBeVisible();
-        await expect(page.locator('#expandedGlobe #seeMoreBtn')).toBeHidden();
-        await expect(page.locator('#expandedGlobe #addToCompareBtn')).toBeHidden();
+        await expect(page.locator('#expandedGlobe #seeMoreBtn')).toBeVisible();
+        await expect(page.locator('#expandedGlobe #addToCompareBtn')).toBeVisible();
         await expect(page.locator('#expandedGlobe #navCompare, #expandedGlobe #visualizationPanel')).toHaveCount(0);
         await expect.poll(() => page.evaluate(() => ({ width: Math.round(globeInstance.width), height: Math.round(globeInstance.height) })))
             .toEqual(await page.locator('#globe').evaluate(node => ({ width: Math.round(node.clientWidth), height: Math.round(node.clientHeight) })));
@@ -119,6 +119,75 @@ for (const fallback of [false, true]) {
     });
 }
 
+for (const configuration of [
+    { width: 1440, fallback: false }, { width: 1440, fallback: true }, { width: 390, fallback: true }
+]) for (const action of ['analysis', 'compare']) {
+    test(`fullscreen snapshot opens ${action} after exiting with ${configuration.fallback ? 'CSS fallback' : 'Fullscreen API'} at ${configuration.width}px`, async ({ page }) => {
+        const errors = []; page.on('pageerror', error => errors.push(error.message));
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await page.setViewportSize({ width: configuration.width, height: 1000 });
+        if (configuration.fallback) await page.addInitScript(() => {
+            HTMLElement.prototype.requestFullscreen = async () => { throw new Error('Fullscreen unavailable'); };
+        });
+        await ready(page);
+        await page.locator('#expandGlobeBtn').click();
+        await expect(page.locator('#expandedGlobe')).toBeVisible();
+        if (!configuration.fallback) expect(await page.evaluate(() => document.fullscreenElement?.id)).toBe('expandedGlobe');
+        await page.locator('#globe .country[data-country-code="tn"]').click();
+        await expect(page.locator('#countryName')).toContainText('Tunisia');
+        await expect(page.locator('#seeMoreBtn')).toBeVisible();
+        await expect(page.locator('#addToCompareBtn')).toBeVisible();
+        await page.evaluate(action => {
+            window.__snapshotActions = [];
+            const owner = action === 'analysis' ? window : CompareMode;
+            const method = action === 'analysis' ? 'showVisualizations' : 'addCountry';
+            const original = owner[method];
+            owner[method] = function(...args) {
+                window.__snapshotActions.push({ expanded: !!document.getElementById('expandedGlobe'), fullscreen: !!document.fullscreenElement });
+                return original.apply(this, args);
+            };
+        }, action);
+        await page.locator(action === 'analysis' ? '#seeMoreBtn' : '#addToCompareBtn').click();
+        await expect(page.locator('#expandedGlobe')).toHaveCount(0);
+        expect(await page.evaluate(() => document.fullscreenElement)).toBe(null);
+        expect(await page.evaluate(() => window.__snapshotActions)).toEqual([{ expanded: false, fullscreen: false }]);
+        await expect(page.locator('#exploreView > #exploreWorkspace')).toHaveCount(1);
+        await expect(page.locator('.category-bar > .dataset-buttons')).toHaveCount(1);
+        expect(await page.evaluate(() => document.body.classList.contains('globe-expanded-open'))).toBe(false);
+        expect(await page.evaluate(() => globeInstance.selectedCountryCode)).toBe('tn');
+        if (action === 'analysis') {
+            await expect(page.locator('#visualizationPanel')).toBeVisible();
+            await expect(page.locator('#viz-country-name')).toHaveText('Tunisia');
+            await expect(page.locator('#chartContainer .data-line')).toBeVisible();
+        } else {
+            await expect(page.locator('#comparePanel')).toBeVisible();
+            expect(await page.evaluate(() => CompareMode.state.countries)).toEqual(['tn']);
+            await expect(page.locator('#compareChartContainer .data-line')).toBeVisible();
+        }
+        expect(errors).toEqual([]);
+    });
+}
+
+test('fullscreen snapshot ignores repeated actions during the exit transition', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await ready(page, '/?data=sample&country=tn');
+    await page.locator('#expandGlobeBtn').click();
+    await expect(page.locator('#expandedGlobe')).toBeVisible();
+    await page.evaluate(() => {
+        window.__analysisOpens = 0;
+        const open = window.showVisualizations;
+        window.showVisualizations = function(...args) { window.__analysisOpens++; return open.apply(this, args); };
+        document.getElementById('seeMoreBtn').click();
+        document.getElementById('addToCompareBtn').click();
+        document.getElementById('seeMoreBtn').click();
+    });
+    await expect(page.locator('#expandedGlobe')).toHaveCount(0);
+    await expect(page.locator('#visualizationPanel')).toBeVisible();
+    await expect(page.locator('#comparePanel')).toBeHidden();
+    expect(await page.evaluate(() => window.__analysisOpens)).toBe(1);
+    expect(await page.evaluate(() => CompareMode.state.countries)).toEqual([]);
+});
+
 for (const viewport of [{ width: 1024, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 740 }]) {
 test(`the expanded explorer keeps its controls usable and restores them on exit at ${viewport.width}px`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -140,7 +209,7 @@ test(`the expanded explorer keeps its controls usable and restores them on exit 
     await expect(page.locator('#countryPrimary .primary-metric-label')).toHaveText('People fully vaccinated');
     await page.locator('#countryInfo').scrollIntoViewIfNeeded();
     await expect(page.locator('#countryInfo')).toContainText('Tunisia');
-    await expect(page.locator('#seeMoreBtn')).toBeHidden();
+    await expect(page.locator('#seeMoreBtn')).toBeVisible();
     await expect(page.locator('#exitExpandedGlobe')).toBeInViewport();
     expect(await page.locator('#expandedGlobe').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

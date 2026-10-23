@@ -205,6 +205,7 @@ input[type="file"]::file-selector-button { background: var(--control); color: va
 .selected-country { stroke: var(--globe-selection) !important; stroke-width: 1.6px !important; }
 .ocean { cursor: grab; }
 .stage-bottomline { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 20px 17px; }
+.stage-bottomline > * { transform: translateY(10px); }
 .globe-hint { display: flex; align-items: center; gap: 8px; color: var(--subtle); font-size: 11px; }
 .globe-hint svg { width: 15px; height: 15px; color: var(--subtle); }
 .hint-divider { padding: 0 5px; color: var(--border-hover); }
@@ -224,7 +225,6 @@ body.globe-expanded-open { overflow: hidden; }
 .expanded-globe .control-panel { height: auto; min-height: 0; }
 .expanded-globe #globeStage { height: 100%; min-height: 400px; }
 .expanded-globe .country-details { max-height: none; overflow: visible; }
-.expanded-globe .country-actions { display: none; }
 .expanded-globe .tooltip { z-index: 1500; }
 .globe-stage.globe-expanded .globe-controls .icon-btn { width: 40px; height: 40px; }
 .loading-state { position: absolute; inset: 0; z-index: 4; background: var(--globe-background); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: var(--muted); font-size: 12px; }
@@ -438,7 +438,7 @@ input.date-range-handle:focus-visible::-moz-range-thumb { outline: 2px solid var
     .stage-topline h2 { font-size: 15px; max-width: 280px; }
     .stage-topline p { font-size: 11px; }
     .coverage-status { font-size: 9px; gap: 5px; }
-    .stage-bottomline { padding: 0 10px 10px; }
+    .stage-bottomline { padding: 0 10px 12px; }
     .globe-hint { font-size: 9px; gap: 5px; }
     .hint-divider { padding: 0 2px; }
     .globe-controls .icon-btn { width: 34px; height: 34px; }

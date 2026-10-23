@@ -220,6 +220,31 @@
         };
     }
 
+    function scatterDateLegend(container, timeColor, start, end) {
+        const legend = document.createElement('div'); legend.className = 'scatter-date-legend';
+        const format = d3.utcFormat('%b %-d, %Y'), iso = d3.utcFormat('%Y-%m-%d');
+        const singleDate = start === end;
+        legend.setAttribute('role', 'img');
+        legend.setAttribute('aria-label', singleDate ? `Date: ${format(new Date(start))}. All points share this date.` :
+            `Date: ${format(new Date(start))} to ${format(new Date(end))}. Earlier dates on the left, later dates on the right.`);
+        const label = document.createElement('span'); label.className = 'scatter-date-label'; label.textContent = 'Date';
+        const bar = document.createElement('div'); bar.className = 'scatter-date-bar'; bar.setAttribute('aria-hidden', 'true');
+        if (singleDate) bar.style.backgroundColor = timeColor(start);
+        else {
+            const stops = Array.from({ length: 9 }, (_, index) => {
+                const fraction = index / 8;
+                return `${timeColor(start + (end - start) * fraction)} ${fraction * 100}%`;
+            });
+            bar.style.backgroundImage = `linear-gradient(to right, ${stops.join(', ')})`;
+        }
+        const range = document.createElement('div'); range.className = 'scatter-date-range';
+        for (const value of singleDate ? [start] : [start, end]) {
+            const date = new Date(value), endpoint = document.createElement('time');
+            endpoint.dateTime = iso(date); endpoint.textContent = format(date); range.appendChild(endpoint);
+        }
+        legend.append(label, bar, range); container.appendChild(legend);
+    }
+
     function scatterPoints(frame, container, model, items, position, plot = frame.plot) {
         const dates = items.map(item => Date.parse(`${item.date}T00:00:00Z`));
         const dated = dates.every(Number.isFinite), start = dated ? Math.min(...dates) : 0, end = dated ? Math.max(...dates) : Math.max(1, items.length - 1);
@@ -245,9 +270,7 @@
                     Math.max(0, Math.min(nodes.length - 1, index + (event.key === 'ArrowRight' ? 1 : -1)));
                 nodes[next].focus({ preventScroll: true });
             });
-        const entries = [{ label: items[0].date || 'Earlier', color: timeColor(start) }];
-        if (items.length > 1) entries.push({ label: items.at(-1).date || 'Later', color: timeColor(end) });
-        AnalyticsPlot.legend(container, entries);
+        if (dated) scatterDateLegend(container, timeColor, start, end);
         frame.svg.attr('aria-label', `${model.title || 'Relationships over time'}. ${items.length} exact shared dates. Use Left and Right arrow keys to inspect dates.`);
         return { points, update };
     }

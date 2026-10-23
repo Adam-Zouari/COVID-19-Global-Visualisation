@@ -197,7 +197,8 @@
         const columns = dataset ? service.availableColumns[dataset] || [] : Object.values(service.availableColumns).flat();
         return [...new Set(columns)].map(value => {
             const metric = metadata(service, value);
-            return { value, label: metric.label, unitOptions: [...(metric.allowedUnits || ['count'])] };
+            return { value, label: metric.label, dataset: dataset || Object.keys(service.availableColumns).find(name => service.availableColumns[name].includes(value)),
+                unitOptions: [...(metric.allowedUnits || ['count'])] };
         });
     }
 

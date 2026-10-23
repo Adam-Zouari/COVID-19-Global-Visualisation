@@ -22,6 +22,7 @@
     });
 
     let shell = null, nativeFullscreen = false, savedScroll = null;
+    let fullscreenRequest = null, closingExpansion = null, pendingCountryAction = null;
     const placements = [];
     function move(node, parent) {
         if (!node) return;
@@ -50,14 +51,22 @@
         resize();
         updateAnalysisSpacing();
     }
-    async function closeExpansion() {
-        if (shell && document.fullscreenElement === shell) {
-            try { await document.exitFullscreen(); } catch { /* The CSS view can still close. */ }
-        }
-        finishExpansion();
+    function closeExpansion() {
+        if (closingExpansion) return closingExpansion;
+        const target = shell;
+        if (!target) return Promise.resolve();
+        closingExpansion = (async () => {
+            // A quick action can arrive before native fullscreen has finished entering.
+            try { await fullscreenRequest; } catch { /* The CSS fallback remains usable. */ }
+            if (document.fullscreenElement === target) {
+                try { await document.exitFullscreen(); } catch { /* The CSS view can still close. */ }
+            }
+            finishExpansion();
+        })().finally(() => { closingExpansion = null; });
+        return closingExpansion;
     }
     async function toggleExpansion() {
-        if (shell) { await closeExpansion(); return; }
+        if (shell || closingExpansion) { await closeExpansion(); return; }
         savedScroll = { left: scrollX, top: scrollY };
         shell = document.createElement('section');
         shell.id = 'expandedGlobe';
@@ -96,13 +105,32 @@
         resize();
         const target = shell;
         // The fixed view also works when Fullscreen is unsupported or denied.
+        let request;
         try {
-            await target.requestFullscreen?.();
+            request = target.requestFullscreen?.();
+            fullscreenRequest = request;
+            await request;
             if (shell === target && document.fullscreenElement === target) nativeFullscreen = true;
             else if (shell !== target && document.fullscreenElement === target) await document.exitFullscreen();
         } catch { /* Keep the viewport-sized CSS fallback. */ }
+        finally { if (fullscreenRequest === request) fullscreenRequest = null; }
     }
     expandButton.addEventListener('click', toggleExpansion);
+    // Restore the normal page before invoking its existing country action.
+    document.addEventListener('click', async event => {
+        const button = event.target.closest?.('#seeMoreBtn, #addToCompareBtn');
+        if (!button || (!pendingCountryAction && !shell?.contains(button))) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (pendingCountryAction) return;
+        pendingCountryAction = button;
+        try {
+            await closeExpansion();
+        } finally {
+            pendingCountryAction = null;
+        }
+        if (button.isConnected && !button.disabled) button.click();
+    }, true);
     document.addEventListener('fullscreenchange', () => {
         if (shell && document.fullscreenElement === shell) nativeFullscreen = true;
         else if (nativeFullscreen) finishExpansion();

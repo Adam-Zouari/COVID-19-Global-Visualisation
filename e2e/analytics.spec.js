@@ -47,6 +47,26 @@ async function chartChoices(page, selector, allowed) {
         .toEqual(Object.keys(allowed).sort());
 }
 
+async function scatterDateLegend(page, selector, expectedDates) {
+    const chart = page.locator(selector), legend = chart.locator('.scatter-date-legend');
+    await expect(legend).toBeVisible();
+    await expect(legend).toHaveAccessibleName(/^Date:/);
+    await expect(legend).toContainText('Date');
+    await expect(legend.locator('.scatter-date-bar')).toBeVisible();
+    const scale = await chart.evaluate(node => {
+        const legend = node.querySelector('.scatter-date-legend'), bar = legend.querySelector('.scatter-date-bar');
+        const points = [...node.querySelectorAll('.scatter-point')].sort((a, b) => a.__data__.date.localeCompare(b.__data__.date));
+        const dates = [...legend.querySelectorAll('time')].map(time => time.dateTime);
+        const colors = getComputedStyle(bar).backgroundImage.match(/rgba?\([^)]+\)/g) || [];
+        return { dates, endpoints: [...new Set([points[0].__data__.date, points.at(-1).__data__.date])],
+            colors: dates.length === 1 ? [getComputedStyle(bar).backgroundColor] : [colors[0], colors.at(-1)],
+            pointColors: [...new Set([points[0], points.at(-1)])].map(point => getComputedStyle(point).fill) };
+    });
+    expect(scale.dates).toEqual(expectedDates || scale.endpoints);
+    expect(scale.colors).toEqual(scale.pointColors);
+    await fits(page, `${selector} .scatter-date-legend, ${selector} .scatter-date-bar, ${selector} .scatter-date-legend time`);
+}
+
 for (const [theme, width] of [['dark', 1440], ['light', 390], ['dark', 320]]) {
     test(`country comparison charts render and fit in ${theme} at ${width}px`, async ({ page }) => {
         test.setTimeout(90000);
@@ -69,7 +89,8 @@ for (const [theme, width] of [['dark', 1440], ['light', 390], ['dark', 320]]) {
                 }));
                 expect(clipped, 'Heatmap date labels fit inside the chart').toEqual([]);
             }
-            if (['heatmap', 'horizontal', 'box'].includes(type))
+            if (type === 'scatter') await scatterDateLegend(page, '#compareChartContainer');
+            if (['heatmap', 'horizontal', 'box', 'scatter'].includes(type))
                 await page.screenshot({ path: `test-results/analytics-${type}-${theme}-${width}.png`, fullPage: true });
         }
         await expect(page.locator('.date-selection-panel')).toBeVisible();
@@ -112,6 +133,7 @@ test('comparison scatter uses country axes over a shareable period with shared m
     await prepare(page, 'dark');
     await page.locator('#compareChartType').selectOption('scatter');
     await expect(page.locator('#compareChartContainer .scatter-point')).toHaveCount(28);
+    await scatterDateLegend(page, '#compareChartContainer', ['2021-01-01', '2021-01-28']);
     await expect(page.locator('.controls-row')).toBeVisible();
     await expect(page.locator('.date-selection-panel')).toBeVisible();
     await expect(page.locator('#compare-xMetric, #compare-yMetric, #compare-date')).toHaveCount(0);
@@ -120,6 +142,7 @@ test('comparison scatter uses country axes over a shareable period with shared m
     await page.locator('#compare-date-range-end-input').fill('2021-01-20');
     await page.locator('#compare-date-range-end-input').dispatchEvent('change');
     await expect(page.locator('#compareChartContainer .scatter-point')).toHaveCount(16);
+    await scatterDateLegend(page, '#compareChartContainer', ['2021-01-05', '2021-01-20']);
     await page.locator('#compareSmoothingSelector').selectOption('7day');
     await expect(page.locator('#compareChartContainer .scatter-point')).toHaveCount(14);
     await page.locator('#compareMetricSelector').selectOption('cumulative_confirmed');
@@ -180,6 +203,7 @@ test('three-country scatter rotates and zooms without selecting text and prevent
     await expect(page.locator('#compareChartContainer .scatter-point')).toHaveCount(28);
     const view = page.locator('#compareChartContainer svg[data-yaw]');
     await expect(view).toBeVisible();
+    await scatterDateLegend(page, '#compareChartContainer', ['2021-01-01', '2021-01-28']);
     const initial = await view.getAttribute('data-yaw');
     await view.focus(); await page.keyboard.press('ArrowRight');
     await expect.poll(() => view.getAttribute('data-yaw')).not.toBe(initial);
@@ -390,6 +414,7 @@ test('country analysis contains only single-country charts and follows the chose
         for (const [type, mark] of Object.entries(countryMarks)) {
             await page.locator('#vizTypeSelector').selectOption(type);
             await expect(page.locator(`#chartContainer ${mark}`).first(), `${metric}: ${type}`).toBeVisible();
+            if (type === 'scatter') await scatterDateLegend(page, '#chartContainer');
             await expect(page.locator('#chartContainer')).not.toContainText('United States');
             await expect(page.locator('#chartContainer')).not.toContainText('France');
         }
@@ -411,43 +436,116 @@ test('country analysis contains only single-country charts and follows the chose
     expect(errors).toEqual([]);
 });
 
-test('country scatter axes stay within the active dataset and retain the chosen period', async ({ page }) => {
+test('country scatter groups all dataset metrics and retains cross-dataset axes and the chosen period', async ({ page }) => {
+    const errors = []; page.on('pageerror', error => errors.push(error.message));
+    await page.setViewportSize({ width: 390, height: 1000 });
     await prepare(page, 'light', '/?country=tn&date=2021-01-28&smooth=raw');
     await page.locator('#seeMoreBtn').click();
     await page.locator('#hospBtn').click();
     await page.locator('#vizTypeSelector').selectOption('scatter');
-    await page.locator('#analysis-xMetric').selectOption('current_hospitalized_patients');
+    const activeColumns = await page.evaluate(() => dataService.availableColumns[dataService.currentDataset]);
+    for (const selector of ['#analysis-xMetric', '#analysis-yMetric']) {
+        expect(activeColumns).toContain(await page.locator(selector).inputValue());
+        expect(await page.locator(`${selector} optgroup`).evaluateAll(groups => groups.map(group => group.label)))
+            .toEqual(['Cases & deaths', 'Hospitalizations', 'Vaccinations']);
+        for (const [metric, group] of [['new_deceased', 'Cases & deaths'], ['current_intensive_care_patients', 'Hospitalizations'],
+            ['cumulative_persons_fully_vaccinated', 'Vaccinations']])
+            await expect(page.locator(`${selector} optgroup[label="${group}"] option[value="${metric}"]`)).toHaveCount(1);
+    }
+    await expect(page.locator('#analysis-xMetric')).not.toHaveValue(await page.locator('#analysis-yMetric').inputValue());
+    await page.locator('#analysis-xMetric').selectOption('current_intensive_care_patients');
     await page.locator('#analysis-xUnit').selectOption('per100k');
-    await page.locator('#analysis-yMetric').selectOption('current_intensive_care_patients');
+    await page.locator('#analysis-yMetric').selectOption('new_deceased');
     await page.locator('#analysis-yUnit').selectOption('count');
-    await page.locator('#analysis-smoothing').selectOption('7day');
+    await page.locator('#analysis-smoothing').selectOption('raw');
     await page.locator('#date-range-start-input').fill('2021-01-10');
     await page.locator('#date-range-start-input').dispatchEvent('change');
     await page.locator('#date-range-end-input').fill('2021-01-20');
     await page.locator('#date-range-end-input').dispatchEvent('change');
     await expect(page.locator('#chartContainer .scatter-point')).toHaveCount(11);
-    expect(await page.locator('#chartContainer .scatter-point').first().evaluate(node => ({ ...node.__data__ })))
-        .toMatchObject({ date: '2021-01-10', x: 1200, y: 6 });
-    const activeChoices = async () => {
-        const columns = await page.evaluate(() => dataService.availableColumns[dataService.currentDataset]);
-        for (const selector of ['#analysis-xMetric', '#analysis-yMetric']) {
-            expect(await page.locator(selector + ' option').evaluateAll(nodes => nodes.map(node => node.value))).toEqual(columns);
-            expect(columns).toContain(await page.locator(selector).inputValue());
-        }
-    };
-    await activeChoices();
+    await scatterDateLegend(page, '#chartContainer', ['2021-01-10', '2021-01-20']);
+    const first = await page.locator('#chartContainer .scatter-point').first().evaluate(node => ({ ...node.__data__ }));
+    expect(first).toMatchObject({ date: '2021-01-10', y: 4 });
+    expect(first.x).toBeCloseTo(900, 8);
+    await page.locator('#chartContainer .scatter-point').first().focus();
+    await expect(page.locator('#chartContainer .chart-tooltip')).toContainText('Current ICU patients');
+    await expect(page.locator('#chartContainer .chart-tooltip')).toContainText('Per 100,000 people');
+    await expect(page.locator('#chartContainer .chart-tooltip')).toContainText('New reported deaths');
+    await expect(page.locator('#chartContainer .chart-tooltip')).toContainText('Count');
     await page.screenshot({ path: 'test-results/country-scatter-columns.png', fullPage: true });
+    const lightScale = await page.locator('#chartContainer .scatter-date-bar').evaluate(node => getComputedStyle(node).backgroundImage);
+    await page.locator('#appearanceButton').click();
+    await page.locator('#appearanceMenu [data-appearance="dark"]').click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await scatterDateLegend(page, '#chartContainer', ['2021-01-10', '2021-01-20']);
+    await expect(page.locator('#chartContainer .scatter-date-legend')).toHaveCount(1);
+    expect(await page.locator('#chartContainer .scatter-date-bar').evaluate(node => getComputedStyle(node).backgroundImage)).not.toBe(lightScale);
     await page.locator('#vaccBtn').click();
-    await activeChoices();
-    await expect(page.locator('#analysis-xMetric option[value="current_hospitalized_patients"]')).toHaveCount(0);
-    await expect(page.locator('#analysis-xMetric option[value="new_confirmed"]')).toHaveCount(0);
+    await expect(page.locator('#analysis-xMetric')).toHaveValue('current_intensive_care_patients');
+    await expect(page.locator('#analysis-yMetric')).toHaveValue('new_deceased');
+    await expect(page.locator('#analysis-xUnit')).toHaveValue('per100k');
     await expect(page.locator('#date-range-start-input')).toHaveValue('2021-01-10');
     await expect(page.locator('#date-range-end-input')).toHaveValue('2021-01-20');
     await page.locator('#vizTypeSelector').selectOption('line');
     await expect(page.locator('#analysisChartOptions')).toBeHidden();
     await expect(page.locator('#analysisChartOptions > *')).toHaveCount(0);
     await page.locator('#vizTypeSelector').selectOption('scatter');
-    await activeChoices();
+    await expect(page.locator('#analysis-xMetric')).toHaveValue('current_intensive_care_patients');
+    await expect(page.locator('#analysis-yMetric')).toHaveValue('new_deceased');
+    await page.locator('#analysis-xMetric').selectOption('cumulative_persons_fully_vaccinated');
+    await expect(page.locator('#analysis-xUnit')).toHaveValue('count');
+    expect(await page.locator('#analysis-xUnit option').evaluateAll(options => options.map(option => option.value)))
+        .toEqual(['count', 'percent']);
+    await page.locator('#analysis-xUnit').selectOption('percent');
+    await expect(page.locator('#chartContainer .scatter-point')).toHaveCount(11);
+    expect(await page.locator('#chartContainer .scatter-point').first().evaluate(node => ({ ...node.__data__ })))
+        .toMatchObject({ date: '2021-01-10', x: 9, y: 4 });
+    await expect(page.locator('#date-range-start-input')).toHaveValue('2021-01-10');
+    await expect(page.locator('#date-range-end-input')).toHaveValue('2021-01-20');
+    expect(errors).toEqual([]);
+});
+
+test('country scatter preserves calendar bounds when axes change coverage and plots only valid shared reports', async ({ page }) => {
+    const sparse = {
+        ...csv,
+        epidem: csv.epidem.split('\n').map(row => {
+            const fields = row.split(',');
+            if (fields[1] === 'TN' && fields[0] === '2021-01-02') fields[3] = '';
+            if (fields[1] === 'TN' && fields[0] === '2021-01-06') fields[3] = '-2';
+            return fields.join(',');
+        }).join('\n'),
+        hospitalizations: ['date,location_key,current_hospitalized_patients,current_intensive_care_patients,new_hospitalized_patients',
+            '2021-01-01,TN,0,0,0', '2021-01-02,TN,2,1,1', '2021-01-04,TN,6,,3',
+            '2021-01-06,TN,10,6,5', '2021-01-08,TN,14,8,7'].join('\n')
+    };
+    await prepare(page, 'dark', '/?country=tn&date=2021-01-28&smooth=raw', sparse);
+    await page.locator('#seeMoreBtn').click();
+    await page.locator('#hospBtn').click();
+    await page.locator('#vizTypeSelector').selectOption('scatter');
+    await page.locator('#analysis-xMetric').selectOption('current_intensive_care_patients');
+    await page.locator('#analysis-xUnit').selectOption('per100k');
+    await page.locator('#analysis-yMetric').selectOption('current_hospitalized_patients');
+    await page.locator('#analysis-smoothing').selectOption('raw');
+    await page.locator('#date-range-start-input').fill('2021-01-02');
+    await page.locator('#date-range-start-input').dispatchEvent('change');
+    await page.locator('#date-range-end-input').fill('2021-01-06');
+    await page.locator('#date-range-end-input').dispatchEvent('change');
+    await page.locator('#analysis-yMetric').selectOption('new_deceased');
+    await expect(page.locator('#date-range-start-input')).toHaveValue('2021-01-02');
+    await expect(page.locator('#date-range-end-input')).toHaveValue('2021-01-06');
+    const observations = () => page.locator('#chartContainer .scatter-point').evaluateAll(nodes => nodes.map(node => ({ ...node.__data__ })));
+    await expect.poll(observations).toEqual([{ date: '2021-01-06', x: 600, y: -2 }]);
+    await scatterDateLegend(page, '#chartContainer', ['2021-01-06']);
+    await page.locator('#date-range-start-input').fill('2021-01-01');
+    await page.locator('#date-range-start-input').dispatchEvent('change');
+    await page.locator('#date-range-end-input').fill('2021-01-28');
+    await page.locator('#date-range-end-input').dispatchEvent('change');
+    await expect.poll(observations).toEqual([
+        { date: '2021-01-01', x: 0, y: 0 },
+        { date: '2021-01-06', x: 600, y: -2 },
+        { date: '2021-01-08', x: 800, y: 2 }
+    ]);
+    await scatterDateLegend(page, '#chartContainer', ['2021-01-01', '2021-01-08']);
 });
 
 test('box statistics appear on hover and keyboard focus without extra panels in either workspace', async ({ page }) => {
