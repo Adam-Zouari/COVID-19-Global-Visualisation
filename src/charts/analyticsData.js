@@ -183,7 +183,8 @@
         const dates = range && service.getAvailableDates(options.column).filter(date => date >= range.start && date <= range.end);
         if (!dates?.length) return empty(model, 'No reporting dates are available in this period.');
         const startDate = dates[0], endDate = dates.at(-1);
-        Object.assign(model, { startDate, endDate, startLabel: labelDate(startDate), endLabel: labelDate(endDate), subtitle: options.metric.label });
+        Object.assign(model, { startDate, endDate, startLabel: labelDate(startDate), endLabel: labelDate(endDate),
+            subtitle: `${options.metric.label} · ${labelDate(startDate)}–${labelDate(endDate)}` });
         for (const code of codes) {
             const start = service.getDisplayValue(code, { ...options, date: startDate }), end = service.getDisplayValue(code, { ...options, date: endDate });
             if (finite(start) && finite(end)) model.items.push({ code, label: name(service, code), start, end });

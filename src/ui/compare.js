@@ -57,7 +57,7 @@ window.CompareMode = {
     changeChartType(type) {
         if (!Object.hasOwn(window.ChartTypes || { line: {}, bar: {} }, type) || (window.ChartTypes && !ChartTypes[type].compare)) return;
         window.AnalyticsCharts?.select(type);
-        this.state.chartType = type; this.updateComparisonView(); window.syncAtlasState?.();
+        this.state.chartType = type; this.updateComparisonView({ retainHeight: false }); window.syncAtlasState?.();
     },
 
     changeScale(value) {
@@ -124,9 +124,9 @@ window.CompareMode = {
         if (scale) { scale.hidden = !definition.separate; scale.value = this.state.scale; scale.disabled = this.state.displayMode !== 'separate'; scale.onchange = () => this.changeScale(scale.value); }
     },
 
-    updateComparisonView() {
+    updateComparisonView({ retainHeight = true } = {}) {
         if (!this.state.active) return;
-        return CompareUI.preserveScroll(() => this.renderComparisonView());
+        return CompareUI.preserveScroll(() => this.renderComparisonView(), { retainHeight });
     },
 
     renderComparisonView() {

@@ -35,6 +35,17 @@ function harness() {
     return { context, globe, frames, tick, elements };
 }
 
+function mockResetZoom(context, globe, initial = 2) {
+    let transform = { k: initial }, scale = initial * 100;
+    context.d3 = { zoomIdentity: { scale: k => ({ k }) }, zoomTransform: () => transform };
+    globe.svg = { interrupt() {}, node() { return this; }, call(callback, value) { callback(this, value); } };
+    globe.radius = 100;
+    globe.projection.scale = function(value) { if (value === undefined) return scale; scale = value; return this; };
+    globe.tooltip = { style() {} };
+    globe.zoom = { transform(selection, value) { transform = value; globe.zoomed({ transform }); } };
+    return () => transform.k;
+}
+
 test('rotation has one scheduled frame and stopping cancels it', () => {
     const { globe, frames, tick } = harness();
     globe.startAutoRotation();
@@ -64,15 +75,20 @@ test('default rotation stays suspended for hidden, reduced-motion, and Compare v
     assert.equal(frames.size, 0);
 });
 
-test('Reset resumes rotation after returning to its initial view', () => {
+test('Reset smoothly restores zoom and rotation before resuming automatic rotation', () => {
     const { context, globe, frames, tick } = harness();
-    context.d3 = { zoomIdentity: { k: 1 } };
-    globe.svg = { interrupt() {}, call() {} };
-    globe.zoom = { transform() {} };
+    const zoom = mockResetZoom(context, globe);
     globe.stopAutoRotation();
     globe.resetView();
     assert.equal(globe.autoRotate, false);
-    tick(0); tick(1000);
+    assert.equal(zoom(), 2);
+    tick(0); tick(500);
+    assert.equal(zoom(), 1.5);
+    assert.deepEqual([...globe.currentRotation], [-5, -7.5, 0]);
+    assert.equal(globe.autoRotate, false);
+    assert.equal(frames.size, 1);
+    tick(1000);
+    assert.equal(zoom(), 1);
     assert.equal(globe.autoRotate, true);
     assert.equal(frames.size, 1);
     tick(1016); tick(1032);
@@ -81,15 +97,13 @@ test('Reset resumes rotation after returning to its initial view', () => {
 
 test('interacting during Reset cancels its pending rotation restart', () => {
     const { context, globe, frames, tick } = harness();
-    context.d3 = { zoomIdentity: { k: 1 } };
-    globe.svg = { interrupt() {}, call() {} };
-    globe.zoom = { transform() {} };
-    globe.tooltip = { style() {} };
+    const zoom = mockResetZoom(context, globe);
     globe.resetView();
-    tick(0);
+    tick(0); tick(500);
     globe.dragstarted({ x: 10, y: 20 });
     globe.dragended();
     tick(1000);
+    assert.equal(zoom(), 1.5);
     assert.equal(globe.autoRotate, false);
     assert.equal(frames.size, 0);
 });
@@ -97,11 +111,10 @@ test('interacting during Reset cancels its pending rotation restart', () => {
 test('Reset respects reduced motion instead of restarting automatic rotation', () => {
     const { context, globe, frames, tick } = harness();
     context.window.matchMedia = () => ({ matches: true });
-    context.d3 = { zoomIdentity: { k: 1 } };
-    globe.svg = { interrupt() {}, call() {} };
-    globe.zoom = { transform() {} };
+    const zoom = mockResetZoom(context, globe);
     globe.resetView();
     tick(0);
+    assert.equal(zoom(), 1);
     assert.equal(globe.autoRotate, false);
     assert.equal(frames.size, 0);
 });
@@ -322,11 +335,9 @@ test('rebuilding the date slider replaces listeners and preserves the selected d
 
 test('reset preserves the selected country, metric, and date', () => {
     const { context, globe } = harness();
-    context.d3 = { zoomIdentity: { k: 1 } };
+    mockResetZoom(context, globe);
     let target;
     globe.animateToRotation = rotation => { target = rotation; };
-    globe.svg = { interrupt() {}, call() {} };
-    globe.zoom = { transform() {} };
     globe.selectedCountryCode = 'tn';
     globe.selectedCountry = '788';
     globe.dataService = { currentDate: '2021-01-01', currentColumn: 'new_confirmed' };

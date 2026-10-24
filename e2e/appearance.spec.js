@@ -166,6 +166,59 @@ test('appearance menu supports keyboard selection, Escape and outside dismissal'
     await expect(button).toHaveAttribute('aria-expanded', 'false');
 });
 
+test('mouse actions leave no focus rectangles while keyboard navigation keeps its indicators', async ({ page }) => {
+    await ready(page);
+    const raw = page.locator('#rawBtn'), average = page.locator('#averageBtn');
+    await raw.click();
+    await expect(raw).toBeFocused();
+    await expect(raw).toHaveCSS('outline-style', 'none');
+    await page.keyboard.press('Tab');
+    await expect(average).toBeFocused();
+    await expect(average).toHaveCSS('outline-style', 'solid');
+    await average.click();
+    await expect(average).toBeFocused();
+    await expect(average).toHaveCSS('outline-style', 'none');
+
+    // Exercise pointer-focused native selects without opening an OS picker.
+    const metric = page.locator('#dataSelector');
+    await metric.dispatchEvent('pointerdown', { pointerType: 'mouse' });
+    await metric.focus();
+    await expect(metric).toHaveCSS('outline-style', 'none');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#unitSelector')).toBeFocused();
+    await expect(page.locator('#unitSelector')).toHaveCSS('outline-style', 'solid');
+    await page.keyboard.press('Shift+Tab');
+    await expect(metric).toBeFocused();
+    await expect(metric).toHaveCSS('outline-style', 'solid');
+
+    await page.locator('#navCompare').click();
+    await expect(page.locator('#compareTitle')).toBeFocused();
+    await expect(page.locator('#compareTitle')).toHaveCSS('outline-style', 'none');
+    await page.keyboard.press('Tab');
+    await expect(page.locator(':focus')).toHaveCSS('outline-style', 'solid');
+    await page.locator('#appearanceButton').click();
+    await expect(page.locator('#appearanceMenu :focus')).toHaveCSS('outline-style', 'none');
+    await page.locator('#appearanceMenu [data-appearance="light"]').click();
+    await expect(page.locator('#appearanceButton')).toBeFocused();
+    await expect(page.locator('#appearanceButton')).toHaveCSS('outline-style', 'none');
+    await page.keyboard.press('Shift+Tab');
+    await expect(page.locator(':focus')).toHaveCSS('outline-style', 'solid');
+});
+
+test.describe('touch focus indicators', () => {
+    test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+    test('tapping menu controls keeps focus without a persistent rectangle', async ({ page }) => {
+        await ready(page);
+        await page.locator('#appearanceButton').tap();
+        await expect(page.locator('#appearanceMenu :focus')).toHaveCSS('outline-style', 'none');
+        await page.locator('#appearanceMenu [data-appearance="light"]').tap();
+        await expect(page.locator('#appearanceButton')).toBeFocused();
+        await expect(page.locator('#appearanceButton')).toHaveCSS('outline-style', 'none');
+        await page.keyboard.press('Shift+Tab');
+        await expect(page.locator(':focus')).toHaveCSS('outline-style', 'solid');
+    });
+});
+
 test('live appearance changes recolor analysis without reloading data or rebuilding geography', async ({ page }) => {
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await ready(page, '/?data=sample&country=tn');

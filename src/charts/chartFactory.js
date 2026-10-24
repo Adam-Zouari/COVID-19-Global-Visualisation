@@ -5,6 +5,7 @@ const ChartFactory = {
     countryColorIndices: new Map(),
     comparisonCountrySlots: new Map(),
     chartSequence: 0,
+    chartSizes: new WeakMap(),
     palette: ['#59b5ff', '#ffb23f', '#ef73cb', '#79d17d', '#f48ba1', '#8fd2e1', '#d3cd77', '#9db0ff'],
 
     // Browsing a country must not consume one of the four comparison colors.
@@ -105,6 +106,19 @@ const ChartFactory = {
             series: { [column]: observations.map(point => this.isValue(point.value) ? point.value : null) } };
     },
 
+    emptyCountryData(countryCode, settings = {}) {
+        countryCode = typeof countryCode === 'string' ? countryCode.toLowerCase() : '';
+        const service = window.globeInstance?.dataService;
+        const column = settings.selectedColumn || settings.column || service?.currentColumn;
+        const dates = service?.getAvailableDates?.(column) || service?.availableDates || [];
+        const metric = this.metadata(column);
+        return { countryCode, countryName: service?.getCountryName(countryCode) || countryCode,
+            column, metric, unit: settings.unit || service?.displayUnit || 'count',
+            smoothing: this.smoothingMode(metric, settings.smoothing || service?.smoothing), dates,
+            reported: dates.map(() => false), missingReasons: dates.map(() => 'No observation'),
+            series: { [column]: dates.map(() => null) } };
+    },
+
     applySettings(data, settings = {}) {
         const timeline = settings.timeline?.length ? settings.timeline : data.dates;
         const start = this.dateIndex(settings.dateRange?.start ?? 0, timeline.length);
@@ -127,8 +141,7 @@ const ChartFactory = {
         const extraControls = document.getElementById('analysisChartOptions');
         if (extraControls) { extraControls.hidden = true; extraControls.replaceChildren(); delete extraControls.dataset.fields; }
         const range = document.getElementById('chartControlsContainer'); if (range) range.hidden = false;
-        const data = this.prepareDataForCountry(countryCode, settings);
-        if (!data) return this.showError(container, 'No observations available for this country and dataset.');
+        const data = this.prepareDataForCountry(countryCode, settings) || this.emptyCountryData(countryCode, settings);
         settings = settings || ChartControls.initialize(container, countryCode, vizType, data);
         if (!['line', 'bar', 'area'].includes(vizType)) return this.showError(container, 'Choose a supported chart type.');
         const filtered = this.applySettings(data, settings);
@@ -152,6 +165,15 @@ const ChartFactory = {
     },
 
     clearChart(container) {
+        // Empty states retain only the last populated size of the same chart
+        // at the same width. Changing chart types still uses natural sizing.
+        if (container.dataset.chartType && container.querySelector('.chart-heading + svg, .chart-heading ~ svg') && !container.querySelector('.chart-empty-state')) {
+            const { width, height } = container.getBoundingClientRect();
+            if (height > 0) {
+                const sizes = this.chartSizes.get(container) || new Map();
+                sizes.set(container.dataset.chartType, { width, height }); this.chartSizes.set(container, sizes);
+            }
+        }
         container.replaceChildren();
         container.classList.remove('analytics-chart');
         delete container.dataset.chartType;
@@ -160,6 +182,23 @@ const ChartFactory = {
     showError(container, message) {
         const error = document.createElement('div'); error.className = 'chart-error'; error.setAttribute('role', 'status');
         error.textContent = message; container.appendChild(error);
+    },
+
+    showEmptyState(container, message, { height = 390 } = {}) {
+        const heading = container.querySelector('.chart-heading');
+        const bounds = container.getBoundingClientRect();
+        const previous = this.chartSizes.get(container)?.get(container.dataset.chartType);
+        const style = window.getComputedStyle(container);
+        const box = ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'].reduce((total, key) => total + (parseFloat(style[key]) || 0), 0);
+        const headingHeight = heading ? heading.getBoundingClientRect().height + (parseFloat(window.getComputedStyle(heading).marginBottom) || 0) : 0;
+        const total = previous && Math.abs(previous.width - bounds.width) < 1 ? previous.height : Math.max(bounds.height, box + headingHeight + height);
+        [...container.children].forEach(child => { if (child !== heading) child.remove(); });
+        const state = document.createElement('div'); state.className = 'chart-empty-state'; state.setAttribute('role', 'status');
+        state.style.height = `${Math.max(180, total - box - headingHeight)}px`;
+        const title = document.createElement('h4'); title.textContent = 'No data available';
+        const reason = document.createElement('p'); reason.textContent = message;
+        const suggestion = document.createElement('p'); suggestion.className = 'chart-empty-suggestion'; suggestion.textContent = 'Try another metric or date range.';
+        state.append(title, reason, suggestion); container.appendChild(state);
     },
 
     showTooltip(container, event, lines) {
@@ -196,6 +235,7 @@ const ChartFactory = {
     },
 
     periodLabel(dates) {
+        if (!dates.length) return 'Selected date range';
         const format = date => new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
             .format(new Date(`${date}T00:00:00Z`));
         return dates[0] === dates.at(-1) ? format(dates[0]) : `${format(dates[0])} – ${format(dates.at(-1))}`;
@@ -220,6 +260,25 @@ const ChartFactory = {
                     Math.abs(value) > 5 * Math.max(Math.abs(before), Math.abs(after));
             });
         });
+    },
+
+    cartesianLegend(container, series, type) {
+        const legend = document.createElement('div'); legend.className = 'chart-legend';
+        for (const item of series) {
+            const entry = document.createElement('span'); entry.className = 'legend-item';
+            let swatch;
+            if (type === 'line' || type === 'area') {
+                swatch = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                swatch.setAttribute('class', 'legend-line'); swatch.setAttribute('width', '28'); swatch.setAttribute('height', '10');
+                swatch.setAttribute('viewBox', '0 0 28 10'); swatch.setAttribute('aria-hidden', 'true');
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', '2'); line.setAttribute('x2', '26'); line.setAttribute('y1', '5'); line.setAttribute('y2', '5');
+                line.setAttribute('stroke', item.color || this.countryColor(item.key)); line.setAttribute('stroke-width', '2.25'); line.setAttribute('stroke-linecap', 'round');
+                swatch.appendChild(line);
+            } else { swatch = document.createElement('i'); swatch.style.backgroundColor = item.color || this.countryColor(item.key); }
+            entry.append(swatch, document.createTextNode(item.label)); legend.appendChild(entry);
+        }
+        container.appendChild(legend);
     },
 
     // Long histories use Monday–Sunday calendar weeks. Partial bars retain
@@ -272,7 +331,7 @@ const ChartFactory = {
 
     renderCartesian(container, dates, series, type, options = {}) {
         this.clearChart(container);
-        if (!dates.length) return this.showError(container, 'No dates available.');
+        container.dataset.chartType = type;
         options = { ...options, smoothing: this.smoothingMode(options.metric, options.smoothing) };
         const selectedDates = dates;
         const hadDisplayedValues = series.some(item => item.values.some(value => this.isValue(value)));
@@ -295,6 +354,19 @@ const ChartFactory = {
         for (const text of warnings) { const warning = document.createElement('p'); warning.className = 'chart-warning'; warning.textContent = text; container.appendChild(warning); }
         const width = Math.max(280, container.clientWidth || 720);
         const height = width < 500 ? 330 : 390;
+        if (!dates.length || !values.some(value => this.isValue(value))) {
+            // Render the same natural trailing space as a populated chart, then
+            // replace the unused plot and notes with one centered explanation.
+            const spacer = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); spacer.setAttribute('height', height); container.appendChild(spacer);
+            if (options.showLegend !== false && series.length > 1) this.cartesianLegend(container, series, type);
+            if (note) { const hint = document.createElement('p'); hint.className = 'chart-note'; hint.textContent = note; container.appendChild(hint); }
+            const reasons = active.flatMap(item => item.missingReasons || []);
+            const message = hadDisplayedValues && aggregation ? 'No weekly snapshots are available on the last selected days of these weeks.' :
+                reasons.includes('No population estimate') ? 'Population-adjusted values are unavailable because the selected country has no population estimate.' :
+                reasons.includes('Insufficient reported days for the 7-day average') ? 'There are not enough reported days to calculate a 7-day average in the selected period.' :
+                `No reported observations are available for ${(options.metric?.label || 'this metric').toLowerCase()} in the selected ${series.length > 1 ? 'countries' : 'country'} and date range.`;
+            return this.showEmptyState(container, message, { height });
+        }
         const margin = { top: 40, right: 20, bottom: 44, left: width < 500 ? 55 : 66 };
         const plotWidth = width - margin.left - margin.right, plotHeight = height - margin.top - margin.bottom;
         container.style.position = 'relative';
@@ -418,26 +490,8 @@ const ChartFactory = {
                 });
         }
         if (options.showLegend !== false && series.length > 1) {
-            const legend = document.createElement('div'); legend.className = 'chart-legend';
-            for (const item of series) {
-                const entry = document.createElement('span'); entry.className = 'legend-item';
-                let swatch;
-                if (type === 'line' || type === 'area') {
-                    swatch = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                    swatch.setAttribute('class', 'legend-line'); swatch.setAttribute('width', '28'); swatch.setAttribute('height', '10');
-                    swatch.setAttribute('viewBox', '0 0 28 10'); swatch.setAttribute('aria-hidden', 'true');
-                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                    line.setAttribute('x1', '2'); line.setAttribute('x2', '26'); line.setAttribute('y1', '5'); line.setAttribute('y2', '5');
-                    line.setAttribute('stroke', item.color || this.countryColor(item.key)); line.setAttribute('stroke-width', '2.25'); line.setAttribute('stroke-linecap', 'round');
-                    swatch.appendChild(line);
-                } else { swatch = document.createElement('i'); swatch.style.backgroundColor = item.color || this.countryColor(item.key); }
-                entry.append(swatch, document.createTextNode(item.label)); legend.appendChild(entry);
-            }
-            container.appendChild(legend);
+            this.cartesianLegend(container, series, type);
         }
         if (note) { const hint = document.createElement('p'); hint.className = 'chart-note'; hint.textContent = note; container.appendChild(hint); }
-        if (!values.some(value => this.isValue(value))) this.showError(container, hadDisplayedValues && aggregation ?
-            'No weekly snapshots are available on the last selected days of these weeks.' :
-            'No displayable observations for this metric, unit and date range. Check reporting availability, averaging history, and population data.');
     }
 };

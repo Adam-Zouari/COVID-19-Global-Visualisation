@@ -1,5 +1,5 @@
 window.CompareUI = {
-    preserveScroll(render) {
+    preserveScroll(render, { retainHeight = true } = {}) {
         const panel = document.getElementById('comparePanel');
         if (!panel || this.preservingScroll) return render();
         const position = { left: window.scrollX, top: window.scrollY };
@@ -9,9 +9,9 @@ window.CompareUI = {
         try { return render(); }
         finally {
             panel.style.minHeight = minimum;
-            // A shorter chart still needs enough page height to retain the
-            // current viewport. Recalculate this floor on the next update.
-            const shortage = position.top + window.innerHeight - document.documentElement.scrollHeight;
+            // Settings edits may retain enough height for the current viewport.
+            // Switching chart types releases that floor for natural sizing.
+            const shortage = retainHeight ? position.top + window.innerHeight - document.documentElement.scrollHeight : 0;
             this.scrollMinimumActive = shortage > 0;
             this.originalMinimum = minimum;
             if (shortage > 0) panel.style.minHeight = `${panel.getBoundingClientRect().height + shortage}px`;

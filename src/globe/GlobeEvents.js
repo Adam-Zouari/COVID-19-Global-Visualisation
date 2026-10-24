@@ -1,5 +1,18 @@
 GlobeVis.prototype.setupEventListeners = function() {
     const options = { signal: this.listeners.signal };
+    const dateInput = document.getElementById('timelineDateInput');
+    if (dateInput) window.DateInput.bind(dateInput, requested => {
+        if (!requested || !dateInput.checkValidity()) {
+            window.DateInput.sync(dateInput, this.dataService.currentDate);
+            return;
+        }
+        const dates = this.dataService.getAvailableDates?.() || this.dataService.availableDates || [];
+        const slider = document.getElementById('dateSlider');
+        if (!dates.length || !slider) return;
+        window.stopTimeline?.();
+        slider.value = String(window.DateInput.nearestIndex(dates, requested));
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+    }, options);
     // A click, pen touch, pinch, or wheel on any part of the globe stops motion
     // immediately, even when the gesture does not become a D3 drag or zoom.
     const stopInteraction = () => {
@@ -419,6 +432,13 @@ GlobeVis.prototype.syncDateControls = function() {
     if (previous) previous.disabled = dates.length === 0 || index <= 0;
     if (next) next.disabled = dates.length === 0 || index >= dates.length - 1;
     current.textContent = dates.length ? this.dataService.formatDate(dates[index]) : 'No dates with data';
+    const dateInput = document.getElementById('timelineDateInput');
+    if (dateInput) {
+        dateInput.disabled = !dates.length;
+        dateInput.min = dates[0] || '';
+        dateInput.max = dates.at(-1) || '';
+        window.DateInput.sync(dateInput, dates[index] || '');
+    }
     const start = document.getElementById('timelineStart');
     const end = document.getElementById('timelineEnd');
     if (start) start.textContent = dates.length ? this.dataService.formatDate(dates[0]) : '—';

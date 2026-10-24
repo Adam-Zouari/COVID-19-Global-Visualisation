@@ -88,7 +88,8 @@
                     <div class="timeline-selected">
                         <span class="eyebrow">TRAVEL THROUGH TIME</span>
                         <div class="timeline-day">
-                            <strong id="currentDate">Loading…</strong>
+                            <strong id="currentDate" class="sr-only">Loading…</strong>
+                            <input id="timelineDateInput" class="timeline-date-input" type="date" aria-label="Reporting date, enter a date" aria-describedby="timelineMeasure" disabled>
                             <span id="timelineMeasure">Observation date</span>
                         </div>
                     </div>
@@ -133,8 +134,8 @@
                             <fieldset class="control-group smoothing-group">
                                 <legend>Reporting</legend>
                                 <div class="segmented-control">
-                                    <button id="rawBtn" onclick="atlasActions.setSmoothing('raw')" aria-pressed="false">Daily</button>
-                                    <button id="averageBtn" class="active" title="Average of recent daily reports to make the trend easier to see" onclick="atlasActions.setSmoothing('7day')" aria-pressed="true">7-day average</button>
+                                    <button id="rawBtn" class="active" onclick="atlasActions.setSmoothing('raw')" aria-pressed="true">Daily</button>
+                                    <button id="averageBtn" title="Average of recent daily reports to make the trend easier to see" onclick="atlasActions.setSmoothing('7day')" aria-pressed="false">7-day average</button>
                                 </div>
                             </fieldset>
                             <div class="legend-block">
@@ -208,9 +209,25 @@
                         </div>
                     </div>
                     <p id="analysisUnits" class="chart-description"></p>
-                    <div class="analysis-value-row">
-                        <p id="analysisValue" class="primary-metric-value analysis-value"></p>
-                        <div class="viz-controls">
+                    <p id="analysisValue" class="primary-metric-value analysis-value"></p>
+                    <p id="analysisValueDate" class="analysis-value-date"></p>
+                    <div class="analysis-controls" role="group" aria-label="Country chart settings">
+                        <div id="analysisMetricControl" class="control-group">
+                            <label for="analysisMetricSelector">Metric</label>
+                            <select id="analysisMetricSelector" onchange="atlasActions.setMetric(this.value)"></select>
+                        </div>
+                        <div id="analysisUnitControl" class="control-group">
+                            <label for="analysisUnitSelector">Display values as</label>
+                            <select id="analysisUnitSelector" onchange="atlasActions.setUnit(this.value)"></select>
+                        </div>
+                        <fieldset id="analysisReportingGroup" class="control-group">
+                            <legend>Reporting</legend>
+                            <div class="segmented-control">
+                                <button id="analysisRawBtn" class="active" onclick="atlasActions.setSmoothing('raw')" aria-pressed="true">Daily</button>
+                                <button id="analysisAverageBtn" onclick="atlasActions.setSmoothing('7day')" aria-pressed="false" title="Average of recent daily reports to make the trend easier to see">7-day average</button>
+                            </div>
+                        </fieldset>
+                        <div class="control-group viz-controls">
                             <label for="vizTypeSelector">Chart</label>
                             <select id="vizTypeSelector" aria-label="Visualization type" onchange="changeVisualization()">
                                 <option value="line">Trend line</option>
@@ -222,7 +239,6 @@
                             </select>
                         </div>
                     </div>
-                    <p id="analysisValueDate" class="analysis-value-date"></p>
                     <div id="analysisChartOptions" class="analytics-controls" hidden></div>
                     <div class="viz-content">
                         <div id="chartContainer" class="chart-container"></div>

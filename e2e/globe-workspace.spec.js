@@ -53,6 +53,46 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 1024, height: 10
     });
 }
 
+for (const viewport of [{ width: 1440, height: 1000 }, { width: 1440, height: 760 }, { width: 1024, height: 1000 }, { width: 390, height: 844 }]) {
+    test(`expanded color ranges preserve bottom space and allow a full snapshot at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await page.setViewportSize(viewport);
+        await ready(page, '/?data=sample&country=us&smooth=raw');
+        await expect(page.locator('#countryInfo')).toBeVisible();
+        await page.evaluate(() => document.fonts.ready);
+        const layout = () => page.evaluate(() => {
+            const boxes = [...document.querySelectorAll('#exploreWorkspace > .panel')]
+                .filter(node => node.getClientRects().length).map(node => node.getBoundingClientRect());
+            const snapshot = document.getElementById('countryInfo');
+            return {
+                gap: document.documentElement.scrollHeight - Math.max(...boxes.map(box => box.bottom + scrollY)),
+                snapshotHeight: snapshot.getBoundingClientRect().height,
+                snapshotOverflow: snapshot.scrollHeight - snapshot.clientHeight,
+                settingsHeight: document.getElementById('explorerSettings').getBoundingClientRect().height,
+                rowHeight: document.getElementById('exploreWorkspace').getBoundingClientRect().height,
+                maximum: getComputedStyle(snapshot).maxHeight
+            };
+        });
+        const collapsed = await layout();
+        await page.locator('#globeLegend summary').click();
+        await expect(page.locator('#globeLegend details')).toHaveAttribute('open', '');
+        await expect.poll(async () => Math.round((await layout()).gap)).toBe(Math.round(Math.max(14, collapsed.gap)));
+        const expanded = await layout();
+        expect(expanded.snapshotOverflow).toBeLessThanOrEqual(1);
+        expect(expanded.snapshotHeight).toBeGreaterThanOrEqual(collapsed.snapshotHeight);
+        if (viewport.width >= 1200) {
+            expect(expanded.snapshotHeight).toBeCloseTo(expanded.rowHeight, 1);
+            expect(expanded.settingsHeight).toBeCloseTo(expanded.rowHeight, 1);
+        }
+        await page.locator('#globeLegend summary').click();
+        await expect(page.locator('#globeLegend details')).not.toHaveAttribute('open');
+        const restored = await layout();
+        expect(restored.snapshotHeight).toBeCloseTo(collapsed.snapshotHeight, 1);
+        expect(restored.gap).toBeCloseTo(collapsed.gap, 0);
+        expect(restored.maximum).toBe(collapsed.maximum);
+    });
+}
+
 for (const fallback of [false, true]) {
     test(`globe expands, resizes, and exits through Escape with ${fallback ? 'CSS fallback' : 'Fullscreen API'}`, async ({ page }) => {
         await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -255,47 +295,41 @@ test('globe rotates slowly by default, stops after contact, and resumes only aft
 });
 
 for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 740 }]) {
-test(`analysis keeps its static chart selector beside the numeric value at ${viewport.width}px`, async ({ page }) => {
+test(`analysis keeps its static settings above the date controls at ${viewport.width}px`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.setViewportSize(viewport);
     await ready(page, '/?data=sample&country=us&metric=cumulative_confirmed&smooth=raw');
-    const referenceGap = await page.evaluate(() => Math.max(18, innerHeight - Math.max(...[...document.querySelectorAll('#exploreWorkspace > .panel')]
-        .filter(node => node.getClientRects().length).map(node => node.getBoundingClientRect().bottom + scrollY))));
     await page.locator('#seeMoreBtn').click();
     await expect(page.locator('#analysisValue')).toContainText(/\d/);
-    async function expectValueRow() {
+    async function expectSettingsLayout() {
         const boxes = await page.evaluate(() => {
             const value = document.getElementById('analysisValue').getBoundingClientRect();
             const selector = document.getElementById('vizTypeSelector').getBoundingClientRect();
-            const offset = new DOMMatrixReadOnly(getComputedStyle(document.querySelector('.viz-controls')).transform).m42;
+            const controls = document.querySelector('.analysis-controls').getBoundingClientRect();
             const caption = document.getElementById('analysisValueDate').getBoundingClientRect();
             const dates = document.getElementById('chartControlsContainer').getBoundingClientRect();
-            return { valueRight: value.right, valueTop: value.top, valueBottom: value.bottom, valueCenter: value.top + value.height / 2,
-                selectorLeft: selector.left, selectorRight: selector.right, selectorTop: selector.top, selectorBottom: selector.bottom,
-                selectorCenter: selector.top + selector.height / 2, selectorOffset: offset,
-                captionTop: caption.top, datesTop: dates.top, datesRight: dates.right };
+            return { valueBottom: value.bottom, selectorRight: selector.right,
+                controlsTop: controls.top, controlsBottom: controls.bottom,
+                captionTop: caption.top, captionBottom: caption.bottom, datesTop: dates.top, datesRight: dates.right };
         });
-        expect(boxes.valueRight).toBeLessThanOrEqual(boxes.selectorLeft);
-        // A visual offset leaves the value and selector aligned in the grid.
-        expect(Math.abs(boxes.selectorCenter - boxes.selectorOffset - boxes.valueCenter)).toBeLessThan(1);
-        expect(Math.max(boxes.valueTop, boxes.selectorTop - boxes.selectorOffset))
-            .toBeLessThan(Math.min(boxes.valueBottom, boxes.selectorBottom - boxes.selectorOffset));
         expect(boxes.captionTop).toBeGreaterThanOrEqual(boxes.valueBottom);
+        expect(boxes.controlsTop).toBeGreaterThanOrEqual(boxes.captionBottom);
         expect(Math.abs(boxes.selectorRight - boxes.datesRight)).toBeLessThan(2);
-        expect(boxes.selectorBottom - boxes.selectorOffset).toBeLessThan(boxes.datesTop);
+        expect(boxes.controlsBottom).toBeLessThan(boxes.datesTop);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }
-    await expectValueRow();
+    await expectSettingsLayout();
     const initialSelector = await page.locator('#vizTypeSelector').evaluate(node => node.getBoundingClientRect().top + scrollY);
     await page.evaluate(() => scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
     expect(await page.locator('#vizTypeSelector').evaluate(node => node.getBoundingClientRect().top + scrollY)).toBeCloseTo(initialSelector, 1);
     expect(await page.locator('#vizTypeSelector').evaluate(node => getComputedStyle(node.closest('.viz-controls')).position)).toBe('static');
     const gap = await page.locator('#visualizationPanel').evaluate(node => document.documentElement.scrollHeight - (node.getBoundingClientRect().bottom + scrollY));
-    expect(Math.abs(gap - referenceGap)).toBeLessThan(2);
+    expect(gap).toBeGreaterThanOrEqual(3);
+    expect(gap).toBeLessThanOrEqual(7);
     await page.screenshot({ path: `test-results/country-analysis-fixed-chart-control-${viewport.width}.png` });
     await page.locator('#vizTypeSelector').selectOption('scatter');
     await expect(page.locator('#analysisChartOptions')).toBeVisible();
-    await expectValueRow();
+    await expectSettingsLayout();
     const scatterSelector = await page.locator('#vizTypeSelector').evaluate(node => node.getBoundingClientRect().top + scrollY);
     await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));
     expect(await page.locator('#vizTypeSelector').evaluate(node => node.getBoundingClientRect().top + scrollY)).toBeCloseTo(scatterSelector, 1);

@@ -166,7 +166,8 @@ test('desktop exploration keeps the still globe and communicates metric, source,
     await ready(page);
     await expect(page.locator('#dataSourceSelector')).toHaveValue('sample');
     await expect(page.locator('#mapMetricLabel')).toHaveText('New confirmed cases');
-    await expect(page.locator('#mapUnitsLabel')).toContainText('7-day average');
+    await expect(page.locator('#mapUnitsLabel')).toHaveText('Absolute count');
+    await expect(page.locator('#rawBtn')).toHaveAttribute('aria-pressed', 'true');
     expect(await page.locator('#globe .country').count()).toBeGreaterThan(150);
     expect(await page.evaluate(() => window.globeInstance.autoRotate)).toBe(false);
     expect(await page.evaluate(() => window.globeInstance.projection.clipAngle())).toBe(90);

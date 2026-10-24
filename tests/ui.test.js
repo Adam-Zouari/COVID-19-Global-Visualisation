@@ -49,6 +49,24 @@ function harness(t) {
         resetCount: () => resetCount, stopCount: () => stopCount, resizeCount: () => resizeCount };
 }
 
+test('focus indicators follow pointer and keyboard interaction without changing focused controls', t => {
+    const { window, document } = harness(t);
+    const button = document.getElementById('rawBtn'), root = document.documentElement;
+    button.addEventListener('pointerdown', () => {
+        assert.equal(root.dataset.inputModality, 'pointer');
+        button.focus();
+    });
+    button.dispatchEvent(new window.Event('pointerdown', { bubbles: true }));
+    assert.equal(document.activeElement, button);
+    button.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Shift', bubbles: true }));
+    assert.equal(root.dataset.inputModality, 'pointer');
+    button.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    assert.equal(root.dataset.inputModality, 'keyboard');
+    assert.equal(document.activeElement, button);
+    button.dispatchEvent(new window.Event('pointerdown', { bubbles: true }));
+    assert.equal(root.dataset.inputModality, 'pointer');
+});
+
 test('search and comparison treat imported country names as literal text', t => {
     const { window, document, compare } = harness(t);
     window.initializeUI(); window.openSearch();
@@ -120,6 +138,50 @@ test('comparison sliders reach every active metric date and labels agree with fi
     assert.equal(document.getElementById('compare-date-range-start-input').value, prepared[0].dates[0]);
     assert.equal(document.getElementById('compare-date-range-end-input').value, prepared[0].dates.at(-1));
     assert.equal(prepared[0].dates[0], service.availableDates[107]); assert.equal(prepared[1].dates[0], prepared[0].dates[0]);
+});
+
+test('single-date chart arrows step calendar days through sparse observations and stay synchronized', t => {
+    const { window, document, context, service } = harness(t);
+    vm.runInContext(readFileSync(new URL('../src/ui/analytics.js', import.meta.url), 'utf8'), context);
+    service.metricDates = ['2020-02-28', '2020-03-02']; service.currentDate = service.metricDates[0];
+    const host = document.getElementById('compareChartOptions');
+    let options = {}, changes = 0;
+    const render = () => window.AnalyticsCharts.controls(host, 'horizontal', options, next => {
+        options = next; changes++; render();
+    });
+    render();
+    const previous = document.getElementById('compare-date-prev'), next = document.getElementById('compare-date-next');
+    const field = document.getElementById('compare-date'), slider = document.getElementById('compare-date-slider');
+    assert.equal(previous.disabled, true); assert.equal(next.disabled, false);
+    previous.click(); assert.equal(changes, 0);
+    next.focus(); next.click();
+    assert.equal(field.value, '2020-02-29'); assert.equal(slider.value, '0');
+    assert.equal(document.activeElement, next);
+    next.click(); assert.equal(field.value, '2020-03-01');
+    next.click(); assert.equal(field.value, '2020-03-02'); assert.equal(next.disabled, true);
+    assert.equal(slider.value, '1'); next.click(); assert.equal(changes, 3);
+    previous.click(); assert.equal(field.value, '2020-03-01');
+    field.value = '2020-02-29'; field.dispatchEvent(new window.Event('change'));
+    previous.click(); assert.equal(field.value, '2020-02-28'); assert.equal(previous.disabled, true);
+    slider.value = '1'; slider.dispatchEvent(new window.Event('input'));
+    assert.equal(field.value, '2020-03-02'); assert.equal(next.disabled, true);
+    assert.equal(host.querySelectorAll('[data-date-step]').length, 2);
+});
+
+test('single-date chart arrows are disabled for empty and one-date timelines', t => {
+    const { window, document, context, service } = harness(t);
+    vm.runInContext(readFileSync(new URL('../src/ui/analytics.js', import.meta.url), 'utf8'), context);
+    const host = document.getElementById('compareChartOptions');
+    let changes = 0;
+    for (const dates of [[], ['2020-02-28']]) {
+        service.metricDates = dates;
+        window.AnalyticsCharts.controls(host, 'horizontal', {}, () => { changes++; });
+        assert.equal(document.getElementById('compare-date-slider').disabled, true);
+        for (const button of host.querySelectorAll('[data-date-step]')) {
+            assert.equal(button.disabled, true); button.click();
+        }
+    }
+    assert.equal(changes, 0);
 });
 
 test('comparison period shares a highlighted track and touch date fields preserve exact chart bounds', t => {
@@ -257,4 +319,41 @@ test('comparison keeps select options and focus during updates and updates popul
     assert.equal(rateOption.disabled, true);
     service.getPopulation = () => 1000000; compare.syncControls();
     assert.equal(rateOption.disabled, false);
+});
+
+test('country analysis settings mirror current dataset, units and reporting without replacing focused controls', t => {
+    const { window, document, service, globe } = harness(t);
+    globe.selectedCountryCode = 'tn';
+    const metadata = service.getMetricMetadata.bind(service);
+    service.getMetricMetadata = (column = service.currentColumn) => column === 'cumulative_confirmed' ? {
+        ...metadata(column), label: 'Total confirmed cases', kind: 'cumulative', smoothingAllowed: false
+    } : metadata(column);
+    service.availableColumns.epidem.push('cumulative_confirmed');
+    window.updateAtlasPresentation();
+    const metrics = document.getElementById('analysisMetricSelector');
+    const units = document.getElementById('analysisUnitSelector');
+    const reporting = document.getElementById('analysisReportingGroup');
+    assert.deepEqual(Array.from(metrics.options, option => option.value), service.availableColumns.epidem);
+    assert.equal(metrics.value, 'new_confirmed'); assert.equal(units.value, 'count');
+    assert.equal(reporting.hidden, false);
+    const metricOption = metrics.options[0], rateOption = units.querySelector('[value="per100k"]');
+    metrics.focus();
+    service.currentColumn = 'new_tested'; service.displayUnit = 'per100k'; service.smoothing = '7day';
+    window.updateAtlasPresentation();
+    assert.equal(metrics.value, 'new_tested'); assert.equal(units.value, 'per100k');
+    assert.equal(document.getElementById('unitSelector').value, 'per100k');
+    assert.equal(document.getElementById('analysisAverageBtn').getAttribute('aria-pressed'), 'true');
+    assert.equal(document.getElementById('analysisRawBtn').getAttribute('aria-pressed'), 'false');
+    assert.equal(document.activeElement, metrics); assert.equal(metrics.options[0], metricOption);
+    assert.equal(units.querySelector('[value="per100k"]'), rateOption);
+    service.getPopulation = () => null;
+    window.updateAtlasPresentation();
+    assert.equal(rateOption.disabled, true);
+    service.availableColumns.vaccinations = ['cumulative_confirmed'];
+    service.currentDataset = 'vaccinations'; service.currentColumn = 'cumulative_confirmed';
+    service.displayUnit = 'count'; service.smoothing = 'raw';
+    window.updateAtlasPresentation();
+    assert.deepEqual(Array.from(metrics.options, option => option.value), ['cumulative_confirmed']);
+    assert.equal(metrics.value, 'cumulative_confirmed'); assert.equal(reporting.hidden, true);
+    assert.equal(document.getElementById('analysisAverageBtn').disabled, true);
 });

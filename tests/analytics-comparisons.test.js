@@ -111,6 +111,59 @@ test('heatmaps distinguish zero, correction, missing, partial and inactive cells
     assert.doesNotMatch(container.innerHTML, /NaN|Infinity/);
 });
 
+test('heatmap color bars match cells and label the numeric range and units in either theme', t => {
+    for (const theme of ['dark', 'light']) for (const width of [320, 1200]) {
+        const { container, renderers } = harness(t, width, theme);
+        const columns = ['zero', 'middle', 'maximum', 'correction', 'missing', 'inactive'].map(key => ({ key, label: key }));
+        renderers.heatmap(container, { ...common, columns, rows: [{ key: 'tn', label: 'Tunisia', cells: columns.map((column, index) => ({
+            ...column, value: [0, 4, 8, -3, null, 100][index], expectedDays: index === 5 ? 0 : 7,
+            reportedDays: index === 4 ? 0 : 7, partial: index === 1
+        })) }] });
+        const legend = container.querySelector('.heatmap-value-legend'), bar = legend.querySelector('.heatmap-value-bar');
+        assert.ok(legend.classList.contains('chart-color-legend'), 'Heatmaps and scatter plots share the same color-bar presentation');
+        assert.equal(legend.getAttribute('role'), 'img');
+        assert.match(legend.getAttribute('aria-label'), /Cases per 100,000 people: 0 to 8.*Lower values.*higher values/);
+        assert.equal(legend.querySelector('.heatmap-value-label').textContent, common.unitLabel);
+        assert.deepEqual([...legend.querySelector('.heatmap-value-range').children].map(node => node.textContent), ['0', '8']);
+        const colors = (bar.style.backgroundImage.match(/rgba?\([^)]+\)|#[\da-f]{3,8}\b/gi) || []).map(color => d3.color(color).formatHex());
+        const marks = [...container.querySelectorAll('.heatmap-cell')];
+        for (const [stop, mark] of [[0, 0], [4, 1], [8, 2]]) assert.equal(colors[stop], d3.color(marks[mark].getAttribute('fill')).formatHex());
+        const keys = container.querySelector('.heatmap-status-legend');
+        assert.equal(keys.querySelectorAll('.legend-item').length, 3, 'Exceptional states remain separate from the continuous value range');
+        assert.equal(keys.querySelectorAll('.legend-hatched').length, 1);
+        assert.match(keys.textContent, /Negative correction.*No displayable value.*Hatched: partial reports/);
+        assert.equal(legend.querySelector('i'), null, 'Numeric values use a continuous bar instead of disconnected swatches');
+        assert.doesNotMatch(container.innerHTML, /NaN|Infinity/);
+    }
+});
+
+test('heatmap color legends avoid invented ranges for zero-only, negative-only and unavailable observations', t => {
+    const { container, renderers } = harness(t, 320);
+    const columns = [{ key: 'a', label: 'First day' }, { key: 'b', label: 'Second day' }];
+    const render = values => renderers.heatmap(container, { ...common, columns,
+        rows: [{ key: 'tn', label: 'Tunisia', cells: columns.map((column, index) => ({ ...column, value: values[index], expectedDays: 1 })) }] });
+    render([0, 0]);
+    const legend = container.querySelector('.heatmap-value-legend'), bar = legend.querySelector('.heatmap-value-bar');
+    assert.equal(bar.style.backgroundImage, '');
+    assert.equal(d3.color(bar.style.backgroundColor).formatHex(), d3.color(container.querySelector('.heatmap-cell').getAttribute('fill')).formatHex());
+    assert.equal(legend.querySelector('.heatmap-value-range').textContent, '0');
+    assert.match(legend.getAttribute('aria-label'), /All nonnegative reported values are zero/);
+    assert.equal(container.querySelector('.heatmap-status-legend'), null);
+    for (const values of [[-3, -7], [null, null], [-3, null]]) {
+        render(values);
+        assert.equal(container.querySelector('.heatmap-value-legend'), null, 'No nonnegative range is drawn without nonnegative observations');
+        if (values.every(value => value === null)) {
+            assert.equal(container.querySelector('.heatmap-status-legend'), null);
+            assert.equal(container.querySelector('svg'), null);
+            assert.match(container.querySelector('.chart-empty-state').textContent, /No data available.*Try another metric or date range/);
+            continue;
+        }
+        assert.equal(container.querySelectorAll('.heatmap-status-legend').length, 1);
+        assert.equal(container.textContent.includes('Negative correction'), values.some(value => value < 0));
+        assert.equal(container.textContent.includes('No displayable value'), values.includes(null));
+    }
+});
+
 test('large heatmaps fit the chart without scrolling and retain every keyboard-inspectable source cell', t => {
     const { window, container, renderers } = harness(t, 320);
     const columns = Array.from({ length: 150 }, (_, index) => ({ key: String(index), label: `Week ${index + 1}` }));
@@ -156,6 +209,7 @@ test('scatter plots encode shared dates with color, retain tiny and negative val
         ] });
     const points = [...container.querySelectorAll('.scatter-point')];
     assert.equal(points.length, 3);
+    assert.equal(container.querySelector('svg title'), null, 'ARIA labels and themed tooltips do not create duplicate native hover bubbles');
     assert.equal(new Set(points.map(point => point.getAttribute('fill'))).size, 3);
     assert.equal(new Set(points.map(point => point.getAttribute('r'))).size, 1);
     assertDateLegend(container, ['2021-01-01', '2021-01-03']);
@@ -216,7 +270,7 @@ test('2D and 3D scatter date scales match points in each theme, redraw for new p
         assertDateLegend(container, ['2021-01-03']);
         renderers.scatter(container, { ...model, items: [] });
         assert.equal(container.querySelector('.scatter-date-legend'), null);
-        assert.ok(container.querySelector('.analytics-empty'));
+        assert.ok(container.querySelector('.chart-empty-state'));
     }
 });
 
@@ -379,8 +433,11 @@ test('comparison renderers stay finite in both themes at narrow and desktop widt
         const { container, renderers } = harness(t, width, theme);
         for (const type of ['horizontal', 'heatmap', 'scatter', 'dumbbell']) {
             renderers[type](container, { ...common, type, items: [], rows: [], columns: [] });
-            assert.equal(container.querySelectorAll('svg').length, 1);
-            assert.ok(container.querySelector('.analytics-empty'));
+            assert.equal(container.querySelectorAll('svg').length, 0);
+            assert.ok(container.querySelector('.chart-empty-state'));
+            assert.equal(container.querySelector('.chart-empty-state').getAttribute('role'), 'status');
+            assert.equal(container.querySelector('.chart-heading-title').textContent, common.title);
+            assert.equal(container.querySelector('.chart-subtitle').textContent, common.subtitle);
             assert.equal(container.querySelector('.scatter-date-legend'), null);
             assert.doesNotMatch(container.innerHTML, /NaN|Infinity/);
         }

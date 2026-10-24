@@ -60,3 +60,52 @@ test('releasing an unchanged slider does not redraw the same range twice', t => 
     assert.equal(changes.length, 1, 'A committed selection is still announced');
     assert.equal(changes[0].selected.start, '2020-01-02');
 });
+
+test('typed multi-digit dates stay editable until Enter or blur commits the complete date', t => {
+    const dates = Array.from({ length: 31 }, (_, index) => `2020-01-${String(index + 1).padStart(2, '0')}`);
+    const { instance, window, changes } = control(t, dates);
+    const field = instance.dateInputs.end;
+    field.focus();
+    field.dispatchEvent(new window.KeyboardEvent('keydown', { key: '2' }));
+    field.value = '2020-01-02'; field.dispatchEvent(new window.Event('change'));
+    instance.refresh();
+    assert.equal(field.value, '2020-01-02', 'A presentation update must preserve the date still being typed');
+    assert.equal(instance.getDates().end, '2020-01-31');
+    assert.equal(changes.length, 0);
+    field.dispatchEvent(new window.KeyboardEvent('keydown', { key: '3' }));
+    field.value = '2020-01-23'; field.dispatchEvent(new window.Event('change'));
+    field.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+    assert.equal(instance.getDates().end, '2020-01-23');
+    assert.equal(changes.length, 1);
+    field.blur();
+    assert.equal(changes.length, 1, 'Leaving an already committed date does not render it twice');
+
+    const start = instance.dateInputs.start;
+    start.focus(); start.dispatchEvent(new window.KeyboardEvent('keydown', { key: '1' }));
+    start.value = '2020-01-12'; start.dispatchEvent(new window.Event('change'));
+    assert.equal(changes.length, 1);
+    start.blur();
+    assert.equal(instance.getDates().start, '2020-01-12');
+    assert.equal(changes.length, 2);
+});
+
+test('incomplete typed dates restore the selected date on blur and Escape cancels an edit', t => {
+    const { instance, window, changes } = control(t);
+    const field = instance.dateInputs.start;
+    field.focus(); field.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Backspace' }));
+    field.value = ''; field.dispatchEvent(new window.Event('change'));
+    field.blur();
+    assert.equal(field.value, '2020-01-01');
+    assert.equal(changes.length, 0);
+    field.focus(); field.dispatchEvent(new window.KeyboardEvent('keydown', { key: '2' }));
+    field.value = '2020-01-02'; field.dispatchEvent(new window.Event('change'));
+    let escapes = 0;
+    window.document.addEventListener('keydown', event => { if (event.key === 'Escape') escapes++; });
+    field.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(field.value, '2020-01-01');
+    assert.equal(escapes, 0, 'Cancelling a draft must not also close the enclosing panel');
+    field.blur();
+    assert.equal(changes.length, 0);
+    field.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(escapes, 1, 'An Escape without a draft still reaches normal panel navigation');
+});

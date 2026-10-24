@@ -3,13 +3,6 @@
     const finite = value => typeof value === 'number' && Number.isFinite(value);
     const availableWidth = container => container.getBoundingClientRect().width || container.clientWidth || 700;
 
-    function empty(frame, model, fallback) {
-        frame.plot.append('text').attr('class', 'chart-empty-label')
-            .attr('x', frame.innerWidth / 2).attr('y', frame.innerHeight / 2)
-            .attr('text-anchor', 'middle').attr('fill', 'var(--muted)')
-            .text(model.emptyMessage || fallback);
-    }
-
     // Character limits work before fonts load and in SVG environments without getBBox.
     function wrap(selection, limit, maxLines = Infinity) {
         selection.each(function() {
@@ -67,10 +60,10 @@
     function box(container, model) {
         const P = window.AnalyticsPlot;
         const groups = (model.groups || []).map(group => ({ ...group, values: group.values.filter(finite).sort(d3.ascending) }));
-        const frame = P.frame(container, model, { height: Math.max(260, groups.length * 78 + 95),
+        const frame = P.frame(container, { ...model, type: 'box' }, { height: Math.max(260, groups.length * 78 + 95),
             margin: { left: Math.min(150, Math.max(80, availableWidth(container) * 0.23)), right: 22, top: 25 } });
         const values = groups.flatMap(group => group.values), summaries = groups.map(statistics);
-        if (!values.length) return empty(frame, model, 'No reported observations for this distribution');
+        if (!values.length) return P.empty(frame, 'No reported observations are available for this distribution.');
         const x = d3.scaleLinear().domain(valueDomain(values)).nice().range([0, frame.innerWidth]);
         const y = d3.scaleBand().domain(d3.range(groups.length)).range([0, frame.innerHeight]).padding(0.35);
         horizontalAxes(frame, groups, x, y, model.unitLabel);

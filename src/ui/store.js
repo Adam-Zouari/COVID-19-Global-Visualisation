@@ -1,6 +1,6 @@
 const DEFAULTS = {
     view: 'explore', category: 'epidem', metric: 'new_confirmed', unit: 'count',
-    smoothing: '7day', selectedDate: null, selectedCountry: null, analysisOpen: false,
+    smoothing: 'raw', selectedDate: null, selectedCountry: null, analysisOpen: false,
     compareCountries: [], compareRange: { start: 0, end: 100 }, compareLayout: 'combined',
     compareChartType: 'line', compareScale: 'shared', compareChartOptions: {}, dataMode: 'csv'
 };
@@ -46,7 +46,7 @@ export function readURLState(search) {
     try { if ((params.get('chartOptions') || '').length <= 1500) chartOptions = readChartOptions(JSON.parse(params.get('chartOptions') || '{}')); } catch { /* Ignore invalid shared chart options. */ }
     return {
         category, unit, metric: params.get('metric') || null,
-        smoothing: params.get('smooth') === 'raw' ? 'raw' : '7day',
+        smoothing: params.get('smooth') === '7day' ? '7day' : 'raw',
         view: params.get('view') === 'compare' ? 'compare' : 'explore',
         selectedDate: /^\d{4}-\d{2}-\d{2}$/.test(params.get('date') || '') ? params.get('date') : null,
         selectedCountry,
@@ -68,7 +68,7 @@ export function stateToURL(state, currentURL) {
         view: state.view === 'compare' ? 'compare' : null,
         category: state.category === 'epidem' ? null : state.category,
         metric: state.metric, unit: state.unit === 'count' ? null : state.unit,
-        smooth: state.smoothing === 'raw' ? 'raw' : null,
+        smooth: state.smoothing === '7day' ? '7day' : null,
         date: state.selectedDate, country: state.selectedCountry,
         analysis: state.analysisOpen === true && typeof state.selectedCountry === 'string' && /^[a-z]{2}$/i.test(state.selectedCountry) ? '1' : null,
         compare: state.compareCountries?.length ? state.compareCountries.join(',') : null,

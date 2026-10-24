@@ -130,7 +130,10 @@ test('Compare is the first painted view before app and data load, and reload pre
             await expect(page.locator('#compareChartType')).toHaveValue('bar');
             await expect(page.locator('.country-chart-container svg')).toHaveCount(2);
             const params = new URL(page.url()).searchParams;
-            for (const [key, value] of new URL(path, page.url()).searchParams) expect(params.get(key), key).toBe(value);
+            for (const [key, value] of new URL(path, page.url()).searchParams) {
+                // Daily reporting is now the implicit URL default.
+                expect(params.get(key), key).toBe(key === 'smooth' && value === 'raw' ? null : value);
+            }
             await assertNoExploreFrames(page);
         }
     } finally {

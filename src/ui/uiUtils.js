@@ -3,6 +3,13 @@ let timelineTimer = null;
 let timelineSpeed = 1;
 const timelineSpeeds = [0.5, 1, 2, 4];
 
+// Run before click handlers move focus into menus or onto panel headings.
+// Keep that focus for accessibility without showing keyboard rings after a tap.
+document.addEventListener('pointerdown', () => { document.documentElement.dataset.inputModality = 'pointer'; }, true);
+document.addEventListener('keydown', event => {
+    if (!['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) document.documentElement.dataset.inputModality = 'keyboard';
+}, true);
+
 function applyDatasetTheme(dataset) {
     document.documentElement.dataset.category = dataset;
     const ids = { epidem: 'epidemBtn', hospitalizations: 'hospBtn', vaccinations: 'vaccBtn' };
@@ -105,6 +112,26 @@ function syncAtlasState() {
     updateAtlasPresentation();
 }
 
+function updateCountryAnalysisControls() {
+    const service = window.dataService || window.globeInstance?.dataService;
+    if (!service) return;
+    const scatter = document.getElementById('vizTypeSelector')?.value === 'scatter';
+    for (const id of ['analysisMetricControl', 'analysisUnitControl']) {
+        const group = document.getElementById(id);
+        if (group) group.hidden = scatter;
+    }
+    const reporting = document.getElementById('analysisReportingGroup');
+    if (reporting) reporting.hidden = scatter || !currentMetric().smoothingAllowed;
+    const metrics = document.getElementById('analysisMetricSelector');
+    if (metrics) {
+        const columns = service.availableColumns[service.currentDataset] || [];
+        updateSelectOptions(metrics, columns.map(value => ({ value, label: service.getMetricMetadata(value).label })));
+        metrics.value = service.currentColumn;
+        metrics.title = currentMetric().label;
+        metrics.disabled = !columns.length;
+    }
+}
+
 function updateAtlasPresentation() {
     const service = window.dataService || window.globeInstance?.dataService;
     if (!service) return;
@@ -123,15 +150,17 @@ function updateAtlasPresentation() {
     if (metricName) { metricName.textContent = metric.label; metricName.hidden = metric.label.length < 33; }
     setText('mapUnitsLabel', `${unitText}${service.smoothing === '7day' ? ' · 7-day average' : ''}`);
     setText('timelineMeasure', service.smoothing === '7day' ? 'Trailing 7-day average' : 'Observation date');
-    const units = document.getElementById('unitSelector');
-    if (units) {
-        const populationAvailable = hasPopulation();
-        updateSelectOptions(units, metric.allowedUnits.map(value => ({ value,
-            label: value === 'count' ? 'Absolute count' : service.getUnitLabel?.(service.currentColumn, value) || value,
-            disabled: value !== 'count' && !populationAvailable })));
+    const populationAvailable = hasPopulation();
+    const unitChoices = metric.allowedUnits.map(value => ({ value,
+        label: value === 'count' ? 'Absolute count' : service.getUnitLabel?.(service.currentColumn, value) || value,
+        disabled: value !== 'count' && !populationAvailable }));
+    for (const id of ['unitSelector', 'analysisUnitSelector']) {
+        const units = document.getElementById(id);
+        if (!units) continue;
+        updateSelectOptions(units, unitChoices);
         units.value = service.displayUnit || 'count';
     }
-    for (const [id, value] of [['rawBtn', 'raw'], ['averageBtn', '7day']]) {
+    for (const [id, value] of [['rawBtn', 'raw'], ['averageBtn', '7day'], ['analysisRawBtn', 'raw'], ['analysisAverageBtn', '7day']]) {
         const button = document.getElementById(id);
         if (!button) continue;
         const active = (service.smoothing || 'raw') === value;
@@ -140,6 +169,7 @@ function updateAtlasPresentation() {
     }
     const smoothingGroup = document.querySelector('.smoothing-group');
     if (smoothingGroup) smoothingGroup.hidden = !metric.smoothingAllowed;
+    updateCountryAnalysisControls();
     if (dates.length) {
         const firstYear = Number(dates[0].slice(0, 4)), lastYear = Number(dates.at(-1).slice(0, 4));
         setText('availablePeriod', firstYear === lastYear ? String(firstYear) : `${firstYear} — ${lastYear}`);

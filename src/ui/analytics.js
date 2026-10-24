@@ -81,7 +81,21 @@ window.AnalyticsCharts = {
                 const label = document.createElement('label'); label.htmlFor = id; label.textContent = field.label;
                 input = document.createElement(field.kind ? 'input' : 'select'); input.id = id;
                 if (field.kind) input.type = field.kind;
-                group.append(label, input); host.appendChild(group);
+                if (field.kind === 'range') {
+                    const timeline = document.createElement('div'); timeline.className = 'single-date-slider';
+                    for (const step of [-1, 1]) {
+                        const button = document.createElement('button'); button.type = 'button'; button.className = 'icon-btn';
+                        button.id = `${scope === 'country' ? 'analysis' : 'compare'}-date-${step < 0 ? 'prev' : 'next'}`;
+                        button.dataset.dateStep = String(step);
+                        const label = step < 0 ? 'Previous date' : 'Next date';
+                        button.setAttribute('aria-label', label); button.title = label;
+                        button.textContent = step < 0 ? '\u2039' : '\u203a';
+                        if (step > 0) timeline.appendChild(input);
+                        timeline.appendChild(button);
+                    }
+                    group.append(label, timeline);
+                } else group.append(label, input);
+                host.appendChild(group);
             }
             const dates = this.timeline(service, type, scope, options);
             if (field.kind === 'range') {
@@ -91,15 +105,28 @@ window.AnalyticsCharts = {
                 input.value = String(exact >= 0 ? exact : Math.max(0, dates.findLastIndex(date => date <= options.date)));
                 input.setAttribute('aria-valuetext', options.date ? service.formatDate(options.date) : 'No observations');
                 input.oninput = () => onChange({ date: dates[Number(input.value)] });
+                for (const button of input.parentElement.querySelectorAll('[data-date-step]')) {
+                    const step = Number(button.dataset.dateStep);
+                    button.disabled = dates.length < 2 || !options.date || (step < 0 ? options.date <= dates[0] : options.date >= dates.at(-1));
+                    button.onclick = () => {
+                        if (button.disabled) return;
+                        const date = new Date(Date.parse(`${options.date}T00:00:00Z`) + step * 86400000).toISOString().slice(0, 10);
+                        onChange(this.normalizedOptions(service, type, { ...options, date }, scope));
+                    };
+                }
                 continue;
             }
             if (field.choices) updateSelectOptions(input, field.choices);
             else { input.min = dates[0] || ''; input.max = dates.at(-1) || ''; }
-            input.value = options[field.key] || '';
+            if (field.kind === 'date') {
+                DateInput.bind(input, requested => {
+                    if (!requested || !input.checkValidity()) { DateInput.sync(input, options[field.key]); return; }
+                    onChange(this.normalizedOptions(service, type, { ...options, [field.key]: requested }, scope));
+                });
+                DateInput.sync(input, options[field.key]);
+            } else input.value = options[field.key] || '';
             input.title = field.choices?.find(choice => choice.value === input.value)?.label || field.label;
-            input.onchange = () => {
-                if (field.kind === 'date' && !input.value) { onChange(this.normalizedOptions(service, type, {}, scope)); return; }
-                if (field.kind === 'date' && !input.checkValidity()) { input.reportValidity(); return; }
+            if (field.kind !== 'date') input.onchange = () => {
                 onChange(this.normalizedOptions(service, type, { ...options, [field.key]: input.value }, scope));
             };
         }
@@ -115,19 +142,20 @@ window.AnalyticsCharts = {
         if (!this.definition(type)?.[settings.scope]) return ChartFactory.showError(container, 'Choose a supported chart type.');
         const options = this.normalizedOptions(service, type, settings.options, settings.scope);
         const timeline = settings.timeline || this.timeline(service, type, settings.scope, options);
+        const bounds = this.bounds(service, settings.dateRange, timeline);
         const model = AnalyticsData.build(type, service, {
-            ...options, ...this.bounds(service, settings.dateRange, timeline),
+            ...options, ...bounds,
             scope: settings.scope, countries: settings.countries, country: settings.country,
             column: service.currentColumn, unit: service.displayUnit,
             smoothing: type === 'scatter' && settings.scope === 'country' ? options.smoothing : service.smoothing,
             date: options.date || service.currentDate
         });
+        if (!model.subtitle) {
+            const metric = service.getMetricMetadata(service.currentColumn);
+            model.subtitle = `${metric.label} · ${ChartFactory.smoothingLabel(metric, service.smoothing)} · ${ChartFactory.periodLabel([bounds.startDate, bounds.endDate].filter(Boolean))}`;
+        }
         ChartFactory.clearChart(container);
-        if (model.emptyMessage) {
-            const title = document.createElement('h3'); title.className = 'chart-heading-title'; title.textContent = model.title;
-            container.appendChild(title); ChartFactory.showError(container, model.emptyMessage);
-            for (const warning of model.warnings || []) AnalyticsPlot.text(container, warning, 'chart-warning');
-        } else AnalyticsRenderers[type](container, model);
+        AnalyticsRenderers[type](container, model);
         return model;
     },
     renderCountry(container, country, type, settings) {

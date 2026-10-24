@@ -22,8 +22,10 @@ const ChartControls = {
         if (this.frame !== null) cancelAnimationFrame(this.frame);
         this.frame = requestAnimationFrame(() => {
             this.frame = null; const context = this.context;
-            if (context?.container.isConnected && !document.hidden && !window.CompareMode?.state.active && !document.getElementById('visualizationPanel')?.hidden)
-                ChartFactory.createChart(context.container, context.countryCode, context.vizType, this.getSettings());
+            if (!context?.container.isConnected || document.hidden || window.CompareMode?.state.active || document.getElementById('visualizationPanel')?.hidden) return;
+            const render = () => ChartFactory.createChart(context.container, context.countryCode, context.vizType, this.getSettings());
+            if (window.preserveCountryAnalysisScroll) window.preserveCountryAnalysisScroll(render);
+            else render();
         });
     }
 };

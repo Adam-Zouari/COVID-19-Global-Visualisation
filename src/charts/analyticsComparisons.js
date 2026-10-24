@@ -10,9 +10,6 @@
         return available.length && available.some(value => value !== 0) ?
             [Math.min(0, ...available), Math.max(0, ...available)] : [0, 1];
     };
-    const empty = (frame, message) => frame.plot.append('text').attr('class', 'analytics-empty')
-        .attr('x', frame.innerWidth / 2).attr('y', frame.innerHeight / 2).attr('text-anchor', 'middle')
-        .attr('fill', 'var(--muted)').text(message);
 
     function boundTickLabels(axis, left, right) {
         axis.selectAll('.tick text').each(function() {
@@ -58,11 +55,11 @@
 
     function horizontal(container, model) {
         const items = model.items || [], compact = narrow(container);
-        const frame = AnalyticsPlot.frame(container, model, {
+        const frame = AnalyticsPlot.frame(container, { ...model, type: 'horizontal' }, {
             height: Math.max(220, items.length * 31 + 94),
             margin: { left: compact ? 100 : 156, right: 62, top: 20, bottom: 64 }
         });
-        if (!items.length) return empty(frame, 'No reported values for this date.');
+        if (!items.some(item => finite(item.value))) return AnalyticsPlot.empty(frame, 'No reported values are available for the selected countries and date.');
         frame.svg.attr('role', 'group');
         const x = d3.scaleLinear().domain(domain(items.map(item => item.value))).nice().range([0, frame.innerWidth]);
         const y = d3.scaleBand().domain(items.map((_, index) => index)).range([0, frame.innerHeight]).padding(0.3);
@@ -90,10 +87,10 @@
 
     function heatmap(container, model) {
         const rows = model.rows || [], columns = model.columns || [], compact = narrow(container);
-        const frame = AnalyticsPlot.frame(container, model, {
+        const frame = AnalyticsPlot.frame(container, { ...model, type: 'heatmap' }, {
             height: Math.max(230, rows.length * 36 + 95), margin: { left: compact ? 100 : 156, right: 16, top: 20, bottom: 64 }
         });
-        if (!rows.length || !columns.length) return empty(frame, 'No reporting periods available.');
+        if (!rows.length || !columns.length) return AnalyticsPlot.empty(frame, 'No reporting periods are available for the selected country and date range.');
         frame.svg.attr('role', 'group');
         // Every source cell fits the chart. Keyboard inspection keeps narrow cells usable.
         const innerWidth = frame.innerWidth;
@@ -104,14 +101,16 @@
             return columns.map((column, columnIndex) => ({ ...lookup.get(column.key),
                 key: column.key, label: lookup.get(column.key)?.label || column.label, row, rowIndex, columnIndex }));
         });
-        const values = cells.flat().map(cell => cell.value).filter(finite), maximum = Math.max(0, ...values);
+        const inactive = cell => cell.expectedDays === 0;
+        const activeCells = cells.flat().filter(cell => !inactive(cell));
+        const values = activeCells.map(cell => cell.value).filter(finite), maximum = Math.max(0, ...values);
+        if (!values.length) return AnalyticsPlot.empty(frame, 'No reported observations are available for the selected countries and date range.');
         const light = document.documentElement.dataset.theme === 'light';
         const low = color('--heatmap-low', light ? '#dfedf8' : '#213c54');
         const high = color('--heatmap-high', AnalyticsPlot.seriesColor(0));
         const negative = color('--heatmap-negative', color('--warning', '#e8b766'));
         const missing = color('--heatmap-missing', color('--surface-raised', '#172437'));
         const scale = d3.scaleSequential(d3.interpolateRgb(low, high)).domain([0, maximum || 1]);
-        const inactive = cell => cell.expectedDays === 0;
         const partial = cell => finite(cell.value) && (cell.partial ||
             finite(cell.expectedDays) && finite(cell.reportedDays) && cell.reportedDays < cell.expectedDays);
         const patternId = `analytics-partial-${++sequence}`;
@@ -185,12 +184,17 @@
         marks.on('pointerenter.heatmap pointermove.heatmap', (event, cell) => inspect(cell.rowIndex, cell.columnIndex, event))
             .on('pointerleave.heatmap', () => { if (document.activeElement !== grid.node()) selection.attr('visibility', 'hidden'); AnalyticsPlot.hideTip(container); })
             .on('click.heatmap', (_event, cell) => { activeRow = cell.rowIndex; activeColumn = cell.columnIndex; grid.node().focus({ preventScroll: true }); inspect(activeRow, activeColumn); });
-        const entries = [{ label: `0 ${model.unitLabel || ''}`, color: low }];
-        if (maximum > 0) entries.push({ label: AnalyticsPlot.value(maximum / 2), color: scale(maximum / 2) }, { label: AnalyticsPlot.value(maximum), color: high });
+        const unit = model.unitLabel || 'Value';
+        if (values.some(value => value >= 0)) AnalyticsPlot.colorLegend(container, {
+            name: 'heatmap-value', label: unit, start: 0, end: maximum, color: scale, format: AnalyticsPlot.value,
+            description: maximum > 0 ? `${unit}: 0 to ${AnalyticsPlot.value(maximum)}. Lower values on the left, higher values on the right.` :
+                `${unit}: 0. All nonnegative reported values are zero.`
+        });
+        const entries = [];
         if (values.some(value => value < 0)) entries.push({ label: 'Negative correction', color: negative });
-        entries.push({ label: 'No displayable value', color: missing });
-        if (cells.flat().some(partial)) entries.push({ label: 'Hatched: partial reports', color: color('--text', '#f3f7fe') });
-        AnalyticsPlot.legend(container, entries);
+        if (activeCells.some(cell => !finite(cell.value))) entries.push({ label: 'No displayable value', color: missing });
+        if (activeCells.some(partial)) entries.push({ label: 'Hatched: partial reports', color: low, hatched: true });
+        if (entries.length) AnalyticsPlot.legend(container, entries, 'heatmap-status-legend');
     }
 
     const minimumZoom = 0.5, maximumZoom = 4;
@@ -221,28 +225,29 @@
     }
 
     function scatterDateLegend(container, timeColor, start, end) {
-        const legend = document.createElement('div'); legend.className = 'scatter-date-legend';
-        const format = d3.utcFormat('%b %-d, %Y'), iso = d3.utcFormat('%Y-%m-%d');
+        const format = value => d3.utcFormat('%b %-d, %Y')(new Date(value));
         const singleDate = start === end;
-        legend.setAttribute('role', 'img');
-        legend.setAttribute('aria-label', singleDate ? `Date: ${format(new Date(start))}. All points share this date.` :
-            `Date: ${format(new Date(start))} to ${format(new Date(end))}. Earlier dates on the left, later dates on the right.`);
-        const label = document.createElement('span'); label.className = 'scatter-date-label'; label.textContent = 'Date';
-        const bar = document.createElement('div'); bar.className = 'scatter-date-bar'; bar.setAttribute('aria-hidden', 'true');
-        if (singleDate) bar.style.backgroundColor = timeColor(start);
-        else {
-            const stops = Array.from({ length: 9 }, (_, index) => {
-                const fraction = index / 8;
-                return `${timeColor(start + (end - start) * fraction)} ${fraction * 100}%`;
-            });
-            bar.style.backgroundImage = `linear-gradient(to right, ${stops.join(', ')})`;
-        }
-        const range = document.createElement('div'); range.className = 'scatter-date-range';
-        for (const value of singleDate ? [start] : [start, end]) {
-            const date = new Date(value), endpoint = document.createElement('time');
-            endpoint.dateTime = iso(date); endpoint.textContent = format(date); range.appendChild(endpoint);
-        }
-        legend.append(label, bar, range); container.appendChild(legend);
+        return AnalyticsPlot.colorLegend(container, { name: 'scatter-date', label: 'Date', start, end, color: timeColor, format, dates: true,
+            description: singleDate ? `Date: ${format(start)}. All points share this date.` :
+                `Date: ${format(start)} to ${format(end)}. Earlier dates on the left, later dates on the right.` });
+    }
+
+    function fitScatterLegend(frame, legend) {
+        let offset = 0;
+        return () => {
+            if (!legend) return;
+            const svg = frame.svg.node().getBoundingClientRect();
+            const contents = frame.model.type === 'scatter-3d' ? [frame.plot.node()] :
+                [...frame.plot.node().querySelectorAll('.x-axis, .analytics-axis-label')];
+            const bottom = Math.min(svg.bottom, Math.max(svg.top, ...contents.map(node => node.getBoundingClientRect().bottom)));
+            const naturalTop = legend.getBoundingClientRect().top - offset;
+            // Move the legend within the chart's unused space, keeping its
+            // normal layout footprint and the page's bottom spacing intact.
+            offset = Math.min(0, bottom + 2 - naturalTop);
+            legend.style.transform = `translateY(${offset}px)`;
+            // Keep the tighter footer inside the panel when a zoomed cube fills the viewport.
+            legend.style.setProperty('--scatter-legend-offset', `${offset}px`);
+        };
     }
 
     function scatterPoints(frame, container, model, items, position, plot = frame.plot) {
@@ -260,7 +265,6 @@
         const update = () => points.attr('cx', item => position(item)[0]).attr('cy', item => position(item)[1]);
         update();
         AnalyticsPlot.bind(points, container, describe);
-        points.append('title').text(item => describe(item).join('. '));
         points.attr('tabindex', (_item, index) => index ? -1 : 0)
             .on('focus.roving', function() { points.attr('tabindex', -1); d3.select(this).attr('tabindex', 0); })
             .on('keydown.roving', function(event) {
@@ -270,14 +274,15 @@
                     Math.max(0, Math.min(nodes.length - 1, index + (event.key === 'ArrowRight' ? 1 : -1)));
                 nodes[next].focus({ preventScroll: true });
             });
-        if (dated) scatterDateLegend(container, timeColor, start, end);
+        const legend = dated ? scatterDateLegend(container, timeColor, start, end) : null;
         frame.svg.attr('aria-label', `${model.title || 'Relationships over time'}. ${items.length} exact shared dates. Use Left and Right arrow keys to inspect dates.`);
-        return { points, update };
+        return { points, update, fitLegend: fitScatterLegend(frame, legend) };
     }
 
     function scatter3D(container, model, items) {
-        const compact = narrow(container), frame = AnalyticsPlot.frame(container, model, { height: compact ? 360 : 430,
+        const compact = narrow(container), frame = AnalyticsPlot.frame(container, { ...model, type: 'scatter-3d' }, { height: compact ? 360 : 430,
             margin: { left: 20, right: 20, top: 26, bottom: 32 } });
+        if (!items.length) return AnalyticsPlot.empty(frame, 'No exact shared dates have displayable values for every axis in this period.');
         const keys = ['x', 'y', 'z'], scales = keys.map(key => d3.scaleLinear().domain(domain(items.map(item => item[key]))).nice().range([-0.5, 0.5]));
         const origin = [-0.5, -0.5, -0.5], ends = [[0.5, -0.5, -0.5], [-0.5, 0.5, -0.5], [-0.5, -0.5, 0.5]];
         const initial = { yaw: -0.65, pitch: 0.35 };
@@ -301,7 +306,7 @@
         const axisLines = axes.selectAll('line').data(ends).join('line').attr('stroke', 'var(--chart-axis)').attr('stroke-width', 1.8);
         const labels = axes.selectAll('.scatter-3d-label').data(model.axes || []).join('text').attr('class', 'scatter-3d-label')
             .attr('fill', 'var(--text)').attr('font-size', 12).text(axis => axis.label);
-        labels.append('title').text((axis, index) => `${keys[index].toUpperCase()}: ${axis.label} · ${axis.unitLabel || ''}`);
+        labels.attr('aria-label', (axis, index) => `${keys[index].toUpperCase()}: ${axis.label} · ${axis.unitLabel || ''}`);
         const ticks = axes.selectAll('.scatter-3d-tick').data(scales.flatMap((scale, axis) => scale.ticks(3).map(value => ({ axis, value })))).join('text')
             .attr('class', 'scatter-3d-tick').attr('font-size', 10).attr('fill', 'var(--chart-axis)').text(tick => AnalyticsPlot.value(tick.value));
         const cloud = scatterPoints(frame, container, model, items, item => project(keys.map((key, index) => scales[index](item[key]))));
@@ -317,7 +322,7 @@
                 const values = [...origin]; values[tick.axis] = scales[tick.axis](tick.value); const point = project(values);
                 d3.select(this).attr('x', point[0] + 4).attr('y', point[1] + 12);
             });
-            cloud.update(); frame.svg.attr('data-yaw', yaw).attr('data-pitch', pitch); updateZoom(zoom);
+            cloud.update(); cloud.fitLegend(); frame.svg.attr('data-yaw', yaw).attr('data-pitch', pitch); updateZoom(zoom);
         }
         const changeZoom = factor => { zoom = clampZoom(zoom * factor); AnalyticsPlot.hideTip(container); redraw(); };
         const resetView = () => { yaw = initial.yaw; pitch = initial.pitch; zoom = 1; redraw(); };
@@ -381,13 +386,13 @@
 
     function scatter(container, model) {
         const compact = narrow(container), items = (model.items || []).filter(item => finite(item.x) && finite(item.y) && (model.dimensions !== 3 || finite(item.z)));
-        if (items.length && model.dimensions === 3) return scatter3D(container, model, items);
+        if (model.dimensions === 3) return scatter3D(container, model, items);
         const ticks = compact ? 3 : 5;
         const y = d3.scaleLinear().domain(domain(items.map(item => item.y))).nice();
         const labelWidth = Math.max(compact ? 62 : 76, ...y.ticks(ticks).map(value => AnalyticsPlot.value(value).length * 6.3 + 13));
-        const frame = AnalyticsPlot.frame(container, model, { height: 390,
+        const frame = AnalyticsPlot.frame(container, { ...model, type: 'scatter' }, { height: 390,
             margin: { left: Math.min(106, labelWidth), right: 22, top: 48, bottom: 72 } });
-        if (!items.length) return empty(frame, 'No exact shared dates have displayable values for every axis.');
+        if (!items.length) return AnalyticsPlot.empty(frame, 'No exact shared dates have displayable values for every axis in this period.');
         frame.svg.attr('role', 'group');
         const x = d3.scaleLinear().domain(domain(items.map(item => item.x))).nice().range([0, frame.innerWidth]);
         y.range([frame.innerHeight, 0]);
@@ -415,7 +420,7 @@
             left.call(d3.axisLeft(viewY).ticks(ticks).tickFormat(value => AnalyticsPlot.value(value)));
             verticalZero.attr('x1', viewX(0)).attr('x2', viewX(0)).attr('visibility', viewX(0) >= 0 && viewX(0) <= frame.innerWidth ? 'visible' : 'hidden');
             horizontalZero.attr('y1', viewY(0)).attr('y2', viewY(0)).attr('visibility', viewY(0) >= 0 && viewY(0) <= frame.innerHeight ? 'visible' : 'hidden');
-            cloud.update(); updateZoom(transform.k);
+            cloud.update(); cloud.fitLegend(); updateZoom(transform.k);
         }
         const zoom = d3.zoom().scaleExtent([minimumZoom, maximumZoom])
             .extent([[0, 0], [frame.innerWidth, frame.innerHeight]])
@@ -444,9 +449,9 @@
 
     function dumbbell(container, model) {
         const items = model.items || [], compact = narrow(container);
-        const frame = AnalyticsPlot.frame(container, model, { height: Math.max(230, items.length * 46 + 90),
+        const frame = AnalyticsPlot.frame(container, { ...model, type: 'dumbbell' }, { height: Math.max(230, items.length * 46 + 90),
             margin: { left: compact ? 100 : 156, right: 24, top: 22, bottom: 65 } });
-        if (!items.length) return empty(frame, 'No countries have comparable reporting periods.');
+        if (!items.some(item => finite(item.start) || finite(item.end))) return AnalyticsPlot.empty(frame, 'No countries have comparable reporting periods.');
         frame.svg.attr('role', 'group');
         const x = d3.scaleLinear().domain(domain(items.flatMap(item => [item.start, item.end]))).nice().range([0, frame.innerWidth]);
         const y = d3.scaleBand().domain(items.map((_, index) => index)).range([0, frame.innerHeight]).padding(0.3);

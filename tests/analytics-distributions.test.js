@@ -85,6 +85,8 @@ test('empty and constant box plots remain finite and histogram is no longer regi
     assert.equal(renderers.histogram, undefined);
     renderers.box(container, { title: 'Empty sample', groups: [{ code: 'tn', label: 'Tunisia', values: [] }] });
     assert.match(container.textContent, /No reported observations/);
+    assert.match(container.querySelector('.chart-empty-state').textContent, /No data available.*Try another metric or date range/);
+    assert.equal(container.querySelector('svg'), null);
     for (const values of [[0, 0, 0], [7, 7, 7], [-2]]) {
         renderers.box(container, { title: 'Constant sample', groups: [{ code: 'tn', label: 'Tunisia', values }] });
         assert.ok(container.querySelector('.box-mark circle'));

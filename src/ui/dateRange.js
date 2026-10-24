@@ -1,3 +1,49 @@
+// Native date inputs emit change while a keyboard user is still typing a segment.
+// Commit typed dates on Enter or blur; calendar selections can apply immediately.
+window.DateInput = (() => {
+    const bindings = new WeakMap();
+    return {
+        bind(field, onCommit, { signal } = {}) {
+            const existing = bindings.get(field);
+            if (existing) { existing.onCommit = onCommit; return; }
+            const state = { onCommit, typing: false, value: field.value };
+            bindings.set(field, state);
+            const options = signal ? { signal } : undefined;
+            const commit = () => {
+                state.typing = false;
+                if (field.value === state.value) return;
+                state.value = field.value;
+                state.onCommit(field.value);
+            };
+            field.addEventListener('keydown', event => {
+                if (event.key === 'Enter') { event.preventDefault(); commit(); }
+                else if (event.key === 'Escape' && state.typing) {
+                    event.preventDefault(); event.stopPropagation(); state.typing = false; field.value = state.value;
+                } else if (event.key.length === 1 || ['Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
+                    state.typing = true;
+                }
+            }, options);
+            field.addEventListener('pointerdown', () => { state.typing = false; }, options);
+            field.addEventListener('change', () => { if (!state.typing) commit(); }, options);
+            field.addEventListener('blur', commit, options);
+            signal?.addEventListener('abort', () => bindings.delete(field), { once: true });
+        },
+        sync(field, value) {
+            const state = bindings.get(field);
+            if (state?.typing) return;
+            field.value = value || '';
+            if (state) state.value = field.value;
+        },
+        nearestIndex(dates, date) {
+            let low = 0, high = dates.length;
+            while (low < high) { const middle = Math.floor((low + high) / 2); if (dates[middle] < date) low = middle + 1; else high = middle; }
+            if (!low) return 0;
+            if (low === dates.length) return low - 1;
+            return Date.parse(date) - Date.parse(dates[low - 1]) <= Date.parse(dates[low]) - Date.parse(date) ? low - 1 : low;
+        }
+    };
+})();
+
 // Native keyboard controls share one visual timeline; date fields provide a touch alternative.
 window.DateRangeControl = class DateRangeControl {
     constructor(container, { dates = [], range = { start: 0, end: 100 }, idPrefix = 'date-range',
@@ -32,9 +78,8 @@ window.DateRangeControl = class DateRangeControl {
             const field = document.createElement('input'); field.type = 'date'; field.id = `${idPrefix}-${key}-input`;
             field.setAttribute('aria-label', `${label}, enter a date`); field.disabled = !dates.length;
             this.dateInputs[key] = field; fieldLabel.appendChild(field); fields.appendChild(fieldLabel);
-            field.addEventListener('change', () => {
-                if (!field.value) { this.refresh(); return; }
-                const requested = field.value;
+            DateInput.bind(field, requested => {
+                if (!requested) { this.refresh(); return; }
                 const nearest = this.nearestIndex(requested);
                 this.setIndex(key, nearest, true);
                 if (field.value !== requested) this.status.textContent = `Selected ${this.formatDate(field.value)}, the nearest available date within this interval.`;
@@ -48,11 +93,7 @@ window.DateRangeControl = class DateRangeControl {
     }
 
     nearestIndex(date) {
-        let low = 0, high = this.dates.length;
-        while (low < high) { const middle = Math.floor((low + high) / 2); if (this.dates[middle] < date) low = middle + 1; else high = middle; }
-        if (!low) return 0;
-        if (low === this.dates.length) return low - 1;
-        return Date.parse(date) - Date.parse(this.dates[low - 1]) <= Date.parse(this.dates[low]) - Date.parse(date) ? low - 1 : low;
+        return DateInput.nearestIndex(this.dates, date);
     }
 
     setIndex(key, index, commit) {
@@ -77,7 +118,7 @@ window.DateRangeControl = class DateRangeControl {
         for (const key of ['start', 'end']) {
             this.inputs[key].value = String(this.indices[key]);
             this.inputs[key].setAttribute('aria-valuetext', selected[key] ? this.formatDate(selected[key]) : 'No observations');
-            const field = this.dateInputs[key]; field.value = selected[key] || '';
+            const field = this.dateInputs[key]; DateInput.sync(field, selected[key]);
             field.min = key === 'start' ? this.dates[0] || '' : selected.start || '';
             field.max = key === 'start' ? selected.end || '' : this.dates.at(-1) || '';
         }

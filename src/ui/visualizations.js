@@ -2,6 +2,26 @@ function selectedVisualizationCountry() {
     return window.globeInstance?.selectedCountryCode;
 }
 
+let preservingAnalysisScroll = false;
+function preserveCountryAnalysisScroll(render) {
+    const panel = document.getElementById('visualizationPanel');
+    if (!panel || panel.hidden || document.getElementById('exploreView')?.hidden || preservingAnalysisScroll) return render();
+    const position = { left: window.scrollX, top: window.scrollY };
+    const minimum = panel.style.minHeight;
+    // Chart replacement reads layout before the new SVG is complete. Hold the
+    // panel open so that intermediate layout cannot shorten the scroll range.
+    panel.style.minHeight = `${panel.getBoundingClientRect().height}px`;
+    preservingAnalysisScroll = true;
+    try { return render(); }
+    finally {
+        panel.style.minHeight = minimum;
+        // Let the finished chart use its natural height. Scroll restoration is
+        // limited by the final page length, never by a temporary empty chart.
+        window.scrollTo({ ...position, behavior: 'instant' });
+        preservingAnalysisScroll = false;
+    }
+}
+
 function updateCountryAnalysisSummary() {
     const valueElement = document.getElementById('analysisValue');
     const globe = window.globeInstance, code = selectedVisualizationCountry();
@@ -41,14 +61,17 @@ function changeVisualization() {
     if (!container) return;
     const code = selectedVisualizationCountry();
     if (!code) { closeCountryAnalysis({ focus: false }); ChartFactory.clearChart(container); return; }
-    const name = window.globeInstance.dataService.getCountryName(code);
-    const title = document.getElementById('viz-country-name');
-    if (title) title.textContent = name;
-    const flag = document.getElementById('viz-flag');
-    if (flag) { flag.src = `https://flagcdn.com/${code.toLowerCase()}.svg`; flag.alt = ''; }
-    updateCountryAnalysisSummary();
-    try { ChartFactory.createChart(container, code, document.getElementById('vizTypeSelector')?.value || 'line'); }
-    catch (error) { console.error('Error creating visualization:', error); ChartFactory.clearChart(container); ChartFactory.showError(container, 'Unable to create this visualization.'); }
+    return preserveCountryAnalysisScroll(() => {
+        const name = window.globeInstance.dataService.getCountryName(code);
+        const title = document.getElementById('viz-country-name');
+        if (title) title.textContent = name;
+        const flag = document.getElementById('viz-flag');
+        if (flag) { flag.src = `https://flagcdn.com/${code.toLowerCase()}.svg`; flag.alt = ''; }
+        updateCountryAnalysisControls();
+        updateCountryAnalysisSummary();
+        try { ChartFactory.createChart(container, code, document.getElementById('vizTypeSelector')?.value || 'line'); }
+        catch (error) { console.error('Error creating visualization:', error); ChartFactory.clearChart(container); ChartFactory.showError(container, 'Unable to create this visualization.'); }
+    });
 }
 
 let visualizationResizeFrame = null;

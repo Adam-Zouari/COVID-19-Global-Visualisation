@@ -171,7 +171,7 @@ class GlobeVis {
     }
 
     setControlsDisabled(disabled) {
-        for (const id of ['dataSelector', 'dateSlider', 'prevDateBtn', 'nextDateBtn', 'resetBtn', 'zoomInBtn', 'zoomOutBtn']) {
+        for (const id of ['dataSelector', 'dateSlider', 'timelineDateInput', 'prevDateBtn', 'nextDateBtn', 'resetBtn', 'zoomInBtn', 'zoomOutBtn']) {
             const control = document.getElementById(id);
             if (control) control.disabled = disabled;
         }

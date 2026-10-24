@@ -20,22 +20,47 @@ window.AnalyticsPlot = {
         const svg = d3.select(container).append('svg').attr('viewBox', `0 0 ${width} ${height}`)
             .attr('width', '100%').attr('height', height).attr('role', 'group')
             .attr('aria-label', [model.title, model.subtitle, model.note].filter(Boolean).join('. '));
-        svg.append('title').text(model.title || 'Reported observations');
         svg.append('desc').text([model.subtitle, model.note, ...(model.warnings || [])].filter(Boolean).join('. '));
         const plot = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
-        return { svg, plot, width, height, innerWidth, innerHeight, margin };
+        return { container, model, svg, plot, width, height, innerWidth, innerHeight, margin };
+    },
+    empty(frame, fallback) {
+        return ChartFactory.showEmptyState(frame.container, frame.model.emptyMessage || fallback, { height: frame.height });
     },
     text(container, content, className = 'chart-note') {
         const node = document.createElement('p'); node.className = className; node.textContent = content; container.appendChild(node); return node;
     },
-    legend(container, entries) {
-        const legend = document.createElement('div'); legend.className = 'chart-legend';
+    legend(container, entries, className = '') {
+        const legend = document.createElement('div'); legend.className = `chart-legend ${className}`.trim();
         entries.forEach((entry, index) => {
             const label = document.createElement('span'); label.className = 'legend-item';
             const swatch = document.createElement('i'); swatch.style.backgroundColor = entry.color || this.seriesColor(index);
+            if (entry.hatched) swatch.className = 'legend-hatched';
             label.append(swatch, document.createTextNode(entry.label)); legend.appendChild(label);
         });
         container.appendChild(legend);
+    },
+    colorLegend(container, { name, label, description, start, end, color, format = String, dates = false }) {
+        const legend = document.createElement('div'); legend.className = `chart-color-legend ${name}-legend`;
+        legend.setAttribute('role', 'img'); legend.setAttribute('aria-label', description);
+        const heading = document.createElement('span'); heading.className = `chart-color-label ${name}-label`; heading.textContent = label;
+        const bar = document.createElement('div'); bar.className = `chart-color-bar ${name}-bar`; bar.setAttribute('aria-hidden', 'true');
+        if (start === end) bar.style.backgroundColor = color(start);
+        else {
+            const stops = Array.from({ length: 9 }, (_, index) => {
+                const fraction = index / 8;
+                return `${color(start + (end - start) * fraction)} ${fraction * 100}%`;
+            });
+            bar.style.backgroundImage = `linear-gradient(to right, ${stops.join(', ')})`;
+        }
+        const range = document.createElement('div'); range.className = `chart-color-range ${name}-range`;
+        for (const value of start === end ? [start] : [start, end]) {
+            const endpoint = document.createElement(dates ? 'time' : 'span');
+            if (dates) endpoint.dateTime = d3.utcFormat('%Y-%m-%d')(new Date(value));
+            endpoint.textContent = format(value); range.appendChild(endpoint);
+        }
+        legend.append(heading, bar, range); container.appendChild(legend);
+        return legend;
     },
     color(code, index = 0) { return code ? ChartFactory.countryColor(code) : this.seriesColor(index); },
     seriesColor(index = 0) { return window.AtlasTheme?.getSeriesColor(index) || ChartFactory.palette[index % ChartFactory.palette.length]; },

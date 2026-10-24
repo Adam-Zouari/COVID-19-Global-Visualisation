@@ -160,19 +160,49 @@
     }, true);
 
     function updateAnalysisSpacing() {
+        updateExpandedSettingsSpacing();
         const analysis = document.getElementById('visualizationPanel');
         if (!analysis || analysis.hidden || shell || document.getElementById('exploreView')?.hidden) return;
         const bottoms = [...workspace.querySelectorAll(':scope > .panel')]
             .filter(node => node.getClientRects().length)
             .map(node => node.getBoundingClientRect().bottom + scrollY);
-        const gap = Math.max(18, innerHeight - Math.max(0, ...bottoms));
+        const gap = Math.max(4, Math.min(6, innerHeight - Math.max(0, ...bottoms)));
         document.getElementById('exploreView').style.setProperty('--analysis-bottom-space', `${gap}px`);
+    }
+    function updateExpandedSettingsSpacing() {
+        const explore = document.getElementById('exploreView');
+        if (shell || !explore || explore.hidden || content.hidden) return;
+        const ranges = settings.querySelector('.legend-details[open]');
+        const settingsBox = settings.getBoundingClientRect();
+        const expansion = ranges ? ranges.getBoundingClientRect().height - ranges.querySelector('summary').getBoundingClientRect().height : 0;
+        const style = getComputedStyle(settings);
+        const minimum = parseFloat(style.minHeight) || 0;
+        const naturalHeight = content.getBoundingClientRect().bottom - settingsBox.top + parseFloat(style.paddingBottom) + parseFloat(style.borderBottomWidth);
+        const growth = settingsBox.height - Math.max(minimum, naturalHeight - expansion);
+        // Reconstruct the collapsed layout without closing the user's legend.
+        // Desktop cards share a row; tablet/mobile cards below settings move too.
+        const bottoms = [...workspace.querySelectorAll(':scope > .panel')]
+            .filter(node => node.getClientRects().length)
+            .map(node => {
+                const box = node.getBoundingClientRect();
+                const shift = node === settings || box.top >= settingsBox.bottom - 1 ? growth : 0;
+                const height = node.id === 'countryInfo' && innerWidth > 760 ? Math.min(box.height, stage.getBoundingClientRect().height) : box.height;
+                return box.top + scrollY - shift + height;
+            });
+        const gap = Math.max(14, innerHeight - Math.max(0, ...bottoms));
+        explore.style.setProperty('--expanded-settings-bottom-space', `${gap}px`);
     }
     const analysis = document.getElementById('visualizationPanel');
     const visibility = new MutationObserver(updateAnalysisSpacing);
     if (analysis) visibility.observe(analysis, { attributes: true, attributeFilter: ['hidden'] });
     const explore = document.getElementById('exploreView');
     if (explore) visibility.observe(explore, { attributes: true, attributeFilter: ['hidden'] });
+    const legend = document.getElementById('globeLegend');
+    if (legend) visibility.observe(legend, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] });
+    if (typeof ResizeObserver !== 'undefined') {
+        const layout = new ResizeObserver(updateAnalysisSpacing);
+        for (const node of [settings, stage, document.getElementById('countryInfo')]) if (node) layout.observe(node);
+    }
     window.addEventListener('resize', updateAnalysisSpacing);
     document.addEventListener('atlas-ready', updateAnalysisSpacing);
     document.addEventListener('country-selected', updateAnalysisSpacing);

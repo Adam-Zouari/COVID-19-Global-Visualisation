@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import { createStore, readURLState, stateToURL } from '../src/ui/store.js';
 import { CHART_TYPES } from '../src/charts/chartTypes.js';
 
+test('daily reporting is the default while explicit seven-day views round-trip through URLs', () => {
+    const defaults = createStore().getState();
+    assert.equal(defaults.smoothing, 'raw');
+    for (const query of ['', '?smooth=raw', '?smooth=invalid']) assert.equal(readURLState(query).smoothing, 'raw');
+    const dailyURL = stateToURL(defaults, 'https://example.com/?smooth=7day');
+    assert.equal(dailyURL.searchParams.has('smooth'), false);
+    const averagedURL = stateToURL({ ...defaults, smoothing: '7day' }, dailyURL);
+    assert.equal(averagedURL.searchParams.get('smooth'), '7day');
+    assert.equal(readURLState(averagedURL.search).smoothing, '7day');
+});
+
 test('original CSV data is the default and fictional data requires an explicit sample URL', () => {
     assert.equal(createStore().getState().dataMode, 'csv');
     for (const query of ['', '?data=csv', '?data=invalid']) assert.equal(readURLState(query).dataMode, 'csv');

@@ -67,6 +67,26 @@ async function scatterDateLegend(page, selector, expectedDates) {
     await fits(page, `${selector} .scatter-date-legend, ${selector} .scatter-date-bar, ${selector} .scatter-date-legend time`);
 }
 
+async function heatmapValueLegend(page, selector) {
+    const chart = page.locator(selector), legend = chart.locator('.heatmap-value-legend');
+    await expect(legend).toBeVisible();
+    await expect(legend).toHaveAccessibleName(/Lower values on the left, higher values on the right/);
+    await expect(legend.locator('.heatmap-value-bar')).toBeVisible();
+    const scale = await chart.evaluate(node => {
+        const legend = node.querySelector('.heatmap-value-legend'), bar = legend.querySelector('.heatmap-value-bar');
+        const cells = [...node.querySelectorAll('.heatmap-cell')].filter(cell => Number.isFinite(cell.__data__.value) && cell.__data__.value >= 0);
+        const highest = cells.reduce((current, cell) => cell.__data__.value > current.__data__.value ? cell : current);
+        const colors = getComputedStyle(bar).backgroundImage.match(/rgba?\([^)]+\)/g) || [];
+        return { endpoints: [...legend.querySelectorAll('.heatmap-value-range span')].map(span => span.textContent),
+            expected: ['0', AnalyticsPlot.value(highest.__data__.value)],
+            colors: [colors[0], colors.at(-1)],
+            expectedColors: [d3.color(AtlasTheme.getColor('--heatmap-low')).formatRgb(), getComputedStyle(highest).fill] };
+    });
+    expect(scale.endpoints).toEqual(scale.expected);
+    expect(scale.colors).toEqual(scale.expectedColors);
+    await fits(page, `${selector} .heatmap-value-legend, ${selector} .heatmap-value-bar, ${selector} .heatmap-value-range span`);
+}
+
 for (const [theme, width] of [['dark', 1440], ['light', 390], ['dark', 320]]) {
     test(`country comparison charts render and fit in ${theme} at ${width}px`, async ({ page }) => {
         test.setTimeout(90000);
@@ -80,6 +100,7 @@ for (const [theme, width] of [['dark', 1440], ['light', 390], ['dark', 320]]) {
             expect(await page.locator('#compareChartContainer svg').evaluateAll(nodes => nodes.every(svg => !/NaN|Infinity/.test(svg.outerHTML))), type).toBe(true);
             await fits(page, '#comparePanel select, #comparePanel input, #compareChartContainer svg');
             if (type === 'heatmap') {
+                await heatmapValueLegend(page, '#compareChartContainer');
                 await expect(page.locator('.analytics-heatmap-scroll')).toHaveCount(0);
                 expect(await page.locator('#compareChartContainer').evaluate(node => node.scrollWidth <= node.clientWidth + 1),
                     'Heatmaps fit without horizontal scrolling').toBe(true);
@@ -104,29 +125,90 @@ for (const [theme, width] of [['dark', 1440], ['light', 390], ['dark', 320]]) {
     });
 }
 
-test('horizontal bars have a working date slider and preserve their date when shared', async ({ page }) => {
+test('horizontal bars step dates with arrows, synchronize their slider, and preserve the shared date', async ({ page }) => {
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await prepare(page, 'dark');
     await page.locator('#compareChartType').selectOption('horizontal');
     await expect(page.locator('.date-selection-panel')).toBeHidden();
-    await expect(page.locator('#compare-date-slider')).toBeVisible();
-    await page.locator('#compare-date-slider').evaluate(input => {
-        input.value = '9'; input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await expect(page.locator('#compare-date')).toHaveValue('2021-01-10');
-    expect(await page.locator('.rank-bar').evaluateAll(nodes => nodes.map(node => node.__data__.value).sort((a, b) => a - b))).toEqual([9, 18]);
+    const slider = page.locator('#compare-date-slider'), date = page.locator('#compare-date');
+    const previous = page.locator('#compare-date-prev'), next = page.locator('#compare-date-next');
+    const selectIndex = index => slider.evaluate((input, value) => {
+        input.value = String(value); input.dispatchEvent(new Event('input', { bubbles: true }));
+    }, index);
+    const selectedDate = async (value, index, values) => {
+        await expect(date).toHaveValue(value);
+        await expect(slider).toHaveValue(String(index));
+        await expect.poll(() => page.locator('#compareChartContainer .rank-bar, #compareChartContainer .rank-zero').evaluateAll(nodes =>
+            nodes.map(node => node.__data__.value).sort((a, b) => a - b))).toEqual(values);
+        await expect(page.locator('#compareChartContainer .rank-zero')).toHaveCount(values.filter(value => value === 0).length);
+        await expect(page.locator('#compareChartContainer .rank-bar')).toHaveCount(values.filter(value => value !== 0).length);
+        await expect.poll(() => JSON.parse(new URL(page.url()).searchParams.get('chartOptions') || '{}').date).toBe(value);
+    };
+    await expect(slider).toBeVisible();
+    await expect(previous).toHaveAccessibleName('Previous date');
+    await expect(next).toHaveAccessibleName('Next date');
+    await expect(previous).toBeEnabled();
+    await expect(next).toBeDisabled();
+    await previous.click();
+    await selectedDate('2021-01-27', 26, [26, 52]);
+    await next.click();
+    await selectedDate('2021-01-28', 27, [27, 54]);
+
+    await selectIndex(9);
+    await selectedDate('2021-01-10', 9, [9, 18]);
+    await previous.scrollIntoViewIfNeeded();
+    const position = await page.evaluate(() => scrollY);
+    await previous.click();
+    await selectedDate('2021-01-09', 8, [8, 16]);
+    expect(await page.evaluate(() => scrollY)).toBe(position);
+    await next.click();
+    await selectedDate('2021-01-10', 9, [9, 18]);
+    expect(await page.evaluate(() => scrollY)).toBe(position);
+
+    await selectIndex(0);
+    await selectedDate('2021-01-01', 0, [0, 0]);
+    await expect(previous).toBeDisabled();
+    await expect(next).toBeEnabled();
+    await next.click();
+    await selectedDate('2021-01-02', 1, [1, 2]);
+    await expect(previous).toBeEnabled();
+    await selectIndex(27);
+    await expect(next).toBeDisabled();
+
     await page.locator('#compare-date').fill('2021-01-20');
     await page.locator('#compare-date').dispatchEvent('change');
-    await expect(page.locator('#compare-date-slider')).toHaveValue('19');
+    await selectedDate('2021-01-20', 19, [19, 38]);
+    await next.click();
+    await selectedDate('2021-01-21', 20, [20, 40]);
     await page.reload();
     await expect(page.locator('#compareChartType')).toHaveValue('horizontal');
-    await expect(page.locator('#compare-date')).toHaveValue('2021-01-20');
-    await expect(page.locator('#compare-date-slider')).toHaveValue('19');
+    await selectedDate('2021-01-21', 20, [20, 40]);
+    await expect(previous).toBeEnabled();
+    await expect(next).toBeEnabled();
     await page.locator('#compare-date').fill(''); await page.locator('#compare-date').dispatchEvent('change');
-    await expect(page.locator('#compare-date')).toHaveValue('2021-01-28');
+    await expect(page.locator('#compare-date')).toHaveValue('2021-01-21');
     await expect(page.locator('#compareChartContainer .rank-bar')).toHaveCount(2);
     await expect(page.locator('#compareTitle')).not.toBeFocused();
     expect(errors).toEqual([]);
+});
+
+test('horizontal date arrows include unreported calendar days without inventing values', async ({ page }) => {
+    const archive = { ...csv, epidem: csv.epidem.split('\n').filter(row => !row.startsWith('2021-01-11,')).join('\n') };
+    await prepare(page, 'dark', undefined, archive);
+    await page.locator('#compareChartType').selectOption('horizontal');
+    const date = page.locator('#compare-date'), slider = page.locator('#compare-date-slider');
+    await date.fill('2021-01-10'); await date.dispatchEvent('change');
+    await page.locator('#compare-date-next').click();
+    await expect(date).toHaveValue('2021-01-11');
+    await expect(slider).toHaveValue('9');
+    await expect(page.locator('#compareChartContainer .rank-bar')).toHaveCount(0);
+    await page.locator('#compare-date-next').click();
+    await expect(date).toHaveValue('2021-01-12');
+    await expect(slider).toHaveValue('10');
+    await expect(page.locator('#compareChartContainer .rank-bar')).toHaveCount(2);
+    await page.locator('#compare-date-prev').click();
+    await expect(date).toHaveValue('2021-01-11');
+    await expect(page.locator('#compareChartContainer .rank-bar')).toHaveCount(0);
 });
 
 test('comparison scatter uses country axes over a shareable period with shared metric and unit controls', async ({ page }) => {
@@ -338,6 +420,321 @@ test('country analysis heading shows the selected day value and follows country,
     await expect(value).toHaveText('36');
 });
 
+test('country analysis settings share atlas state and retain the selected country, date and analysis period', async ({ page }) => {
+    const errors = []; page.on('pageerror', error => errors.push(error.message));
+    await prepare(page, 'dark', '/?country=tn&analysis=1&date=2021-01-28&smooth=raw');
+    const value = page.locator('#analysisValue');
+    await page.locator('#date-range-start-input').fill('2021-01-05');
+    await page.locator('#date-range-start-input').dispatchEvent('change');
+    await page.locator('#date-range-end-input').fill('2021-01-20');
+    await page.locator('#date-range-end-input').dispatchEvent('change');
+    expect(await page.locator('#analysisMetricSelector option').evaluateAll(nodes => nodes.map(option => option.value)))
+        .toEqual(await page.locator('#dataSelector option').evaluateAll(nodes => nodes.map(option => option.value)));
+    await page.locator('#analysisMetricSelector').selectOption('new_tested');
+    await expect(page.locator('#dataSelector')).toHaveValue('new_tested');
+    await expect(page.locator('#analysisMetricLabel')).toHaveText('New tests');
+    await expect(value).toHaveText('540');
+    await page.locator('#analysisUnitSelector').selectOption('per100k');
+    await expect(page.locator('#unitSelector')).toHaveValue('per100k');
+    await expect(value).toHaveText('54,000');
+    await page.locator('#analysisAverageBtn').click();
+    await expect(page.locator('#averageBtn')).toHaveAttribute('aria-pressed', 'true');
+    await expect(value).toHaveText('48,000');
+    await expect(page.locator('#analysisUnits')).toContainText('7-day average');
+    await expect(page.locator('#date-range-start-input')).toHaveValue('2021-01-05');
+    await expect(page.locator('#date-range-end-input')).toHaveValue('2021-01-20');
+    expect(await page.evaluate(() => ({ country: globeInstance.selectedCountryCode, date: dataService.currentDate })))
+        .toEqual({ country: 'tn', date: '2021-01-28' });
+    await page.locator('.analysis-controls').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: 'test-results/country-analysis-settings-desktop.png' });
+    expect(new URL(page.url()).searchParams.get('metric')).toBe('new_tested');
+    expect(new URL(page.url()).searchParams.get('unit')).toBe('per100k');
+    await page.locator('#dataSelector').selectOption('cumulative_confirmed');
+    await expect(page.locator('#analysisMetricSelector')).toHaveValue('cumulative_confirmed');
+    await expect(page.locator('#analysisReportingGroup')).toBeHidden();
+    await expect(page.locator('#analysisAverageBtn')).toBeDisabled();
+    await expect(value).toHaveText('270,000');
+    expect(new URL(page.url()).searchParams.has('smooth')).toBe(false);
+    await page.locator('#unitSelector').selectOption('count');
+    await expect(page.locator('#analysisUnitSelector')).toHaveValue('count');
+    await page.locator('#dataSelector').selectOption('new_confirmed');
+    await page.locator('#averageBtn').click();
+    await expect(page.locator('#analysisReportingGroup')).toBeVisible();
+    await expect(page.locator('#analysisAverageBtn')).toHaveAttribute('aria-pressed', 'true');
+    await expect(value).toHaveText('24');
+    await expect(page.locator('#date-range-start-input')).toHaveValue('2021-01-05');
+    await expect(page.locator('#date-range-end-input')).toHaveValue('2021-01-20');
+    await page.reload();
+    await expect(page.locator('#visualizationPanel')).toBeVisible();
+    await expect(page.locator('#analysisMetricSelector')).toHaveValue('new_confirmed');
+    await expect(page.locator('#analysisUnitSelector')).toHaveValue('count');
+    await expect(page.locator('#analysisAverageBtn')).toHaveAttribute('aria-pressed', 'true');
+    await expect(value).toHaveText('24');
+    expect(errors).toEqual([]);
+});
+
+test('country analysis settings fit on mobile and changing them keeps the toolbar in place', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    await prepare(page, 'light', '/?country=tn&analysis=1&date=2021-01-28&smooth=raw');
+    await fits(page, '.analysis-controls, #analysisMetricSelector, #analysisUnitSelector, #analysisReportingGroup, #vizTypeSelector');
+    await page.locator('.analysis-controls').evaluate(node => {
+        window.scrollTo(0, window.scrollY + node.getBoundingClientRect().top - 120);
+    });
+    for (const change of [
+        () => page.locator('#analysisMetricSelector').selectOption('new_deceased'),
+        () => page.locator('#analysisUnitSelector').selectOption('per100k'),
+        () => page.locator('#analysisAverageBtn').click(),
+        () => page.locator('#analysisRawBtn').click()
+    ]) {
+        const previous = await page.locator('.analysis-controls').evaluate(node => node.getBoundingClientRect().top);
+        await change();
+        // Browser scroll anchoring may adjust scrollY when content above changes
+        // height. The user's visible toolbar should retain its viewport position.
+        await expect.poll(async () => Math.abs(await page.locator('.analysis-controls')
+            .evaluate(node => node.getBoundingClientRect().top) - previous)).toBeLessThanOrEqual(2);
+    }
+    await expect(page.locator('#analysisValue')).toHaveText('200');
+    await expect(page.locator('#dataSelector')).toHaveValue('new_deceased');
+    await expect(page.locator('#rawBtn')).toHaveAttribute('aria-pressed', 'true');
+    await fits(page, '.analysis-controls, #analysisMetricSelector, #analysisUnitSelector, #analysisReportingGroup, #vizTypeSelector');
+    await page.screenshot({ path: 'test-results/country-analysis-settings-mobile.png' });
+});
+
+for (const [theme, width, motion] of [['dark', 1440, 'reduce'], ['light', 390, 'reduce'],
+    ['dark', 1440, 'no-preference'], ['light', 390, 'no-preference']]) {
+    test(`country bar transitions avoid extra scroll jumps and keep natural heights at ${width}px with ${motion}`, async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: motion });
+        await page.setViewportSize({ width, height: 1000 });
+        const history = Array.from({ length: 126 }, (_, index) => {
+            const date = new Date(Date.UTC(2021, 0, index + 1)).toISOString().slice(0, 10);
+            return `${date},TN,${index + 1},${index % 5},${index * 100},${index * 3},${index * 20}`;
+        });
+        const archive = { ...csv, epidem: `${csv.epidem.split('\n')[0]}\n${history.join('\n')}` };
+        await prepare(page, theme, '/?country=tn&analysis=1&date=2021-05-06&smooth=raw', archive);
+        const selector = page.locator('#vizTypeSelector');
+        const position = () => page.evaluate(() => ({
+            y: scrollY, toolbar: document.querySelector('.analysis-controls').getBoundingClientRect().top
+        }));
+        const assertBounded = async (before, type) => {
+            await expect(selector).toHaveValue(type);
+            await expect(page.locator(`#chartContainer ${countryMarks[type]}`).first()).toBeVisible();
+            // Observe rendered frames as well as the final position: a delayed
+            // restoration must not hide a collapse during redraw. A genuinely
+            // shorter final chart may clamp the viewport to its new page bottom.
+            const frames = await page.evaluate(async () => {
+                const positions = [];
+                for (let frame = 0; frame < 4; frame++) {
+                    await new Promise(requestAnimationFrame);
+                    positions.push({ y: scrollY, maximum: Math.max(0, document.documentElement.scrollHeight - innerHeight),
+                        toolbar: document.querySelector('.analysis-controls').getBoundingClientRect().top });
+                }
+                return positions;
+            });
+            const expectedY = Math.min(before.y, frames.at(-1).maximum);
+            for (const after of frames) {
+                expect(Math.abs(after.y - expectedY), `${type}: page position`).toBeLessThanOrEqual(2);
+                expect(Math.abs(after.toolbar - (before.toolbar + before.y - expectedY)), `${type}: visible controls`).toBeLessThanOrEqual(2);
+            }
+            expect(await page.locator('#visualizationPanel').evaluate(node => node.style.minHeight)).toBe('');
+            if (type === 'bar') {
+                const note = page.locator('#chartContainer > .chart-note');
+                await expect(note).toContainText('Weekly totals');
+                const layout = await note.evaluate(node => ({
+                    padding: parseFloat(getComputedStyle(node.closest('.country-analysis')).paddingBottom),
+                    noteTop: node.getBoundingClientRect().top,
+                    axisBottom: Math.max(...[...node.previousElementSibling.querySelectorAll('.x-axis text')]
+                        .map(label => label.getBoundingClientRect().bottom))
+                }));
+                expect(layout.padding).toBe(12);
+                expect(layout.noteTop).toBeGreaterThanOrEqual(layout.axisBottom);
+            }
+        };
+        await selector.evaluate(node => {
+            const top = node.getBoundingClientRect().top + scrollY;
+            const maximum = document.documentElement.scrollHeight - innerHeight;
+            scrollTo({ top: Math.max(0, Math.min(maximum - 160, top - innerHeight * 0.6)), behavior: 'instant' });
+        });
+        await expect(selector).toBeInViewport({ ratio: 1 });
+        for (const type of ['bar', 'area', 'bar', 'line']) {
+            const before = await position();
+            // selectOption changes the actual control without scrolling it into view.
+            await selector.selectOption(type);
+            await assertBounded(before, type);
+        }
+        await page.evaluate(() => scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+        await expect(selector).toBeInViewport({ ratio: 1 });
+        await selector.evaluate(node => node.focus({ preventScroll: true }));
+        for (const [key, type] of [['ArrowDown', 'bar'], ['ArrowDown', 'area'], ['ArrowUp', 'bar'], ['ArrowUp', 'line']]) {
+            const before = await position();
+            await page.keyboard.press(key);
+            await assertBounded(before, type);
+        }
+        const bottomGap = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('#exploreView')).paddingBottom));
+        expect(bottomGap).toBeGreaterThanOrEqual(4);
+        expect(bottomGap).toBeLessThanOrEqual(6);
+        const panel = page.locator('#visualizationPanel');
+        // Establish a real shorter-chart transition at the bottom. Which type
+        // is taller depends on how many lines the weekly note wraps onto.
+        await page.evaluate(() => scrollBy({ top: -200, behavior: 'instant' }));
+        await selector.selectOption('line');
+        const lineHeight = await panel.evaluate(node => node.getBoundingClientRect().height);
+        await selector.selectOption('bar');
+        const barHeight = await panel.evaluate(node => node.getBoundingClientRect().height);
+        const longer = lineHeight > barHeight ? 'line' : 'bar';
+        const shorter = longer === 'line' ? 'bar' : 'line';
+        const naturalHeight = Math.min(lineHeight, barHeight);
+        await selector.selectOption(longer);
+        await page.evaluate(() => scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+        const atBottom = await position();
+        await selector.selectOption(shorter);
+        await assertBounded(atBottom, shorter);
+        expect(await panel.evaluate(node => node.getBoundingClientRect().height)).toBeCloseTo(naturalHeight, 0);
+        await page.evaluate(() => scrollBy({ top: -200, behavior: 'instant' }));
+        const before = await position();
+        await page.evaluate(() => changeVisualization());
+        await assertBounded(before, shorter);
+        expect(await panel.evaluate(node => node.getBoundingClientRect().height)).toBeCloseTo(naturalHeight, 0);
+        await page.locator('#analysisCloseBtn').click();
+        await expect(panel).toBeHidden();
+        expect(await panel.evaluate(node => node.style.minHeight)).toBe('');
+    });
+}
+
+for (const [theme, width, motion] of [['dark', 1440, 'reduce'], ['light', 390, 'reduce'],
+    ['dark', 1440, 'no-preference'], ['light', 390, 'no-preference']]) {
+    test(`country bar range handles preserve scroll during keyboard input and dragging at ${width}px with ${motion}`, async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: motion });
+        await page.setViewportSize({ width, height: 720 });
+        const history = Array.from({ length: 126 }, (_, index) => {
+            const date = new Date(Date.UTC(2021, 0, index + 1)).toISOString().slice(0, 10);
+            return `${date},TN,${index + 1},${index % 5},${index * 100},${index * 3},${index * 20}`;
+        });
+        const archive = { ...csv, epidem: `${csv.epidem.split('\n')[0]}\n${history.join('\n')}` };
+        await prepare(page, theme, '/?country=tn&analysis=1&date=2021-05-06&smooth=raw', archive);
+        await page.locator('#vizTypeSelector').selectOption('bar');
+        await expect(page.locator('#chartContainer > .chart-note')).toContainText('Weekly totals');
+        await page.evaluate(() => scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+        const start = await page.locator('#date-range-start').elementHandle();
+        const end = await page.locator('#date-range-end').elementHandle();
+        for (const id of ['start', 'end']) await expect(page.locator(`#date-range-${id}`)).toBeInViewport({ ratio: 1 });
+
+        const checkMovement = async action => {
+            const before = await page.evaluate(() => {
+                const sample = () => ({ y: scrollY, maximum: Math.max(0, document.documentElement.scrollHeight - innerHeight) });
+                window.rangeScrollFrames = [sample()];
+                const record = () => {
+                    window.rangeScrollFrames.push(sample());
+                    window.rangeScrollFrame = requestAnimationFrame(record);
+                };
+                window.rangeScrollFrame = requestAnimationFrame(record);
+                return scrollY;
+            });
+            await action();
+            const frames = await page.evaluate(async () => {
+                for (let i = 0; i < 4; i++) await new Promise(requestAnimationFrame);
+                cancelAnimationFrame(window.rangeScrollFrame);
+                return window.rangeScrollFrames;
+            });
+            // A shorter daily note may legitimately shorten the final page.
+            // No frame may jump above that final limit during SVG replacement.
+            const expected = Math.min(before, frames.at(-1).maximum);
+            for (const frame of frames) {
+                expect(frame.y).toBeGreaterThanOrEqual(expected - 2);
+                expect(frame.y).toBeLessThanOrEqual(before + 2);
+            }
+            expect(Math.abs(frames.at(-1).y - expected)).toBeLessThanOrEqual(2);
+            expect(await page.locator('#visualizationPanel').evaluate(node => node.style.minHeight)).toBe('');
+            // Updating the chart must leave native handles mounted, preserving
+            // pointer capture, keyboard focus and continuous dragging.
+            expect(await start.evaluate(node => node === document.querySelector('#date-range-start'))).toBe(true);
+            expect(await end.evaluate(node => node === document.querySelector('#date-range-end'))).toBe(true);
+        };
+        for (const [handle, key, value] of [[start, 'ArrowRight', '1'], [end, 'ArrowLeft', '124']]) {
+            await handle.evaluate(node => node.focus({ preventScroll: true }));
+            await checkMovement(() => page.keyboard.press(key));
+            expect(await handle.inputValue()).toBe(value);
+        }
+        for (const [handle, target] of [[start, 9], [end, 112]]) {
+            const thumb = await handle.evaluate((node, target) => {
+                const bounds = node.getBoundingClientRect();
+                // Chromium reports the input's width for this pseudo-element;
+                // use the thumb dimensions defined by the responsive CSS.
+                const size = innerWidth <= 760 ? 21 : 17;
+                const travel = bounds.width - size;
+                return { x: bounds.left + size / 2 + travel * Number(node.value) / Number(node.max),
+                    y: bounds.top + bounds.height / 2,
+                    target: bounds.left + size / 2 + travel * target / Number(node.max) };
+            }, target);
+            await checkMovement(async () => {
+                await page.mouse.move(thumb.x, thumb.y);
+                await page.mouse.down();
+                await page.mouse.move(thumb.target, thumb.y, { steps: 6 });
+                await page.mouse.up();
+            });
+            expect(await handle.inputValue()).toBe(String(target));
+        }
+        await expect(page.locator('#chartContainer > .chart-note')).not.toContainText('Weekly totals');
+    });
+}
+
+for (const [theme, width] of [['dark', 1440], ['light', 390]]) {
+    test(`country heatmap switches back to the natural line-chart height at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 1000 });
+        const history = Array.from({ length: 730 }, (_, index) => {
+            const date = new Date(Date.UTC(2021, 0, index + 1)).toISOString().slice(0, 10);
+            return `${date},TN,${index + 1},${index % 5},${index * 100},${index * 3},${index * 20}`;
+        });
+        const archive = { ...csv, epidem: `${csv.epidem.split('\n')[0]}\n${history.join('\n')}` };
+        await prepare(page, theme, '/?country=tn&analysis=1&date=2022-12-31&smooth=raw', archive);
+        const panel = page.locator('#visualizationPanel'), selector = page.locator('#vizTypeSelector');
+        await expect(page.locator('#chartContainer .data-line')).toBeVisible();
+        const lineHeight = await panel.evaluate(node => node.getBoundingClientRect().height);
+        await selector.selectOption('heatmap');
+        await expect(page.locator('#chartContainer .heatmap-cell')).toHaveCount(744);
+        await heatmapValueLegend(page, '#chartContainer');
+        expect(await panel.evaluate(node => node.getBoundingClientRect().height)).toBeGreaterThan(lineHeight + 100);
+        const before = await page.evaluate(() => {
+            scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }); return scrollY;
+        });
+        await selector.selectOption('line');
+        await expect(page.locator('#chartContainer .data-line')).toBeVisible();
+        const frames = await page.evaluate(async () => {
+            const positions = [];
+            for (let frame = 0; frame < 4; frame++) {
+                await new Promise(requestAnimationFrame);
+                positions.push({ y: scrollY, maximum: Math.max(0, document.documentElement.scrollHeight - innerHeight) });
+            }
+            return positions;
+        });
+        for (const frame of frames) expect(Math.abs(frame.y - Math.min(before, frames.at(-1).maximum))).toBeLessThanOrEqual(2);
+        expect(await panel.evaluate(node => node.getBoundingClientRect().height)).toBeCloseTo(lineHeight, 0);
+        expect(await panel.evaluate(node => node.style.minHeight)).toBe('');
+        await expect(page.locator('#chartContainer .heatmap-value-legend')).toHaveCount(0);
+    });
+
+    test(`comparison chart-type changes use natural panel heights at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 700 });
+        await prepare(page, theme);
+        const panel = page.locator('#comparePanel'), selector = page.locator('#compareChartType');
+        const heights = { line: await panel.evaluate(node => node.getBoundingClientRect().height) };
+        await selector.selectOption('heatmap');
+        await expect(page.locator('#compareChartContainer .heatmap-cell').first()).toBeVisible();
+        heights.heatmap = await panel.evaluate(node => node.getBoundingClientRect().height);
+        expect(Math.abs(heights.line - heights.heatmap)).toBeGreaterThan(2);
+        for (const type of ['line', 'heatmap', 'line']) {
+            const before = await page.evaluate(() => {
+                scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }); return scrollY;
+            });
+            await selector.selectOption(type);
+            await expect(page.locator(`#compareChartContainer ${comparisonMarks[type]}`).first()).toBeVisible();
+            const position = await page.evaluate(() => ({ y: scrollY, maximum: Math.max(0, document.documentElement.scrollHeight - innerHeight) }));
+            expect(Math.abs(position.y - Math.min(before, position.maximum))).toBeLessThanOrEqual(2);
+            expect(await panel.evaluate(node => node.getBoundingClientRect().height)).toBeCloseTo(heights[type], 0);
+            expect(await panel.evaluate(node => node.style.minHeight)).toBe('');
+        }
+    });
+}
+
 test('selected-day heading remains clear across chart types and independent of the analysis period', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 1000 });
     await prepare(page, 'light', '/?country=tn&date=2021-01-28&smooth=raw');
@@ -415,6 +812,7 @@ test('country analysis contains only single-country charts and follows the chose
             await page.locator('#vizTypeSelector').selectOption(type);
             await expect(page.locator(`#chartContainer ${mark}`).first(), `${metric}: ${type}`).toBeVisible();
             if (type === 'scatter') await scatterDateLegend(page, '#chartContainer');
+            if (type === 'heatmap') await heatmapValueLegend(page, '#chartContainer');
             await expect(page.locator('#chartContainer')).not.toContainText('United States');
             await expect(page.locator('#chartContainer')).not.toContainText('France');
         }
@@ -443,6 +841,8 @@ test('country scatter groups all dataset metrics and retains cross-dataset axes 
     await page.locator('#seeMoreBtn').click();
     await page.locator('#hospBtn').click();
     await page.locator('#vizTypeSelector').selectOption('scatter');
+    for (const id of ['analysisMetricControl', 'analysisUnitControl', 'analysisReportingGroup'])
+        await expect(page.locator(`#${id}`)).toBeHidden();
     const activeColumns = await page.evaluate(() => dataService.availableColumns[dataService.currentDataset]);
     for (const selector of ['#analysis-xMetric', '#analysis-yMetric']) {
         expect(activeColumns).toContain(await page.locator(selector).inputValue());
@@ -487,6 +887,8 @@ test('country scatter groups all dataset metrics and retains cross-dataset axes 
     await expect(page.locator('#date-range-start-input')).toHaveValue('2021-01-10');
     await expect(page.locator('#date-range-end-input')).toHaveValue('2021-01-20');
     await page.locator('#vizTypeSelector').selectOption('line');
+    await expect(page.locator('#analysisMetricControl')).toBeVisible();
+    await expect(page.locator('#analysisUnitControl')).toBeVisible();
     await expect(page.locator('#analysisChartOptions')).toBeHidden();
     await expect(page.locator('#analysisChartOptions > *')).toHaveCount(0);
     await page.locator('#vizTypeSelector').selectOption('scatter');
@@ -575,7 +977,7 @@ test('box statistics appear on hover and keyboard focus without extra panels in 
     await expect(page.locator('#chartContainer table, #chartContainer details')).toHaveCount(0);
 });
 
-test('comparison setting changes preserve the scroll position when the chart becomes shorter', async ({ page }) => {
+test('comparison setting changes preserve scroll while chart-type changes release retained height', async ({ page }) => {
     await page.setViewportSize({ width: 1000, height: 500 });
     await prepare(page, 'dark');
     await page.locator('#compareChartType').selectOption('box');
@@ -583,13 +985,17 @@ test('comparison setting changes preserve the scroll position when the chart bec
         scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }); return scrollY;
     });
     expect(position).toBeGreaterThan(0);
-    for (const [id, value] of [['compareMetricSelector', 'new_tested'], ['compareUnitSelector', 'per100k'], ['compareChartType', 'horizontal']]) {
+    for (const [id, value] of [['compareMetricSelector', 'new_tested'], ['compareUnitSelector', 'per100k']]) {
         await page.locator(`#${id}`).evaluate((select, value) => {
             select.value = value; select.dispatchEvent(new Event('change', { bubbles: true }));
         }, value);
         await expect.poll(() => page.evaluate(() => scrollY)).toBe(position);
     }
+    await page.locator('#compareChartType').selectOption('horizontal');
     await expect(page.locator('.rank-bar')).toHaveCount(2);
+    const after = await page.evaluate(() => ({ y: scrollY, maximum: Math.max(0, document.documentElement.scrollHeight - innerHeight) }));
+    expect(Math.abs(after.y - Math.min(position, after.maximum))).toBeLessThanOrEqual(2);
+    expect(await page.locator('#comparePanel').evaluate(panel => panel.style.minHeight)).toBe('');
     await page.locator('#navExplore').click();
     expect(await page.locator('#comparePanel').evaluate(panel => panel.style.minHeight)).toBe('');
 });

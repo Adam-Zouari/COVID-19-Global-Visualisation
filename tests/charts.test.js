@@ -158,7 +158,7 @@ test('reused chart containers discard analytical state before Cartesian charts o
         assert.equal(container.classList.contains('analytics-chart'), true);
         render();
         assert.equal(container.classList.contains('analytics-chart'), false);
-        assert.equal(container.dataset.chartType, undefined);
+        assert.notEqual(container.dataset.chartType, 'scatter');
         assert.equal(container.classList.contains('retained-layout-class'), true);
         assert.doesNotMatch(container.textContent, /Old chart description|Relationships/);
     }
@@ -172,13 +172,46 @@ test('filtering to metric coverage dates retains unreported calendar days inside
     assert.equal(filtered.series.new_tested[1], null);
 });
 
-test('a reported day without enough averaging history explains the unavailable average', t => {
-    const { factory, service, container, window } = harness(t);
+test('a reported day without enough averaging history explains the unavailable average in a centered state', t => {
+    const { factory, service, container } = harness(t);
     service.smoothing = '7day';
     service.getCountrySeries = () => [{ date: '2020-01-01', value: null, rawValue: 5, reported: true }, { date: '2020-01-02', value: null, rawValue: null, reported: false }];
     factory.createChart(container, 'us', 'line', {});
-    container.querySelector('.chart-hit-area').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
-    assert.match(container.querySelector('.chart-tooltip').textContent, /Insufficient reported days for the 7-day average/);
+    assert.equal(container.querySelector('svg'), null);
+    assert.match(container.querySelector('.chart-empty-state').textContent, /No data available.*not enough reported days to calculate a 7-day average.*Try another metric or date range/);
+    assert.match(container.querySelector('.chart-subtitle').textContent, /7-day average/);
+});
+
+test('all country Cartesian types show titled empty states while zeros remain reported observations', t => {
+    const { factory, service, container } = harness(t);
+    const original = service.getCountrySeries;
+    for (const type of ['line', 'bar', 'area']) {
+        service.getCountrySeries = () => service.availableDates.map(date => ({ date, value: null }));
+        factory.createChart(container, 'us', type, {});
+        const state = container.querySelector('.chart-empty-state');
+        assert.equal(state.getAttribute('role'), 'status');
+        assert.match(state.textContent, /No data available.*new confirmed cases.*selected country and date range.*Try another metric or date range/i);
+        assert.match(container.querySelector('.chart-heading-title').textContent, /New confirmed cases/);
+        assert.match(container.querySelector('.chart-subtitle').textContent, /Daily reported values.*2020/);
+        assert.equal(container.querySelector('svg, .chart-error, .chart-note'), null);
+        assert.ok(parseFloat(state.style.height) >= 330);
+        service.getCountrySeries = () => service.availableDates.map(date => ({ date, value: 0 }));
+        factory.createChart(container, 'us', type, {});
+        assert.equal(container.querySelector('.chart-empty-state'), null);
+        assert.ok(container.querySelector('svg'));
+    }
+    service.getCountrySeries = original;
+});
+
+test('missing country histories retain metric, period and reason instead of returning an unframed error', t => {
+    const { factory, comparison, container } = harness(t);
+    factory.createChart(container, 'zz', 'line', {});
+    assert.match(container.querySelector('.chart-heading-title').textContent, /New confirmed cases/);
+    assert.match(container.querySelector('.chart-subtitle').textContent, /2020/);
+    assert.ok(container.querySelector('.chart-empty-state'));
+    comparison.createCombinedChart(container, ['zz', 'xx'], 'bar');
+    assert.match(container.querySelector('.chart-empty-state').textContent, /selected countries and date range/);
+    assert.equal(container.querySelector('svg, .chart-error'), null);
 });
 
 test('long histories have no point markers and range sliders reach each day', t => {
