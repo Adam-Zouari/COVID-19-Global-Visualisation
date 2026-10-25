@@ -21,14 +21,17 @@ Express server serves the application and its prepared CSV files.
 
 - **Node.js 24 or newer**, or Node.js **22.13 or newer within the 22.x line**.
 - npm and Git available on `PATH`.
-- A modern browser. Browser tests use installed Google Chrome.
+- A modern browser.
 - An internet connection to install dependencies and download the original datasets.
 
 ## Run locally
 
+The commands below work on **Windows** (PowerShell or Command Prompt), **macOS**
+(Terminal with zsh or Bash), and **Linux** (a terminal with Bash).
+
 Clone the repository and install dependencies:
 
-```bash
+```text
 git clone https://github.com/Adam-Zouari/COVID-19-Global-Visualisation.git
 cd COVID-19-Global-Visualisation
 npm ci
@@ -36,7 +39,7 @@ npm ci
 
 Download the five Google datasets and prepare them for the website:
 
-```bash
+```text
 npm run download-data
 npm run prepare-data -- datasets/google
 ```
@@ -46,9 +49,12 @@ before the historical archive can load.
 
 Start the server:
 
-```bash
+```text
 npm start
 ```
+
+Preparation writes to `data/` by default, and `npm start` automatically serves
+those files on port `3000`.
 
 Open [http://localhost:3000](http://localhost:3000). Keep the terminal open while
 using the website, and stop the server with **Ctrl+C**. There is no build step.
@@ -75,31 +81,12 @@ population values are simulated.
 | Explore country data | Line, bar, area, calendar heatmap, scatter, and box plot |
 | Compare | Line, bar, horizontal bars, heatmap, scatter, dumbbell, and box plot |
 
-The globe and country snapshot share Explorer settings. Country analysis and
-Compare each keep independent metrics, units, reporting modes, and dates. They
-start with the globe's applicable settings on first use and retain subsequent
-choices when switching views or refreshing. Adding a country preserves an
-existing comparison's settings.
+The globe, country analysis, and Compare retain independent settings. Shared URLs
+restore your selections. Uploaded CSV contents are temporary and are not included
+in shared links.
 
-Each workspace remembers its last selected metric for each dataset. Returning to
-a dataset restores that metric; clicking the active dataset keeps it unchanged.
-This history is retained through refresh and shared URLs. A saved metric that is
-unavailable in the loaded data falls back to the dataset's default.
-
-Country analysis has its own dataset buttons beside the metric selector; the
-metric menu lists only the selected dataset's measures. These controls wrap into
-separate rows on mobile. Compare keeps its existing category buttons and filtered
-metric menu. The buttons above the workspaces reflect and control the currently
-active Explore or Compare view. Both period sliders update chart axes while
-dragging.
-
-Country scatter plots can pair columns from different loaded datasets. Comparison
-scatter plots use two countries as X/Y axes or three as X/Y/Z axes. Each point
-represents a date with reported values for every selected axis.
-
-Shared URLs retain each workspace's settings, including the country chart and
-its period. The data source and appearance remain global. Uploaded CSVs stay in
-the current browser tab and are not included in shared URLs.
+Country scatter plots can pair metrics from different datasets. Comparison scatter
+plots use two or three countries as axes, with each point representing a date.
 
 ## Data sources and preparation
 
@@ -124,36 +111,59 @@ scripts/prepare-data.js
 data/                  Prepared country-level CSVs used by the website
 ```
 
-The downloader preserves completed files and can be rerun after an interrupted
-download. Preparation keeps country-level records, preserves their reported
-values, and excludes invalid or out-of-range dates. When dates are excluded,
-`data/prepare-report.json` records the reasons and examples. The original
-files remain untouched.
+The downloader saves the original Google CSVs in `datasets/google/`, including
+regional records. It skips completed downloads and can be rerun after an
+interruption.
 
-You can also place the five prepared CSVs directly in `data/` and skip downloading
-and preparation. Population data is optional, but population-adjusted units need
-valid population estimates.
+Preparation reads those files and creates the smaller files used by the website:
 
-Preparation refuses to overwrite existing outputs. To prepare another copy and
-use it with the server, choose a new output folder. For example, in Bash:
+1. **Keep national records.** State, province, and other subregion rows are
+   excluded because the globe and comparisons operate at country level. National
+   totals are taken from the source; regional values are not added together.
+2. **Check dates.** Keep dated observations only when the date is valid and falls
+   between **December 1, 2019** and the day preparation runs.
 
-```bash
-npm run prepare-data -- datasets/google data-next
-DATA_DIR=data-next npm start
+   The project includes the full month when the outbreak was first reported.
+   [WHO's timeline](https://www.who.int/news/item/29-06-2020-COVIDtimeline)
+   records the Wuhan pneumonia cluster on December 31, 2019. Earlier dates, such
+   as Argentina's `2019-03-30`, fall outside this period. Those rows are skipped;
+   their dates are not rewritten, and the original files remain unchanged.
+3. **Validate structure.** Files must contain country identifiers and the required
+   date, country-name, or population columns. Missing required columns or duplicate
+   headers stop preparation.
+4. **Preserve observations.** Retained rows keep their source columns and values,
+   including missing values, reported zeros, and negative corrections. Preparation
+   does not fill gaps, calculate averages, or rewrite source dates.
+5. **Write prepared files.** The output names are listed in the table above. If
+   dates were excluded, `prepare-report.json` records the date rule, row counts,
+   and examples for review. The original downloads remain unchanged.
+
+If you already have the prepared CSVs, copy them into `data/` and skip downloading
+and preparation. The three observation tables and country index are required.
+The population file is optional: counts work without it, but population-adjusted
+units need valid population estimates.
+
+By default, preparation refuses to replace existing outputs. To regenerate the
+prepared files in `data/`, explicitly allow replacement:
+
+```text
+npm run prepare-data -- datasets/google --overwrite
 ```
+
+New outputs are validated before replacement; failed validation preserves the
+existing prepared files. Original downloads remain unchanged. Stop the server
+before replacing its data, and keep source and output folders separate.
 
 The archive contains historical observations through September 2022. Reporting
 periods and coverage vary by country and metric. Missing observations remain
 unavailable; reported zeros and negative reporting corrections are preserved.
 
-Daily reporting is the default. A seven-day average uses the selected day and
-previous six calendar days, requires a full window, at least five reports, and a
-report on the selected day. Missing days are not treated as zero. Cumulative
-metrics remain unsmoothed.
+## Optional configuration
 
-## Configuration
+Use these settings if you want to use a different data folder, port, or listening
+address.
 
-The server reads these environment variables:
+The server accepts these environment variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -161,11 +171,39 @@ The server reads these environment variables:
 | `HOST` | `127.0.0.1` | Interface the server listens on |
 | `DATA_DIR` | `data/` in the project | Directory containing prepared CSV files |
 
-For a different port, in Bash:
+To prepare a separate copy in `data-next/`:
+
+```text
+npm run prepare-data -- datasets/google data-next
+```
+
+To serve this copy on port `3001`, choose the example for your terminal:
+
+**Windows — PowerShell:**
+
+```powershell
+$env:DATA_DIR = "data-next"
+$env:PORT = "3001"
+npm start
+```
+
+**Windows — Command Prompt:**
+
+```bat
+set "DATA_DIR=data-next"
+set "PORT=3001"
+npm start
+```
+
+**macOS and Linux — zsh or Bash:**
 
 ```bash
-PORT=3001 npm start
+DATA_DIR=data-next PORT=3001 npm start
 ```
+
+Set only the variable you need, or use plain `npm start` for the defaults in a
+fresh terminal. PowerShell and Command Prompt retain these settings for the
+current terminal session; the zsh/Bash example applies them to that command only.
 
 ## Project structure
 
@@ -188,35 +226,51 @@ datasets/google/       Original CSV downloads; excluded from Git
 data/                  Prepared CSVs and data-quality report; excluded from Git
 ```
 
-See [the audit record](docs/AUDIT.md) for implementation decisions, data handling,
-known limitations, and verification history.
-
 ## Tests
 
-Run syntax checks and the Node test suite:
+These are development checks; you do not need to run them to use the website.
+The commands work on Windows, macOS, and Linux.
 
-```bash
+Check JavaScript syntax and run the Node tests for data handling, calculations,
+state, charts, and other application behavior:
+
+```text
 npm run check
 npm test
 ```
 
-With Google Chrome installed, run the browser tests:
+**Playwright** checks website interactions in its own Chromium browser, including
+controls, charts, sliders, and saved views. Install the matching browser once
+after `npm ci` (and again after upgrading Playwright), then run the tests:
 
-```bash
+```text
+npx playwright install chromium
 npm run test:e2e
 ```
 
-Playwright starts a separate server on port `3100`. Screenshots and failure traces
-are written to `test-results/`, which is excluded from Git. Some browser checks
-use the prepared archive, so complete data preparation before running the full
-suite.
+Playwright uses this downloaded browser regardless of your default browser. See
+[Playwright's browser documentation](https://playwright.dev/docs/browsers).
+
+To watch the browser while the tests run:
+
+```text
+npm run test:e2e -- --headed
+```
+
+Playwright starts and stops its own server on port `3100`; you do not need to run
+`npm start` separately for these tests. Failed tests can save screenshots and
+traces in `test-results/` for debugging. That folder is excluded from Git. Some
+browser checks use the prepared archive, so complete data preparation before
+running the full suite.
 
 ## Troubleshooting
 
 | Symptom | What to check |
 | --- | --- |
+| PowerShell blocks `npm.ps1` | Use `npm.cmd` instead of `npm`, such as `npm.cmd start`. Both run the same npm tool. For `npx`, use `npx.cmd` if needed. |
+| Chromium cannot start on Linux because system libraries are missing | Run `npx playwright install --with-deps chromium` to install the browser and required system libraries. |
 | Data files are unavailable | Download and prepare the datasets, or place the prepared files in `data/`. Check `DATA_DIR` if using another folder. |
-| Preparation reports that an output already exists | Use a new destination folder and point `DATA_DIR` at it. Existing files are preserved. |
+| Preparation reports that an output already exists | Add `--overwrite` to regenerate the prepared files, or use a new destination folder and point `DATA_DIR` at it. |
 | The server port is already in use | Stop the other server or choose a different `PORT`. |
 | A country or chart has no data | Try another metric or date range. Reporting gaps and missing population estimates can make values unavailable. |
 
