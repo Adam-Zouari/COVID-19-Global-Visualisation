@@ -44,6 +44,7 @@
                 <button id="navExplore" class="nav-link active" onclick="AtlasView.navigate('explore')" aria-current="page">Explore</button>
                 <button id="navCompare" class="nav-link" onclick="AtlasView.navigate('compare')">Compare <span id="compareCount" class="nav-count" hidden>0</span></button>
             </nav>
+            <script>window.AtlasView?.render(window.AtlasView.current);</script>
             <div class="header-actions">
                 <select id="dataSourceSelector" class="data-source-select" aria-label="Data source">
                     <option value="csv">Google data</option>

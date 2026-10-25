@@ -26,6 +26,18 @@ async function layout(page) {
     })));
 }
 
+async function expectLayoutToMatch(page, expected) {
+    const actual = await layout(page);
+    for (const [selector, properties] of Object.entries(expected)) {
+        for (const [property, value] of Object.entries(properties)) {
+            const measured = expect(actual[selector][property], `${selector}: ${property}`);
+            // Browser layout can differ by tiny fractions of a CSS pixel.
+            if (typeof value === 'number') measured.toBeCloseTo(value, 1);
+            else measured.toBe(value);
+        }
+    }
+}
+
 async function expectDefaultSphereToFit(page) {
     await expect.poll(() => page.evaluate(() => {
         const globe = globeInstance, drawing = document.getElementById('globe').getBoundingClientRect();
@@ -107,7 +119,7 @@ for (const viewport of [
         await expect(page.locator('#globe .country').first()).toBeAttached();
         await expectDefaultSphereToFit(page);
         // Preserve the panel sizes from before the drawing area was expanded.
-        expect((await page.locator('#globeStage').boundingBox()).height).toBe(viewport.width === 1440 ? 620 : viewport.width === 1024 ? 440 : 370);
+        expect((await page.locator('#globeStage').boundingBox()).height).toBeCloseTo(viewport.width === 1440 ? 620 : viewport.width === 1024 ? 440 : 370, 1);
         const baselineData = await dataAppearance(page);
         expect(baselineData.mappedColorsCorrect).toBe(true);
         const normalLayout = await layout(page);
@@ -129,20 +141,20 @@ for (const viewport of [
                 expect(await page.locator('#globe .ocean').evaluate(node => getComputedStyle(node).filter)).not.toBe('none');
                 expect(await page.locator('#globeStage').evaluate(node => getComputedStyle(node).backgroundImage)).not.toBe('none');
                 await expectDefaultSphereToFit(page);
-                expect(await layout(page)).toEqual(baselineLayout);
+                await expectLayoutToMatch(page, baselineLayout);
                 expect(await dataAppearance(page)).toEqual(baselineData);
                 await expect(page.locator('#mapMetricLabel')).toBeVisible();
                 await expect(page.locator('#coverageCount')).toBeVisible();
                 await expect(page.locator('.globe-hint')).toBeVisible();
-                await expectGlobeControlsToWork(page);
-                await expectDefaultSphereToFit(page);
-                await page.locator('#globeStage').screenshot({ path: `test-results/globe-refined-${theme}-${expanded ? 'fullscreen' : 'normal'}-${viewport.width}.png` });
             }
+            // Zoom behavior is shared by themes; exercise it once per workspace.
+            await expectGlobeControlsToWork(page);
+            await expectDefaultSphereToFit(page);
         }
         await page.locator('#exitExpandedGlobe').click();
         await expect(page.locator('#expandedGlobe')).toHaveCount(0);
         await expectDefaultSphereToFit(page);
-        expect(await layout(page)).toEqual(normalLayout);
+        await expectLayoutToMatch(page, normalLayout);
         expect(await dataAppearance(page)).toEqual(baselineData);
         // Opening the existing snapshot narrows the desktop stage; fitting
         // should adapt without obscuring its labels or moving its controls.

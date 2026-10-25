@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 
-test.use({ reducedMotion: 'reduce', locale: 'en-US' });
+// Native date segments follow the browser UI language; context locale alone
+// does not set their order on every operating system.
+test.use({ reducedMotion: 'reduce', locale: 'en-US', launchOptions: { args: ['--lang=en-US'] } });
 
 const dates = Array.from({ length: 31 }, (_, index) => `2021-01-${String(index + 1).padStart(2, '0')}`);
 const archive = {

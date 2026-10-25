@@ -4,9 +4,15 @@ window.CompareUI = {
         if (!panel || this.preservingScroll) return render();
         const position = { left: window.scrollX, top: window.scrollY };
         const minimum = this.scrollMinimumActive ? this.originalMinimum : panel.style.minHeight;
+        const chart = document.getElementById('compareChartContainer');
+        let renderedWidth;
         panel.style.minHeight = `${panel.getBoundingClientRect().height}px`;
         this.preservingScroll = true;
-        try { return render(); }
+        try {
+            const result = render();
+            renderedWidth = chart?.clientWidth;
+            return result;
+        }
         finally {
             panel.style.minHeight = minimum;
             // Settings edits may retain enough height for the current viewport.
@@ -15,8 +21,15 @@ window.CompareUI = {
             this.scrollMinimumActive = shortage > 0;
             this.originalMinimum = minimum;
             if (shortage > 0) panel.style.minHeight = `${panel.getBoundingClientRect().height + shortage}px`;
-            window.scrollTo({ ...position, behavior: 'instant' });
-            this.preservingScroll = false;
+            try {
+                // Releasing the old chart's height can remove the page scrollbar.
+                // Redraw once at the final width instead of waiting for a later
+                // theme/resize event to correct the chart's initial scale.
+                if (renderedWidth !== undefined && Math.abs(chart.clientWidth - renderedWidth) > 1) render();
+            } finally {
+                window.scrollTo({ ...position, behavior: 'instant' });
+                this.preservingScroll = false;
+            }
         }
     },
 

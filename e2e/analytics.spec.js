@@ -372,13 +372,36 @@ test('analytical charts support keyboard inspection and adapt appearance without
     await expect(page.locator('#compareChartContainer .chart-tooltip')).toContainText('United States');
     expect(await page.evaluate(() => globeInstance.selectedCountryCode)).toBe(selectedCountry);
     await page.locator('#compareChartType').selectOption('horizontal');
+    const horizontalState = () => page.locator('#compareChartContainer').evaluate(container => {
+        const svg = container.querySelector('svg');
+        const plotWidth = svg.querySelector('.x-axis .domain').getBBox().width;
+        return {
+            labels: [...container.querySelectorAll('.rank-item')].map(node => node.getAttribute('aria-label')),
+            ticks: [...svg.querySelectorAll('.x-axis .tick text')].map(node => node.textContent),
+            proportions: [...svg.querySelectorAll('.rank-bar')].map(node => Number(node.getAttribute('width')) / plotWidth),
+            fitted: Math.abs(svg.viewBox.baseVal.width - svg.getBoundingClientRect().width) < 1
+        };
+    });
+    // A shorter chart can release the page scrollbar; its first rendering must
+    // already use that settled width, before a theme change forces a redraw.
+    await expect.poll(async () => (await horizontalState()).fitted).toBe(true);
+    const baseline = await horizontalState();
+    expect(baseline.labels).toHaveLength(2);
+    expect(baseline.labels.join(' ')).toContain('United States');
+    expect(baseline.labels.join(' ')).toContain('Tunisia');
+    expect(baseline.labels.join(' ')).toContain('2021-01-28');
     await page.evaluate(() => { window.__analyticsSource = dataService.indexedData; });
     const color = await page.locator('.rank-bar').first().getAttribute('fill');
-    const geometry = await page.locator('.rank-bar').first().evaluate(node => ['x', 'width', 'y', 'height'].map(key => node.getAttribute(key)));
     await page.locator('#appearanceButton').click();
     await page.locator('[data-appearance="light"]').click();
     await expect.poll(() => page.locator('.rank-bar').first().getAttribute('fill')).not.toBe(color);
-    expect(await page.locator('.rank-bar').first().evaluate(node => ['x', 'width', 'y', 'height'].map(key => node.getAttribute(key)))).toEqual(geometry);
+    const themed = await horizontalState();
+    expect(themed.fitted).toBe(true);
+    expect(themed.labels).toEqual(baseline.labels);
+    expect(themed.ticks).toEqual(baseline.ticks);
+    expect(themed.proportions).toHaveLength(baseline.proportions.length);
+    themed.proportions.forEach((value, index) => expect(value).toBeCloseTo(baseline.proportions[index], 5));
+    await fits(page, '#compareChartContainer > svg');
     expect(await page.evaluate(() => dataService.indexedData === window.__analyticsSource)).toBe(true);
 });
 
@@ -670,21 +693,32 @@ for (const [theme, width, motion] of [['dark', 1440, 'reduce'], ['light', 390, '
             expect(await handle.inputValue()).toBe(value);
         }
         for (const [handle, target] of [[start, 9], [end, 112]]) {
-            const thumb = await handle.evaluate((node, target) => {
+            const position = value => handle.evaluate((node, value) => {
                 const bounds = node.getBoundingClientRect();
                 // Chromium reports the input's width for this pseudo-element;
                 // use the thumb dimensions defined by the responsive CSS.
                 const size = innerWidth <= 760 ? 21 : 17;
                 const travel = bounds.width - size;
-                return { x: bounds.left + size / 2 + travel * Number(node.value) / Number(node.max),
-                    y: bounds.top + bounds.height / 2,
-                    target: bounds.left + size / 2 + travel * target / Number(node.max) };
-            }, target);
+                return { x: bounds.left + size / 2 + travel * value / Number(node.max),
+                    y: bounds.top + bounds.height / 2 };
+            }, value);
+            const initial = Number(await handle.inputValue());
+            const thumb = await position(initial);
             await checkMovement(async () => {
                 await page.mouse.move(thumb.x, thumb.y);
                 await page.mouse.down();
-                await page.mouse.move(thumb.target, thumb.y, { steps: 6 });
-                await page.mouse.up();
+                try {
+                    for (let step = 1; step <= 6; step++) {
+                        const value = Math.round(initial + (target - initial) * step / 6);
+                        const next = await position(value);
+                        await page.mouse.move(next.x, next.y);
+                        // Keep the native drag active until both the control
+                        // and its scheduled chart redraw acknowledge this step.
+                        await expect.poll(() => handle.inputValue()).toBe(String(value));
+                        await expect.poll(() => page.evaluate(() => ChartControls.frame)).toBe(null);
+                        expect(await handle.evaluate(node => document.activeElement === node && node.matches(':active'))).toBe(true);
+                    }
+                } finally { await page.mouse.up(); }
             });
             expect(await handle.inputValue()).toBe(String(target));
         }

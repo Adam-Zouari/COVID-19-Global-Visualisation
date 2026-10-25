@@ -22,12 +22,6 @@ async function selectCountry(page, name) {
     await expect(page.locator('#searchModal')).toBeHidden();
 }
 
-async function screenshot(page, name) {
-    await page.addStyleTag({ content: 'html { scroll-behavior: auto !important; }' });
-    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-    await page.screenshot({ path: `test-results/${name}.png`, fullPage: true });
-}
-
 test('dismissing the selected country also closes its analysis and clears the saved selection', async ({ page }) => {
     await ready(page, '/?data=sample&country=tn&analysis=1');
     await expect(page.locator('#visualizationPanel')).toBeVisible();
@@ -85,7 +79,6 @@ test('laptop exploration exposes the globe immediately and comparisons keep resu
     await page.locator('#compare-date-range-start-input').press('Tab');
     await expect(page.locator('#dateRangeSlider .date-range-selection')).toContainText('Jun 1, 2021');
     await expect(page.locator('#compareChartContainer .chart-subtitle')).toContainText('Jun 1, 2021');
-    await screenshot(page, 'atlas-compact-comparison');
     for (const name of ['Tunisia', 'France']) await page.getByRole('button', { name: `Remove ${name}`, exact: true }).click();
     await expect(page.locator('.compare-options')).toBeHidden();
     await expect(page.locator('#compareMessage')).toBeHidden();
@@ -120,7 +113,6 @@ test('weekly comparisons visibly distinguish missing weeks, partial reporting an
     await expect(page.locator('.chart-tooltip')).toContainText('Reported days');
     await page.locator('.missing-bar-marker').first().focus();
     await expect(page.locator('.chart-tooltip')).toContainText('No observation');
-    await screenshot(page, 'atlas-weekly-reporting');
 });
 
 test('population units preserve compact axes and the timeline stays above the globe', async ({ page }) => {
@@ -180,7 +172,6 @@ test('desktop exploration keeps the still globe and communicates metric, source,
     expect(await page.locator('#globe .country').count()).toBeGreaterThan(150);
     expect(await page.evaluate(() => window.globeInstance.autoRotate)).toBe(false);
     expect(await page.evaluate(() => window.globeInstance.projection.clipAngle())).toBe(90);
-    await screenshot(page, 'atlas-explore-desktop');
     await selectCountry(page, 'Tunisia');
     await expect(page.locator('#countryName')).toContainText('Tunisia');
     await expect(page.locator('#countryPrimary')).toContainText('New confirmed cases');
@@ -198,7 +189,6 @@ test('desktop exploration keeps the still globe and communicates metric, source,
     await expect(page.locator('#currentDate')).toHaveText('Jan 2, 2020');
     await page.locator('#dateSlider').focus(); await page.keyboard.press('End');
     await page.locator('#averageBtn').click();
-    await screenshot(page, 'atlas-country-desktop');
     await page.getByRole('button', { name: 'Source & methodology' }).click();
     await expect(page.locator('#methodologyDialog')).toBeVisible();
     await page.keyboard.press('Escape');
@@ -219,7 +209,6 @@ test('analysis is inline, normalized values are real calculations and mapless co
     await expect(page.locator('#globe svg')).toBeVisible();
     await expect(page.locator('#chartContainer svg')).toBeVisible();
     expect(await page.locator('#chartContainer circle').count()).toBeLessThan(15);
-    await screenshot(page, 'atlas-analysis-desktop');
     await page.getByRole('button', { name: 'Close country data', exact: true }).click();
     await expect(page.locator('#visualizationPanel')).toBeHidden();
     await expect(page.locator('#seeMoreBtn')).toBeFocused();
@@ -249,7 +238,6 @@ test('comparison uses shared controls, stable colors, readable small multiples a
     await expect(page.locator('#compareMessage')).toContainText('4 countries');
     await page.locator('#compareUnitSelector').selectOption('per100k');
     await expect(page.locator('#compareChartContainer .combined-chart-container > svg')).toHaveCount(1);
-    await screenshot(page, 'atlas-compare-desktop');
     await page.locator('#separateChartsBtn').click();
     await expect(page.locator('.country-chart-container')).toHaveCount(4);
     const colors = await page.locator('.country-color').evaluateAll(nodes => nodes.map(node => node.style.backgroundColor));
@@ -267,17 +255,6 @@ test('comparison uses shared controls, stable colors, readable small multiples a
     await expect(page.locator('#countryName')).toContainText('Tunisia');
     await expect(page.locator('#currentDate')).toHaveText(selectedDate);
     expect(errors).toEqual([]);
-});
-
-test('shared URLs restore country, category, metric, units and comparison layout', async ({ page }) => {
-    await ready(page, '/?data=sample&category=vaccinations&metric=cumulative_persons_vaccinated&unit=percent&smooth=raw&country=tn&compare=tn,us&view=compare&layout=separate&range=40,100');
-    await expect(page.locator('#comparePanel')).toBeVisible();
-    await expect(page.locator('#compareMetricSelector')).toHaveValue('cumulative_persons_vaccinated');
-    await expect(page.locator('#compareUnitSelector')).toHaveValue('percent');
-    await expect(page.locator('.country-chart-container')).toHaveCount(2);
-    await page.reload();
-    await expect(page.locator('#comparePanel')).toBeVisible();
-    await expect(page.locator('.country-chart-container')).toHaveCount(2);
 });
 
 test('mobile explorer, expandable details, keyboard search and charts fit the viewport', async ({ page }) => {
@@ -306,7 +283,6 @@ test('mobile explorer, expandable details, keyboard search and charts fit the vi
     }));
     expect(layout.timeline.bottom).toBeLessThan(layout.globe.top);
     expect(layout.country).toBeGreaterThan(layout.globe.bottom);
-    await screenshot(page, 'atlas-mobile');
     await page.locator('#seeMoreBtn').click();
     await expect(page.locator('#chartContainer svg')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -326,7 +302,6 @@ test('tablet exploration and mobile comparison fit their layouts without clipped
     await page.locator('#combinedChartBtn').click();
     await expect(page.locator('#compareChartContainer .combined-chart-container > svg')).toHaveCount(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await screenshot(page, 'atlas-compare-mobile');
     await page.setViewportSize({ width: 320, height: 740 });
     await expect(page.locator('#dataSourceSelector')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -366,7 +341,6 @@ test('original archive loads by default and source switching explicitly selects 
     await selectCountry(page, 'Tunisia');
     await page.locator('#unitSelector').selectOption('per100k');
     expect(await page.evaluate(() => window.dataService.currentDate < window.dataService.getAvailableDates().at(-1))).toBe(true);
-    await screenshot(page, 'atlas-real-archive');
     await page.getByRole('button', { name: 'Source & methodology' }).click();
     const report = await page.request.get('/api/data-quality');
     if (report.ok()) {

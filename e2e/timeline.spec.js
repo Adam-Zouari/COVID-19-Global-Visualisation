@@ -30,11 +30,16 @@ for (const width of [1440, 390]) {
         await expect(field).toHaveValue('2021-06-14');
 
         await field.click({ position: { x: 10, y: 10 } });
-        expect(await field.evaluate(node => getComputedStyle(node).outlineStyle)).toBe('none');
+        await expect(field).toHaveCSS('outline-style', 'none');
         await page.keyboard.press('Tab');
         await field.focus();
-        expect(await field.evaluate(node => getComputedStyle(node).outlineStyle)).toBe('solid');
-        expect(await field.evaluate(node => getComputedStyle(node).outlineWidth)).toBe('2px');
+        await expect(field).toBeFocused();
+        await expect(field).toHaveCSS('outline-style', 'solid');
+        await expect.poll(() => field.evaluate(node => {
+            const style = getComputedStyle(node);
+            return node.matches(':focus-visible') && parseFloat(style.outlineWidth) > 0 &&
+                !['transparent', 'rgba(0, 0, 0, 0)', style.backgroundColor].includes(style.outlineColor);
+        })).toBe(true);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
         await page.locator('#averageBtn').click();

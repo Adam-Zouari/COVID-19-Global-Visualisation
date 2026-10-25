@@ -11,15 +11,17 @@ window.AnalyticsPlot = {
         heading.append(title, subtitle); container.appendChild(heading);
         if (model.note) this.text(container, model.note, 'chart-note');
         for (const warning of model.warnings || []) this.text(container, warning, 'chart-warning');
+        // Reserve the drawing height before measuring width: inserting a taller
+        // SVG can introduce the page scrollbar and change the available width.
+        const svg = d3.select(container).append('svg').attr('width', '100%').attr('height', height).attr('role', 'group')
+            .attr('aria-label', [model.title, model.subtitle, model.note].filter(Boolean).join('. '));
         const style = window.getComputedStyle(container);
         const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
         const width = Math.max(250, (container.clientWidth || container.getBoundingClientRect().width || 700) - padding);
         margin = { top: 36, right: 24, bottom: 55, left: 70, ...margin };
         const innerWidth = Math.max(30, width - margin.left - margin.right);
         const innerHeight = Math.max(40, height - margin.top - margin.bottom);
-        const svg = d3.select(container).append('svg').attr('viewBox', `0 0 ${width} ${height}`)
-            .attr('width', '100%').attr('height', height).attr('role', 'group')
-            .attr('aria-label', [model.title, model.subtitle, model.note].filter(Boolean).join('. '));
+        svg.attr('viewBox', `0 0 ${width} ${height}`);
         svg.append('desc').text([model.subtitle, model.note, ...(model.warnings || [])].filter(Boolean).join('. '));
         const plot = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
         return { container, model, svg, plot, width, height, innerWidth, innerHeight, margin };

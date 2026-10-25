@@ -185,7 +185,7 @@ for (const configuration of [
         await ready(page);
         await page.locator('#expandGlobeBtn').click();
         await expect(page.locator('#expandedGlobe')).toBeVisible();
-        if (!configuration.fallback) expect(await page.evaluate(() => document.fullscreenElement?.id)).toBe('expandedGlobe');
+        if (!configuration.fallback) await expect.poll(() => page.evaluate(() => document.fullscreenElement?.id)).toBe('expandedGlobe');
         await page.locator('#globe .country[data-country-code="tn"]').click();
         await expect(page.locator('#countryName')).toContainText('Tunisia');
         await expect(page.locator('#seeMoreBtn')).toBeVisible();

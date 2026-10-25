@@ -73,15 +73,9 @@ for (const [theme, width] of [['dark', 1440], ['light', 1440], ['dark', 320], ['
         await expect(buttons).toHaveAccessibleName('Country analysis dataset');
         await expect(buttons.getByRole('button')).toHaveCount(3);
         await matchingDatasetControls(page);
-        await page.locator('#navCompare').click();
-        const comparison = await settings(page, 'compare');
-        await page.locator('#navExplore').click();
-        const globe = await settings(page, 'globe'), snapshot = await page.locator('#countryPrimary').textContent();
-        await trackGlobeRefreshes(page);
-        await period(page, 'date-range', dates[14], dates[65]);
-        await page.locator('#analysisUnitSelector').selectOption('per100k');
-        await page.locator('#analysisAverageBtn').click();
-
+        // Exercise state transitions once per viewport; both themes still check
+        // the same control styling, dataset filtering and responsive layout.
+        const exerciseState = theme === (width === 1440 ? 'dark' : 'light');
         const selected = async (id, category) => {
             await expect(page.locator(id)).toHaveAttribute('aria-pressed', 'true');
             await expect(page.locator(id)).toHaveClass(/\bactive\b/);
@@ -89,35 +83,54 @@ for (const [theme, width] of [['dark', 1440], ['light', 1440], ['dark', 320], ['
             expect(await metric.locator('option').evaluateAll(options => options.map(option => option.value)))
                 .toEqual(await page.evaluate(category => dataService.availableColumns[category], category));
             await expect(metric.locator('optgroup')).toHaveCount(0);
-            await expect(page.locator('#date-range-start-input')).toHaveValue(dates[14]);
-            await expect(page.locator('#date-range-end-input')).toHaveValue(dates[65]);
+            if (exerciseState) {
+                await expect(page.locator('#date-range-start-input')).toHaveValue(dates[14]);
+                await expect(page.locator('#date-range-end-input')).toHaveValue(dates[65]);
+            }
         };
 
-        await page.locator('#analysisHospBtn').click();
-        await selected('#analysisHospBtn', 'hospitalizations');
-        await expect(page.locator('#analysisUnitSelector')).toHaveValue('per100k');
-        await expect(page.locator('#analysisAverageBtn')).toHaveAttribute('aria-pressed', 'true');
-        await expect(page.locator('#analysisValue')).toHaveText('59');
-        await metric.selectOption('current_intensive_care_patients');
-        await expect(page.locator('#analysisValue')).toHaveText('100');
+        if (exerciseState) {
+            await page.locator('#navCompare').click();
+            const comparison = await settings(page, 'compare');
+            await page.locator('#navExplore').click();
+            const globe = await settings(page, 'globe'), snapshot = await page.locator('#countryPrimary').textContent();
+            await trackGlobeRefreshes(page);
+            await period(page, 'date-range', dates[14], dates[65]);
+            await page.locator('#analysisUnitSelector').selectOption('per100k');
+            await page.locator('#analysisAverageBtn').click();
 
-        await page.locator('#analysisVaccBtn').click();
-        await selected('#analysisVaccBtn', 'vaccinations');
-        await expect(page.locator('#analysisReportingGroup')).toBeHidden();
-        await expect(page.locator('#analysisUnitSelector')).toHaveValue('count');
-        await page.locator('#analysisUnitSelector').selectOption('percent');
-        await expect(page.locator('#analysisValue')).toHaveText('2');
-        await expect.poll(() => page.evaluate(() => AtlasWorkspaces.get('country').getDisplayValue('tn'))).toBeCloseTo(2.04, 8);
+            await page.locator('#analysisHospBtn').click();
+            await selected('#analysisHospBtn', 'hospitalizations');
+            await expect(page.locator('#analysisUnitSelector')).toHaveValue('per100k');
+            await expect(page.locator('#analysisAverageBtn')).toHaveAttribute('aria-pressed', 'true');
+            await expect(page.locator('#analysisValue')).toHaveText('59');
+            await metric.selectOption('current_intensive_care_patients');
+            await expect(page.locator('#analysisValue')).toHaveText('100');
 
-        await page.locator('#analysisEpidemBtn').click();
-        await selected('#analysisEpidemBtn', 'epidem');
-        await expect(page.locator('#analysisUnitSelector')).toHaveValue('count');
-        await expect(page.locator('#analysisRawBtn')).toHaveAttribute('aria-pressed', 'true');
-        await metric.selectOption('new_deceased');
-        expect(await settings(page, 'globe')).toEqual(globe);
-        expect(await settings(page, 'compare')).toEqual(comparison);
-        expect(await page.locator('#countryPrimary').textContent()).toBe(snapshot);
-        expect(await page.evaluate(() => window.workspaceGlobeRefreshes)).toBe(0);
+            await page.locator('#analysisVaccBtn').click();
+            await selected('#analysisVaccBtn', 'vaccinations');
+            await expect(page.locator('#analysisReportingGroup')).toBeHidden();
+            await expect(page.locator('#analysisUnitSelector')).toHaveValue('count');
+            await page.locator('#analysisUnitSelector').selectOption('percent');
+            await expect(page.locator('#analysisValue')).toHaveText('2');
+            await expect.poll(() => page.evaluate(() => AtlasWorkspaces.get('country').getDisplayValue('tn'))).toBeCloseTo(2.04, 8);
+
+            await page.locator('#analysisEpidemBtn').click();
+            await selected('#analysisEpidemBtn', 'epidem');
+            await expect(page.locator('#analysisUnitSelector')).toHaveValue('count');
+            await expect(page.locator('#analysisRawBtn')).toHaveAttribute('aria-pressed', 'true');
+            await metric.selectOption('new_deceased');
+            expect(await settings(page, 'globe')).toEqual(globe);
+            expect(await settings(page, 'compare')).toEqual(comparison);
+            expect(await page.locator('#countryPrimary').textContent()).toBe(snapshot);
+            expect(await page.evaluate(() => window.workspaceGlobeRefreshes)).toBe(0);
+        } else {
+            for (const [id, category] of [['#analysisHospBtn', 'hospitalizations'],
+                ['#analysisVaccBtn', 'vaccinations'], ['#analysisEpidemBtn', 'epidem']]) {
+                await page.locator(id).click();
+                await selected(id, category);
+            }
+        }
 
         const navigation = await buttons.evaluate(node => {
             const bounds = node.getBoundingClientRect();
@@ -131,12 +144,14 @@ for (const [theme, width] of [['dark', 1440], ['light', 1440], ['dark', 320], ['
         await buttons.scrollIntoViewIfNeeded();
         await page.screenshot({ path: `test-results/country-datasets-${theme}-${width}.png`, fullPage: true });
         await page.locator('.analysis-controls').screenshot({ path: `test-results/country-datasets-toolbar-${theme}-${width}.png` });
-        await page.reload();
-        await expect.poll(() => page.evaluate(() => window.AtlasView.restoring)).toBe(false);
-        await expect(page.locator('#analysisEpidemBtn')).toHaveAttribute('aria-pressed', 'true');
-        await expect(metric).toHaveValue('new_deceased');
-        await expect(page.locator('#date-range-start-input')).toHaveValue(dates[14]);
-        await expect(page.locator('#date-range-end-input')).toHaveValue(dates[65]);
+        if (exerciseState) {
+            await page.reload();
+            await expect.poll(() => page.evaluate(() => window.AtlasView.restoring)).toBe(false);
+            await expect(page.locator('#analysisEpidemBtn')).toHaveAttribute('aria-pressed', 'true');
+            await expect(metric).toHaveValue('new_deceased');
+            await expect(page.locator('#date-range-start-input')).toHaveValue(dates[14]);
+            await expect(page.locator('#date-range-end-input')).toHaveValue(dates[65]);
+        }
     });
 }
 
