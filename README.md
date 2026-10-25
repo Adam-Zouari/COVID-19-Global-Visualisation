@@ -221,7 +221,6 @@ server/                Express server and data endpoints
 scripts/               Download, preparation, and syntax-check commands
 tests/                 Node regression tests
 e2e/                   Playwright browser tests
-docs/                  Audit record and design references
 datasets/google/       Original CSV downloads; excluded from Git
 data/                  Prepared CSVs and data-quality report; excluded from Git
 ```

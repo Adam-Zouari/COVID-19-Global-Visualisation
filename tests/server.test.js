@@ -24,7 +24,7 @@ test('server serves app assets and CSV aliases without exposing repository or da
         assert.equal((await fetch(base + asset)).status, 200, asset);
     }
     for (const hidden of ['/.git/config', '/package.json', '/server/server.js', '/tests/server.test.js', '/data/secret.csv',
-        '/docs/AUDIT.md', '/docs/design/', '/scripts/prepare-data.js', '/src/',
+        '/scripts/prepare-data.js', '/src/',
         '/app.js', '/styles.css', '/ui/theme.js', '/charts/chartFactory.js', '/globe/GlobeVis.js', '/dataService/index.js',
         '/api/list-files', '/api/toString', '/missing.js']) {
         const result = await fetch(base + hidden);
