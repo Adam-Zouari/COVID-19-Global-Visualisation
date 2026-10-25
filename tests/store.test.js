@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createStore, readURLState, stateToURL } from '../src/ui/store.js';
+import { createStore, readURLState, stateToURL, readWorkspaceSettings, readWorkspaceMetrics } from '../src/ui/store.js';
 import { CHART_TYPES } from '../src/charts/chartTypes.js';
 
 test('daily reporting is the default while explicit seven-day views round-trip through URLs', () => {
@@ -132,4 +132,140 @@ test('shared chart inputs reject unknown types, malformed dates, units and arbit
     for (const value of ['null', '[]', '123', '{', JSON.stringify({ date: '2021-02-29', xMetric: '<script>', xUnit: 'people', smoothing: 'weekly', callback: 'alert(1)' })]) {
         assert.deepEqual(readURLState(`?chartOptions=${encodeURIComponent(value)}`).compareChartOptions, {});
     }
+});
+
+test('independent globe, comparison and country-analysis settings survive the same shared URL', () => {
+    const state = { ...createStore().getState(), view: 'compare', category: 'epidem', metric: 'new_confirmed',
+        selectedDate: '2021-05-15', selectedCountry: 'tn', analysisOpen: true,
+        compareSettings: { category: 'vaccinations', metric: 'cumulative_persons_fully_vaccinated', unit: 'percent', smoothing: 'raw', selectedDate: '2022-06-10' },
+        analysisSettings: { category: 'hospitalizations', metric: 'current_intensive_care_patients', unit: 'per100k', smoothing: '7day', selectedDate: '2021-02-28' },
+        compareCountries: ['tn', 'us'], compareRange: { start: 10, end: 70 }, compareChartType: 'horizontal',
+        compareChartOptions: { date: '2022-02-03' }, analysisChartType: 'scatter', analysisRange: { start: 30, end: 80 },
+        analysisChartOptions: { xMetric: 'new_deceased', yMetric: 'current_intensive_care_patients', xUnit: 'per1m', yUnit: 'count', smoothing: '7day' } };
+    const url = stateToURL(state, 'https://example.com/?unrelated=keep#chart');
+    assert.deepEqual(readURLState(url.search), state);
+    assert.equal(url.searchParams.get('category'), null, 'The globe keeps its own default category');
+    assert.equal(url.searchParams.get('metric'), 'new_confirmed');
+    assert.equal(url.searchParams.get('unrelated'), 'keep');
+    assert.equal(url.hash, '#chart');
+    assert.equal(url.searchParams.get('data'), null, 'A workspace cannot replace the shared data source');
+});
+
+test('workspace settings and local chart choices are copied and frozen without duplicate updates', () => {
+    const settings = { category: 'hospitalizations', metric: 'current_hospitalized_patients', unit: 'count', smoothing: 'raw', selectedDate: '2021-01-20' };
+    const range = { start: 10, end: 60 }, options = { xMetric: 'new_confirmed', yMetric: 'new_deceased' };
+    const store = createStore({ analysisSettings: settings, compareSettings: settings, analysisRange: range, analysisChartOptions: options });
+    settings.metric = 'new_confirmed'; range.start = 40; options.yMetric = 'new_tested';
+    assert.equal(store.getState().analysisSettings.metric, 'current_hospitalized_patients');
+    assert.equal(store.getState().compareSettings.metric, 'current_hospitalized_patients');
+    assert.equal(store.getState().analysisRange.start, 10);
+    assert.equal(store.getState().analysisChartOptions.yMetric, 'new_deceased');
+    for (const key of ['analysisSettings', 'compareSettings', 'analysisRange', 'analysisChartOptions'])
+        assert.equal(Object.isFrozen(store.getState()[key]), true, key);
+    assert.throws(() => { store.getState().analysisSettings.metric = 'new_tested'; });
+    let changes = 0; store.subscribe(() => { changes++; });
+    const next = { ...store.getState().analysisSettings, unit: 'per100k' };
+    store.setState({ analysisSettings: next }); store.setState({ analysisSettings: { ...next } });
+    assert.equal(changes, 1);
+    assert.equal(store.getState().compareSettings.unit, 'count');
+    assert.equal(store.getState().unit, 'count');
+});
+
+test('legacy URLs leave local workspace settings uninitialized and retain shared globe context', () => {
+    const legacy = readURLState('?view=compare&category=hospitalizations&metric=current_hospitalized_patients&unit=per100k&smooth=7day&date=2021-01-20&compare=tn,us');
+    assert.equal(legacy.compareSettings, null);
+    assert.equal(legacy.analysisSettings, null);
+    assert.equal(legacy.category, 'hospitalizations');
+    assert.equal(legacy.metric, 'current_hospitalized_patients');
+    assert.equal(legacy.unit, 'per100k');
+    assert.equal(legacy.smoothing, '7day');
+    assert.equal(legacy.selectedDate, '2021-01-20');
+    assert.equal(legacy.analysisChartType, 'line');
+    assert.deepEqual(legacy.analysisRange, { start: 0, end: 100 });
+    assert.deepEqual(legacy.analysisChartOptions, {});
+    const cleaned = stateToURL({ ...createStore().getState(), analysisSettings: null, compareSettings: null },
+        'https://example.com/?analysisSettings=old&compareSettings=old&analysisChart=scatter&analysisRange=20,80&analysisChartOptions=old');
+    for (const key of ['analysisSettings', 'compareSettings', 'analysisChart', 'analysisRange', 'analysisChartOptions'])
+        assert.equal(cleaned.searchParams.has(key), false, key);
+});
+
+test('untrusted local workspace URLs constrain settings, chart types, ranges and payload size', () => {
+    const params = new URLSearchParams({
+        analysisSettings: JSON.stringify({ category: 'hospitalizations', metric: '<script>', unit: ['percent'], smoothing: 'weekly', selectedDate: '2021-02-29', execute: 'bad' }),
+        compareSettings: JSON.stringify({ category: '__proto__', metric: 'new_confirmed' }),
+        analysisChart: 'horizontal', analysisRange: '80,20',
+        analysisChartOptions: JSON.stringify({ xMetric: 'new_confirmed', yMetric: '<script>', yUnit: 'unknown', unrelated: 'bad' })
+    });
+    const state = readURLState(params.toString());
+    assert.deepEqual(state.analysisSettings, { category: 'hospitalizations', metric: null, unit: 'count', smoothing: 'raw', selectedDate: null });
+    assert.equal(state.compareSettings, null);
+    assert.equal(state.analysisChartType, 'line');
+    assert.deepEqual(state.analysisRange, { start: 20, end: 80 });
+    assert.deepEqual(state.analysisChartOptions, { xMetric: 'new_confirmed' });
+    for (const malformed of ['null', '[]', '123', 'true', '{', 'x'.repeat(1600)]) {
+        const url = new URLSearchParams({ analysisSettings: malformed, compareSettings: malformed, analysisChartOptions: malformed });
+        const restored = readURLState(url.toString());
+        assert.equal(restored.analysisSettings, null, malformed.slice(0, 10));
+        assert.equal(restored.compareSettings, null, malformed.slice(0, 10));
+        assert.deepEqual(restored.analysisChartOptions, {});
+    }
+    for (const chart of ['__proto__', 'toString', 'horizontal', 'dumbbell', 'radar', 'unknown']) {
+        assert.equal(readURLState(`?analysisChart=${chart}`).analysisChartType, 'line');
+        assert.equal(stateToURL({ ...createStore().getState(), analysisChartType: chart }, 'https://example.com/').searchParams.has('analysisChart'), false);
+    }
+    for (const range of ['NaN,20', '-1,60', '0,101', '0,1,2'])
+        assert.deepEqual(readURLState(`?analysisRange=${range}`).analysisRange, { start: 0, end: 100 });
+    assert.equal(readWorkspaceSettings(null), null);
+});
+
+test('last metrics for each dataset and workspace round-trip without changing active settings', () => {
+    const workspaceMetrics = {
+        globe: { epidem: 'new_deceased', hospitalizations: 'current_intensive_care_patients' },
+        country: { hospitalizations: 'new_hospitalized_patients', vaccinations: 'cumulative_persons_vaccinated' },
+        compare: { epidem: 'new_tested', hospitalizations: 'current_hospitalized_patients', vaccinations: 'cumulative_persons_fully_vaccinated' }
+    };
+    const state = { ...createStore().getState(), workspaceMetrics };
+    const url = stateToURL(state, 'https://example.com/?unrelated=keep#chart');
+    assert.deepEqual(readURLState(url.search), state);
+    assert.equal(url.searchParams.get('unrelated'), 'keep');
+    assert.equal(url.hash, '#chart');
+    assert.deepEqual(readURLState('?metric=new_confirmed').workspaceMetrics, {}, 'Legacy links have no remembered selections');
+    const cleaned = stateToURL(createStore().getState(), url);
+    assert.equal(cleaned.searchParams.has('workspaceMetrics'), false);
+});
+
+test('remembered metric maps are copied and frozen independently across state snapshots', () => {
+    const memory = { globe: { epidem: 'new_deceased' }, compare: { epidem: 'new_tested' } };
+    const store = createStore({ workspaceMetrics: memory });
+    memory.globe.epidem = 'new_confirmed';
+    memory.country = { epidem: 'new_recovered' };
+    const first = store.getState();
+    assert.deepEqual(first.workspaceMetrics, { globe: { epidem: 'new_deceased' }, compare: { epidem: 'new_tested' } });
+    assert.equal(Object.isFrozen(first.workspaceMetrics), true);
+    assert.equal(Object.isFrozen(first.workspaceMetrics.globe), true);
+    assert.throws(() => { first.workspaceMetrics.globe.epidem = 'new_tested'; });
+    let updates = 0; store.subscribe(() => { updates++; });
+    store.setState({ workspaceMetrics: { ...first.workspaceMetrics, country: { vaccinations: 'cumulative_persons_vaccinated' } } });
+    const next = store.getState();
+    store.setState({ workspaceMetrics: structuredClone(next.workspaceMetrics) });
+    assert.equal(updates, 1);
+    assert.equal(first.workspaceMetrics.country, undefined);
+    assert.equal(next.workspaceMetrics.globe.epidem, 'new_deceased');
+    assert.equal(next.workspaceMetrics.compare.epidem, 'new_tested');
+});
+
+test('remembered metric URLs reject malformed maps, inherited properties and oversized payloads', () => {
+    const input = JSON.parse('{"globe":{"epidem":"new_deceased","hospitalizations":"<script>","vaccinations":"A","extra":"new_confirmed"},"country":["new_confirmed"],"compare":{"epidem":"new_tested","vaccinations":""},"__proto__":{"epidem":"new_recovered"},"unknown":{"epidem":"new_confirmed"}}');
+    assert.deepEqual(readWorkspaceMetrics(input), { globe: { epidem: 'new_deceased' }, compare: { epidem: 'new_tested' } });
+    assert.deepEqual(readWorkspaceMetrics(Object.create({ globe: { epidem: 'new_confirmed' } })), {});
+    assert.deepEqual(readWorkspaceMetrics({ globe: Object.create({ epidem: 'new_confirmed' }) }), {});
+    assert.deepEqual(readWorkspaceMetrics({ globe: { epidem: 'a'.repeat(129), hospitalizations: [], vaccinations: null } }), {});
+    for (const invalid of ['null', '[]', 'true', '123', '{', 'x'.repeat(2001)])
+        assert.deepEqual(readURLState(new URLSearchParams({ workspaceMetrics: invalid }).toString()).workspaceMetrics, {});
+    const valid = { globe: { epidem: 'new_deceased' } };
+    const atLimit = JSON.stringify({ ...valid, ignored: '' });
+    const padded = JSON.stringify({ ...valid, ignored: 'x'.repeat(2000 - atLimit.length) });
+    assert.equal(padded.length, 2000);
+    assert.deepEqual(readURLState(new URLSearchParams({ workspaceMetrics: padded }).toString()).workspaceMetrics, valid);
+    assert.deepEqual(readURLState(new URLSearchParams({ workspaceMetrics: padded + ' ' }).toString()).workspaceMetrics, {});
 });

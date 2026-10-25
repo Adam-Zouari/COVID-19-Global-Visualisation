@@ -213,18 +213,27 @@
                     <p id="analysisValueDate" class="analysis-value-date"></p>
                     <div class="analysis-controls" role="group" aria-label="Country chart settings">
                         <div id="analysisMetricControl" class="control-group">
-                            <label for="analysisMetricSelector">Metric</label>
-                            <select id="analysisMetricSelector" onchange="atlasActions.setMetric(this.value)"></select>
+                            <div class="analysis-metric-fields">
+                                <div id="analysisDatasetButtons" class="dataset-buttons analysis-dataset-buttons" role="group" aria-label="Country analysis dataset" data-category="epidem">
+                                    <button id="analysisEpidemBtn" type="button" class="dataset-btn active" data-analysis-dataset="epidem" onclick="changeDataset('epidem', 'country')" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 13h4l3-7 4 12 3-7h4"/></svg>Cases &amp; deaths</button>
+                                    <button id="analysisHospBtn" type="button" class="dataset-btn" data-analysis-dataset="hospitalizations" onclick="changeDataset('hospitalizations', 'country')" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 21V5h14v16M2 21h20M9 10h6m-3-3v6M9 21v-5h6v5"/></svg>Hospitalizations</button>
+                                    <button id="analysisVaccBtn" type="button" class="dataset-btn" data-analysis-dataset="vaccinations" onclick="changeDataset('vaccinations', 'country')" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m14 3 7 7m-5-5-4 4m5 0-8 8-4 2 2-4 8-8M4 20l-2 2M9 8l7 7"/></svg>Vaccinations</button>
+                                </div>
+                                <div class="control-group analysis-metric-select">
+                                    <label for="analysisMetricSelector">Metric</label>
+                                    <select id="analysisMetricSelector" onchange="atlasActions.setMetric(this.value, 'country')"></select>
+                                </div>
+                            </div>
                         </div>
                         <div id="analysisUnitControl" class="control-group">
                             <label for="analysisUnitSelector">Display values as</label>
-                            <select id="analysisUnitSelector" onchange="atlasActions.setUnit(this.value)"></select>
+                            <select id="analysisUnitSelector" onchange="atlasActions.setUnit(this.value, 'country')"></select>
                         </div>
                         <fieldset id="analysisReportingGroup" class="control-group">
                             <legend>Reporting</legend>
                             <div class="segmented-control">
-                                <button id="analysisRawBtn" class="active" onclick="atlasActions.setSmoothing('raw')" aria-pressed="true">Daily</button>
-                                <button id="analysisAverageBtn" onclick="atlasActions.setSmoothing('7day')" aria-pressed="false" title="Average of recent daily reports to make the trend easier to see">7-day average</button>
+                                <button id="analysisRawBtn" class="active" onclick="atlasActions.setSmoothing('raw', 'country')" aria-pressed="true">Daily</button>
+                                <button id="analysisAverageBtn" onclick="atlasActions.setSmoothing('7day', 'country')" aria-pressed="false" title="Average of recent daily reports to make the trend easier to see">7-day average</button>
                             </div>
                         </fieldset>
                         <div class="control-group viz-controls">

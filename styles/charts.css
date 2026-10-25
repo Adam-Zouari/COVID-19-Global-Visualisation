@@ -34,7 +34,7 @@
 .single-date-slider { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 36px; }
 .single-date-slider input[type="range"] { flex: 1; min-width: 0; }
 .single-date-slider .icon-btn { width: 27px; height: 27px; border-color: transparent; font-size: 21px; }
-.analytics-chart { min-width: 0; }
+.analytics-chart { display: flow-root; min-width: 0; }
 .analytics-chart svg { display: block; max-width: 100%; overflow: visible; }
 .analytics-chart svg text { font-family: inherit; }
 .analytics-axis-label, .analytics-value-label { fill: var(--chart-axis-unit); font-size: 11px; }

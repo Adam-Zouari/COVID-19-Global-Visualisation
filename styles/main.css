@@ -298,12 +298,18 @@ input[type="range"]::-moz-range-thumb { width: 9px; height: 9px; border: 2px sol
 .analysis-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 200px) 220px 180px; align-items: end; gap: 12px; margin-top: 18px; }
 .analysis-controls .viz-controls { grid-column: -2; }
 .analysis-controls .segmented-control { height: 36px; }
+.analysis-metric-fields { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 28px; min-width: 0; }
+.analysis-metric-select { flex: 1 1 180px; min-width: min(100%, 180px); }
+.analysis-dataset-buttons { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow-x: auto; padding-bottom: 1px; --dataset-color: var(--cases); }
+.analysis-dataset-buttons[data-category="hospitalizations"] { --dataset-color: var(--hospital); }
+.analysis-dataset-buttons[data-category="vaccinations"] { --dataset-color: var(--vaccine); }
 @media (min-width: 1051px) {
     .analysis-controls:has(#analysisReportingGroup[hidden]) { grid-template-columns: minmax(0, 1fr) minmax(150px, 200px) 180px; }
 }
 @media (max-width: 1050px) { .analysis-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
     #analysisMetricControl, #analysisReportingGroup { grid-column: 1 / -1; }
+    .analysis-dataset-buttons, .analysis-metric-select { flex-basis: 100%; width: 100%; }
     #analysisReportingGroup { grid-row: 3; }
     .analysis-controls .viz-controls { grid-row: 2; }
     .analysis-controls:has(#analysisMetricControl[hidden]) .viz-controls { grid-row: auto; }

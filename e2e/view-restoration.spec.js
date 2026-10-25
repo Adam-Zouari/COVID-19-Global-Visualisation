@@ -101,6 +101,12 @@ test('Compare is the first painted view before app and data load, and reload pre
     const expectedState = {
         view: 'compare', category: 'hospitalizations', metric: 'current_hospitalized_patients', unit: 'per100k',
         smoothing: 'raw', selectedDate: '2020-01-10', selectedCountry: 'tn', analysisOpen: false, compareCountries: ['tn', 'us'],
+        analysisSettings: null, analysisChartType: 'line', analysisRange: { start: 0, end: 100 }, analysisChartOptions: {},
+        compareSettings: { category: 'hospitalizations', metric: 'current_hospitalized_patients', unit: 'per100k', smoothing: 'raw', selectedDate: '2020-01-10' },
+        workspaceMetrics: {
+            globe: { hospitalizations: 'current_hospitalized_patients' },
+            compare: { hospitalizations: 'current_hospitalized_patients' }
+        },
         compareRange: { start: 20, end: 80 }, compareLayout: 'separate', compareChartType: 'bar', compareScale: 'independent', compareChartOptions: {}, dataMode: 'csv'
     };
     try {

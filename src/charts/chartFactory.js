@@ -85,7 +85,7 @@ const ChartFactory = {
     },
 
     prepareDataForCountry(countryCode, settings = {}) {
-        const service = window.globeInstance?.dataService;
+        const service = settings.service || window.globeInstance?.dataService;
         if (!service || typeof countryCode !== 'string') return null;
         const key = countryCode.toLowerCase();
         const available = service.availableColumns[service.currentDataset] || [];
@@ -108,7 +108,7 @@ const ChartFactory = {
 
     emptyCountryData(countryCode, settings = {}) {
         countryCode = typeof countryCode === 'string' ? countryCode.toLowerCase() : '';
-        const service = window.globeInstance?.dataService;
+        const service = settings.service || window.globeInstance?.dataService;
         const column = settings.selectedColumn || settings.column || service?.currentColumn;
         const dates = service?.getAvailableDates?.(column) || service?.availableDates || [];
         const metric = this.metadata(column);
@@ -141,8 +141,10 @@ const ChartFactory = {
         const extraControls = document.getElementById('analysisChartOptions');
         if (extraControls) { extraControls.hidden = true; extraControls.replaceChildren(); delete extraControls.dataset.fields; }
         const range = document.getElementById('chartControlsContainer'); if (range) range.hidden = false;
-        const data = this.prepareDataForCountry(countryCode, settings) || this.emptyCountryData(countryCode, settings);
-        settings = settings || ChartControls.initialize(container, countryCode, vizType, data);
+        const service = settings?.service || window.AtlasWorkspaces?.get('country') || window.globeInstance?.dataService;
+        const requested = { ...settings, service };
+        const data = this.prepareDataForCountry(countryCode, requested) || this.emptyCountryData(countryCode, requested);
+        settings = settings || ChartControls.initialize(container, countryCode, vizType, data, service);
         if (!['line', 'bar', 'area'].includes(vizType)) return this.showError(container, 'Choose a supported chart type.');
         const filtered = this.applySettings(data, settings);
         this.renderCartesian(container, filtered.dates, [{ key: data.countryCode, label: data.countryName,

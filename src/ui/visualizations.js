@@ -25,15 +25,18 @@ function preserveCountryAnalysisScroll(render) {
 function updateCountryAnalysisSummary() {
     const valueElement = document.getElementById('analysisValue');
     const globe = window.globeInstance, code = selectedVisualizationCountry();
-    if (!valueElement || !globe || !code) return;
-    const service = globe.dataService, metric = service.getMetricMetadata();
-    const value = service.getDisplayValue(code), available = typeof value === 'number' && Number.isFinite(value);
+    if (!valueElement || !globe || !code || document.getElementById('visualizationPanel')?.hidden) return;
+    const service = window.AtlasWorkspaces?.get('country') || globe.dataService;
+    const metric = service.getMetricMetadata() || ChartFactory.metadata(service.currentColumn);
+    const value = service.currentColumn ? service.getDisplayValue(code) : null, available = typeof value === 'number' && Number.isFinite(value);
     document.getElementById('analysisMetricLabel').textContent = metric.label;
     document.getElementById('analysisUnits').textContent = `${ChartFactory.axisUnitLabel(service.currentColumn, service.displayUnit)}${metric.smoothingAllowed && service.smoothing === '7day' ? ' · 7-day average' : ''}`;
-    valueElement.textContent = available ? globe.formatMetricValue(value) : 'Unavailable';
+    valueElement.textContent = available ? globe.formatMetricValue.call({ dataService: service }, value, service.displayUnit) : 'Unavailable';
     valueElement.classList.toggle('unavailable', !available);
-    const detail = available ? value < 0 ? ' · Reporting correction' : '' : ` · ${service.getCountryAvailability(code).label}`;
-    document.getElementById('analysisValueDate').textContent = `Selected day · ${service.formatDate(service.currentDate)}${detail}`;
+    const detail = !service.currentColumn ? ' · No metrics available for this dataset' :
+        available ? value < 0 ? ' · Reporting correction' : '' : ` · ${service.getCountryAvailability(code).label}`;
+    const date = service.currentDate ? `Selected day · ${service.formatDate(service.currentDate)}` : 'No reporting date';
+    document.getElementById('analysisValueDate').textContent = `${date}${detail}`;
 }
 
 function showVisualizations({ scroll = true } = {}) {
@@ -41,6 +44,7 @@ function showVisualizations({ scroll = true } = {}) {
     if (!countryCode) return;
     const panel = document.getElementById('visualizationPanel');
     if (!panel) return;
+    window.AtlasWorkspaces?.ensure('country');
     panel.hidden = false;
     const visible = !document.getElementById('exploreView')?.hidden;
     if (visible) changeVisualization();
@@ -71,6 +75,7 @@ function changeVisualization() {
         updateCountryAnalysisSummary();
         try { ChartFactory.createChart(container, code, document.getElementById('vizTypeSelector')?.value || 'line'); }
         catch (error) { console.error('Error creating visualization:', error); ChartFactory.clearChart(container); ChartFactory.showError(container, 'Unable to create this visualization.'); }
+        window.syncAtlasState?.();
     });
 }
 

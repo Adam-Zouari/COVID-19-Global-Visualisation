@@ -53,10 +53,11 @@ window.CompareUI = {
 
     initializeDateRangeSlider() {
         const sliders = document.getElementById('dateRangeSlider'); if (!sliders) return;
-        const service = window.globeInstance.dataService, dates = service.getAvailableDates?.() || service.availableDates;
+        const service = CompareMode.service(), dates = service.getAvailableDates?.() || service.availableDates;
         new DateRangeControl(sliders, {
             dates, range: CompareMode.state.dateRange, idPrefix: 'compare-date-range',
             sliderIds: { start: 'startDateSlider', end: 'endDateSlider' }, formatDate: date => service.formatDate(date),
+            onInput: range => CompareMode.updateDateRange(range.start, range.end),
             onChange: range => CompareMode.updateDateRange(range.start, range.end)
         });
     },

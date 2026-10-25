@@ -305,6 +305,31 @@ class Control extends EventTarget {
     constructor(value = '0') { super(); this.value = value; this.disabled = false; }
 }
 
+test('globe loading toggles its own controls without changing country dataset availability', () => {
+    const { context, globe, elements } = harness();
+    const mainIds = ['dataSelector', 'dateSlider', 'epidemBtn', 'hospBtn', 'vaccBtn'];
+    for (const id of mainIds) elements.set(id, { disabled: false });
+    const localEnabled = { disabled: false }, localUnavailable = { disabled: true };
+    elements.set('analysisEpidemBtn', localEnabled);
+    elements.set('analysisHospBtn', localUnavailable);
+    context.document.querySelectorAll = selector => selector === '.dataset-btn' ?
+        [...mainIds.slice(2).map(id => elements.get(id)), localEnabled, localUnavailable] : [];
+    let synchronized = 0;
+    globe.syncDateControls = () => { synchronized++; };
+
+    globe.setControlsDisabled(true);
+    for (const id of mainIds) assert.equal(elements.get(id).disabled, true);
+    assert.equal(localEnabled.disabled, false);
+    assert.equal(localUnavailable.disabled, true);
+    assert.equal(synchronized, 0);
+
+    globe.setControlsDisabled(false);
+    for (const id of mainIds) assert.equal(elements.get(id).disabled, false);
+    assert.equal(localEnabled.disabled, false);
+    assert.equal(localUnavailable.disabled, true);
+    assert.equal(synchronized, 1);
+});
+
 test('rebuilding the date slider replaces listeners and preserves the selected date', () => {
     const { globe, elements } = harness();
     for (const id of ['dateSlider', 'currentDate', 'prevDateBtn', 'nextDateBtn']) elements.set(id, new Control());

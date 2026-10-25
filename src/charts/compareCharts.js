@@ -1,9 +1,10 @@
 const CompareCharts = {
     prepare(countryCodes, settings = {}) {
+        const service = settings.service || window.AtlasWorkspaces?.peek('compare') || window.globeInstance.dataService;
+        settings = { ...settings, service };
         const codes = [...new Set(countryCodes.map(code => code.toLowerCase()))];
         ChartFactory.reconcileComparisonCountries(codes);
         const countries = codes.map(code => ChartFactory.prepareDataForCountry(code, settings) || ChartFactory.emptyCountryData(code, settings));
-        const service = window.globeInstance.dataService;
         const timeline = service.getAvailableDates?.(settings.selectedColumn || service.currentColumn) || [...new Set(countries.flatMap(country => country.dates))].sort();
         return countries.map(country => ChartFactory.applySettings(country, { ...settings, timeline }));
     },

@@ -21,6 +21,7 @@ function harness(t, { fullUI = false } = {}) {
         currentDataset: 'epidem', currentColumn: 'new_confirmed', displayUnit: 'count', smoothing: 'none',
         availableColumns: { epidem: ['new_confirmed', 'new_deceased', 'new_tested'] }, indexedData: { epidem: rows },
         availableDates: Object.keys(rows.us), formatDate: date => date, getCountryName: code => code === 'us' ? '<img src=x onerror=alert(1)>' : 'France',
+        getAllCountries: () => Object.keys(rows).map(countryCode => ({ countryCode })),
         getCountrySeries(code, { column }) {
             const rows = this.indexedData[this.currentDataset]?.[code];
             return rows ? this.availableDates.map(date => ({ date, value: rows[date]?.[column] ?? null })) : [];

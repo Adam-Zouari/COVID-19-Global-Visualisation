@@ -2,6 +2,7 @@ import { DataService } from './dataService/DataService.js';
 import * as MetricRegistry from './dataService/metrics.js';
 import { createStore, readURLState, stateToURL } from './ui/store.js';
 import { CHART_TYPES } from './charts/chartTypes.js';
+import { createWorkspaces } from './ui/workspaces.js';
 
 if (document.readyState !== 'complete') {
     await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
@@ -28,6 +29,12 @@ function applyRequestedState(state) {
     service.smoothing = state.smoothing;
     if (!state.selectedDate || !service.changeDate(state.selectedDate)) service.changeDate(service.getSuggestedDate());
     window.validateDisplaySettings();
+    window.AtlasWorkspaces.restoreMetrics(state.workspaceMetrics);
+    if (state.analysisSettings) window.AtlasWorkspaces.ensure('country', state.analysisSettings);
+    if (state.compareSettings) window.AtlasWorkspaces.ensure('compare', state.compareSettings);
+    ChartControls.state.dateRange = state.analysisRange;
+    document.getElementById('vizTypeSelector').value = state.analysisChartType;
+    AnalyticsCharts.countryOptions = state.analysisChartOptions;
     const valid = new Set(service.getAllCountries().map(country => country.countryCode));
     CompareMode.state.countries = state.compareCountries.filter(code => valid.has(code));
     CompareMode.state.displayMode = state.compareLayout || 'combined';
@@ -47,6 +54,7 @@ try {
     if (!window.d3 || !window.topojson) throw new Error('Visualization libraries could not load. Run npm install and restart the server.');
     window.DataService = DataService;
     window.dataService = new DataService({ useSampleData: requestedState.dataMode === 'sample' });
+    window.AtlasWorkspaces = createWorkspaces(window.dataService);
     window.initializeUI();
     const globe = window.initializeGlobe();
     await globe.ready;

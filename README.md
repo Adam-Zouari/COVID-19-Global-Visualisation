@@ -75,11 +75,31 @@ population values are simulated.
 | Explore country data | Line, bar, area, calendar heatmap, scatter, and box plot |
 | Compare | Line, bar, horizontal bars, heatmap, scatter, dumbbell, and box plot |
 
+The globe and country snapshot share Explorer settings. Country analysis and
+Compare each keep independent metrics, units, reporting modes, and dates. They
+start with the globe's applicable settings on first use and retain subsequent
+choices when switching views or refreshing. Adding a country preserves an
+existing comparison's settings.
+
+Each workspace remembers its last selected metric for each dataset. Returning to
+a dataset restores that metric; clicking the active dataset keeps it unchanged.
+This history is retained through refresh and shared URLs. A saved metric that is
+unavailable in the loaded data falls back to the dataset's default.
+
+Country analysis has its own dataset buttons beside the metric selector; the
+metric menu lists only the selected dataset's measures. These controls wrap into
+separate rows on mobile. Compare keeps its existing category buttons and filtered
+metric menu. The buttons above the workspaces reflect and control the currently
+active Explore or Compare view. Both period sliders update chart axes while
+dragging.
+
 Country scatter plots can pair columns from different loaded datasets. Comparison
 scatter plots use two countries as X/Y axes or three as X/Y/Z axes. Each point
 represents a date with reported values for every selected axis.
 
-Uploaded CSVs stay in the current browser tab and are not included in shared URLs.
+Shared URLs retain each workspace's settings, including the country chart and
+its period. The data source and appearance remain global. Uploaded CSVs stay in
+the current browser tab and are not included in shared URLs.
 
 ## Data sources and preparation
 

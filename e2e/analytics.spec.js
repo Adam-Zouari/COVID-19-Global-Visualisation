@@ -382,45 +382,52 @@ test('analytical charts support keyboard inspection and adapt appearance without
     expect(await page.evaluate(() => dataService.indexedData === window.__analyticsSource)).toBe(true);
 });
 
-test('country analysis heading shows the selected day value and follows country, metric, units and averaging', async ({ page }) => {
+test('country analysis heading follows local metric, units and reporting while retaining its selected day', async ({ page }) => {
     await prepare(page, 'dark', '/?country=tn&date=2021-01-28&smooth=raw');
     await page.locator('#seeMoreBtn').click();
     const value = page.locator('#analysisValue'), date = page.locator('#analysisValueDate');
     await expect(value).toHaveText('27');
     await expect(date).toHaveText('Selected day · Jan 28, 2021');
     await page.locator('#unitSelector').selectOption('per100k');
+    await page.locator('#averageBtn').click();
+    await page.locator('#dateSlider').fill('0');
+    await expect(value).toHaveText('27');
+    await expect(date).toHaveText('Selected day · Jan 28, 2021');
+    await expect(page.locator('#analysisUnitSelector')).toHaveValue('count');
+    await expect(page.locator('#analysisRawBtn')).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('#analysisUnitSelector').selectOption('per100k');
     await expect(value).toHaveText('2,700');
     await expect(page.locator('#analysisUnits')).toContainText('per 100,000');
-    await page.locator('#averageBtn').click();
+    await page.locator('#analysisAverageBtn').click();
     await expect(value).toHaveText('2,400');
     await expect(page.locator('#analysisUnits')).toContainText('7-day average');
-    await page.locator('#unitSelector').selectOption('count');
-    await page.locator('#rawBtn').click();
-    await page.locator('#dateSlider').fill('0');
-    await expect(value).toHaveText('0');
-    await expect(date).toContainText('Jan 1, 2021');
-    await page.locator('#averageBtn').click();
-    await expect(value).toHaveText('Unavailable');
-    await expect(date).toContainText('Insufficient reports for average');
-    await page.locator('#rawBtn').click();
-    await page.locator('#dateSlider').fill('14');
-    await expect(value).toHaveText('-2');
-    await expect(date).toContainText('Reporting correction');
-    await page.locator('#dateSlider').fill('9');
-    await expect(value).toHaveText('9');
+    await page.locator('#analysisUnitSelector').selectOption('count');
+    await page.locator('#analysisRawBtn').click();
     await page.locator('#search').click();
     await page.locator('#countrySearchInput').fill('United States');
     await page.getByRole('button', { name: 'United States', exact: true }).click();
-    await expect(value).toHaveText('18');
-    await page.locator('#dataSelector').selectOption('new_deceased');
-    await expect(value).toHaveText('4');
+    await expect(value).toHaveText('54');
+    await page.locator('#analysisMetricSelector').selectOption('new_deceased');
+    await expect(value).toHaveText('2');
     await expect(page.locator('#analysisMetricLabel')).toHaveText('New reported deaths');
-    await page.locator('#hospBtn').click();
-    await page.locator('#dataSelector').selectOption('current_hospitalized_patients');
-    await expect(value).toHaveText('36');
+    await page.locator('#analysisHospBtn').click();
+    await page.locator('#analysisMetricSelector').selectOption('current_hospitalized_patients');
+    await expect(value).toHaveText('108');
+    await expect(page.locator('#dataSelector')).toHaveValue('new_confirmed');
+    await expect(page.locator('#unitSelector')).toHaveValue('per100k');
+    await expect(page.locator('#averageBtn')).toHaveAttribute('aria-pressed', 'true');
+    for (const [selectedDate, expected] of [['2021-01-01', '0'], ['2021-01-15', '-2']]) {
+        await prepare(page, 'dark', `/?country=tn&analysis=1&date=${selectedDate}&smooth=raw`);
+        await expect(value).toHaveText(expected);
+        if (expected === '0') {
+            await page.locator('#analysisAverageBtn').click();
+            await expect(value).toHaveText('Unavailable');
+            await expect(date).toContainText('Insufficient reports for average');
+        } else await expect(date).toContainText('Reporting correction');
+    }
 });
 
-test('country analysis settings share atlas state and retain the selected country, date and analysis period', async ({ page }) => {
+test('country analysis settings remain local and restore their metric, reporting, chart and date period', async ({ page }) => {
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await prepare(page, 'dark', '/?country=tn&analysis=1&date=2021-01-28&smooth=raw');
     const value = page.locator('#analysisValue');
@@ -429,16 +436,16 @@ test('country analysis settings share atlas state and retain the selected countr
     await page.locator('#date-range-end-input').fill('2021-01-20');
     await page.locator('#date-range-end-input').dispatchEvent('change');
     expect(await page.locator('#analysisMetricSelector option').evaluateAll(nodes => nodes.map(option => option.value)))
-        .toEqual(await page.locator('#dataSelector option').evaluateAll(nodes => nodes.map(option => option.value)));
+        .toEqual(await page.evaluate(() => dataService.availableColumns.epidem));
     await page.locator('#analysisMetricSelector').selectOption('new_tested');
-    await expect(page.locator('#dataSelector')).toHaveValue('new_tested');
+    await expect(page.locator('#dataSelector')).toHaveValue('new_confirmed');
     await expect(page.locator('#analysisMetricLabel')).toHaveText('New tests');
     await expect(value).toHaveText('540');
     await page.locator('#analysisUnitSelector').selectOption('per100k');
-    await expect(page.locator('#unitSelector')).toHaveValue('per100k');
+    await expect(page.locator('#unitSelector')).toHaveValue('count');
     await expect(value).toHaveText('54,000');
     await page.locator('#analysisAverageBtn').click();
-    await expect(page.locator('#averageBtn')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#rawBtn')).toHaveAttribute('aria-pressed', 'true');
     await expect(value).toHaveText('48,000');
     await expect(page.locator('#analysisUnits')).toContainText('7-day average');
     await expect(page.locator('#date-range-start-input')).toHaveValue('2021-01-05');
@@ -447,29 +454,37 @@ test('country analysis settings share atlas state and retain the selected countr
         .toEqual({ country: 'tn', date: '2021-01-28' });
     await page.locator('.analysis-controls').scrollIntoViewIfNeeded();
     await page.screenshot({ path: 'test-results/country-analysis-settings-desktop.png' });
-    expect(new URL(page.url()).searchParams.get('metric')).toBe('new_tested');
-    expect(new URL(page.url()).searchParams.get('unit')).toBe('per100k');
-    await page.locator('#dataSelector').selectOption('cumulative_confirmed');
+    const selected = JSON.parse(new URL(page.url()).searchParams.get('analysisSettings'));
+    expect(selected).toMatchObject({ category: 'epidem', metric: 'new_tested', unit: 'per100k', smoothing: '7day' });
+    expect(new URL(page.url()).searchParams.get('metric')).toBe('new_confirmed');
+    expect(new URL(page.url()).searchParams.has('unit')).toBe(false);
+    await page.locator('#analysisMetricSelector').selectOption('cumulative_confirmed');
     await expect(page.locator('#analysisMetricSelector')).toHaveValue('cumulative_confirmed');
     await expect(page.locator('#analysisReportingGroup')).toBeHidden();
     await expect(page.locator('#analysisAverageBtn')).toBeDisabled();
     await expect(value).toHaveText('270,000');
     expect(new URL(page.url()).searchParams.has('smooth')).toBe(false);
-    await page.locator('#unitSelector').selectOption('count');
+    await page.locator('#analysisUnitSelector').selectOption('count');
     await expect(page.locator('#analysisUnitSelector')).toHaveValue('count');
-    await page.locator('#dataSelector').selectOption('new_confirmed');
-    await page.locator('#averageBtn').click();
+    await page.locator('#analysisMetricSelector').selectOption('new_confirmed');
+    await page.locator('#analysisAverageBtn').click();
     await expect(page.locator('#analysisReportingGroup')).toBeVisible();
     await expect(page.locator('#analysisAverageBtn')).toHaveAttribute('aria-pressed', 'true');
     await expect(value).toHaveText('24');
     await expect(page.locator('#date-range-start-input')).toHaveValue('2021-01-05');
     await expect(page.locator('#date-range-end-input')).toHaveValue('2021-01-20');
+    await page.locator('#vizTypeSelector').selectOption('area');
     await page.reload();
     await expect(page.locator('#visualizationPanel')).toBeVisible();
     await expect(page.locator('#analysisMetricSelector')).toHaveValue('new_confirmed');
     await expect(page.locator('#analysisUnitSelector')).toHaveValue('count');
     await expect(page.locator('#analysisAverageBtn')).toHaveAttribute('aria-pressed', 'true');
     await expect(value).toHaveText('24');
+    await expect(page.locator('#vizTypeSelector')).toHaveValue('area');
+    await expect(page.locator('#date-range-start-input')).toHaveValue('2021-01-05');
+    await expect(page.locator('#date-range-end-input')).toHaveValue('2021-01-20');
+    await expect(page.locator('#dataSelector')).toHaveValue('new_confirmed');
+    await expect(page.locator('#rawBtn')).toHaveAttribute('aria-pressed', 'true');
     expect(errors).toEqual([]);
 });
 
@@ -494,7 +509,7 @@ test('country analysis settings fit on mobile and changing them keeps the toolba
             .evaluate(node => node.getBoundingClientRect().top) - previous)).toBeLessThanOrEqual(2);
     }
     await expect(page.locator('#analysisValue')).toHaveText('200');
-    await expect(page.locator('#dataSelector')).toHaveValue('new_deceased');
+    await expect(page.locator('#dataSelector')).toHaveValue('new_confirmed');
     await expect(page.locator('#rawBtn')).toHaveAttribute('aria-pressed', 'true');
     await fits(page, '.analysis-controls, #analysisMetricSelector, #analysisUnitSelector, #analysisReportingGroup, #vizTypeSelector');
     await page.screenshot({ path: 'test-results/country-analysis-settings-mobile.png' });
@@ -762,9 +777,9 @@ test('country analysis heading explains unavailable observations and missing pop
     await page.locator('#seeMoreBtn').click();
     await expect(page.locator('#analysisValue')).toHaveText('Unavailable');
     await expect(page.locator('#analysisValueDate')).toContainText('No report on selected date');
-    await page.locator('#dataSelector').selectOption('new_deceased');
+    await page.locator('#analysisMetricSelector').selectOption('new_deceased');
     await expect(page.locator('#analysisValue')).toHaveText('2');
-    await page.locator('#unitSelector').selectOption('per100k');
+    await page.locator('#analysisUnitSelector').selectOption('per100k');
     await expect(page.locator('#analysisValue')).toHaveText('Unavailable');
     await expect(page.locator('#analysisValueDate')).toContainText('Population unavailable');
 });
@@ -806,8 +821,8 @@ test('country analysis contains only single-country charts and follows the chose
     await chartChoices(page, '#vizTypeSelector', countryMarks);
     for (const [category, metric] of [['hospitalizations', 'current_hospitalized_patients'],
         ['vaccinations', 'cumulative_vaccine_doses_administered']]) {
-        await page.locator(category === 'hospitalizations' ? '#hospBtn' : '#vaccBtn').click();
-        await page.locator('#dataSelector').selectOption(metric);
+        await page.locator(category === 'hospitalizations' ? '#analysisHospBtn' : '#analysisVaccBtn').click();
+        await page.locator('#analysisMetricSelector').selectOption(metric);
         for (const [type, mark] of Object.entries(countryMarks)) {
             await page.locator('#vizTypeSelector').selectOption(type);
             await expect(page.locator(`#chartContainer ${mark}`).first(), `${metric}: ${type}`).toBeVisible();
@@ -839,11 +854,15 @@ test('country scatter groups all dataset metrics and retains cross-dataset axes 
     await page.setViewportSize({ width: 390, height: 1000 });
     await prepare(page, 'light', '/?country=tn&date=2021-01-28&smooth=raw');
     await page.locator('#seeMoreBtn').click();
-    await page.locator('#hospBtn').click();
+    await page.locator('#analysisHospBtn').click();
+    await page.locator('#analysisMetricSelector').selectOption('current_hospitalized_patients');
     await page.locator('#vizTypeSelector').selectOption('scatter');
-    for (const id of ['analysisMetricControl', 'analysisUnitControl', 'analysisReportingGroup'])
+    for (const id of ['analysisDatasetButtons', 'analysisMetricControl', 'analysisUnitControl', 'analysisReportingGroup'])
         await expect(page.locator(`#${id}`)).toBeHidden();
-    const activeColumns = await page.evaluate(() => dataService.availableColumns[dataService.currentDataset]);
+    const activeColumns = await page.evaluate(() => {
+        const service = AtlasWorkspaces.get('country');
+        return service.availableColumns[service.currentDataset];
+    });
     for (const selector of ['#analysis-xMetric', '#analysis-yMetric']) {
         expect(activeColumns).toContain(await page.locator(selector).inputValue());
         expect(await page.locator(`${selector} optgroup`).evaluateAll(groups => groups.map(group => group.label)))
@@ -922,7 +941,8 @@ test('country scatter preserves calendar bounds when axes change coverage and pl
     };
     await prepare(page, 'dark', '/?country=tn&date=2021-01-28&smooth=raw', sparse);
     await page.locator('#seeMoreBtn').click();
-    await page.locator('#hospBtn').click();
+    await page.locator('#analysisHospBtn').click();
+    await page.locator('#analysisMetricSelector').selectOption('current_hospitalized_patients');
     await page.locator('#vizTypeSelector').selectOption('scatter');
     await page.locator('#analysis-xMetric').selectOption('current_intensive_care_patients');
     await page.locator('#analysis-xUnit').selectOption('per100k');

@@ -11,7 +11,7 @@ window.AnalyticsCharts = {
         if (type !== 'dumbbell' || this.dumbbellInitialized) return;
         this.preserveRange();
         if (state.dateRange.start !== 0 || state.dateRange.end !== 100) return;
-        const service = window.dataService, dates = service.getAvailableDates();
+        const service = window.AtlasWorkspaces?.get('compare') || window.dataService, dates = service.getAvailableDates();
         if (dates.length < 2) return;
         const end = Math.max(0, dates.findLastIndex(date => date <= service.currentDate));
         const cutoff = new Date(Date.parse(`${dates[end]}T00:00:00Z`) - 90 * 86400000).toISOString().slice(0, 10);
@@ -52,7 +52,7 @@ window.AnalyticsCharts = {
     },
     controls(host, type, supplied, onChange, scope = 'compare') {
         if (!host) return;
-        const service = window.dataService, options = this.normalizedOptions(service, type, supplied, scope), fields = [];
+        const service = window.AtlasWorkspaces?.get(scope) || window.dataService, options = this.normalizedOptions(service, type, supplied, scope), fields = [];
         if (type === 'dumbbell') this.preserveRange();
         if (type === 'horizontal') fields.push({ key: 'date', label: 'Observation date', kind: 'date' },
             { key: 'date-slider', label: 'Move through time', kind: 'range' });
@@ -138,7 +138,7 @@ window.AnalyticsCharts = {
         };
     },
     render(container, type, settings) {
-        const service = window.dataService || window.globeInstance.dataService;
+        const service = settings.service || window.AtlasWorkspaces?.get(settings.scope) || window.dataService || window.globeInstance.dataService;
         if (!this.definition(type)?.[settings.scope]) return ChartFactory.showError(container, 'Choose a supported chart type.');
         const options = this.normalizedOptions(service, type, settings.options, settings.scope);
         const timeline = settings.timeline || this.timeline(service, type, settings.scope, options);
@@ -151,7 +151,7 @@ window.AnalyticsCharts = {
             date: options.date || service.currentDate
         });
         if (!model.subtitle) {
-            const metric = service.getMetricMetadata(service.currentColumn);
+            const metric = service.getMetricMetadata(service.currentColumn) || ChartFactory.metadata(service.currentColumn);
             model.subtitle = `${metric.label} · ${ChartFactory.smoothingLabel(metric, service.smoothing)} · ${ChartFactory.periodLabel([bounds.startDate, bounds.endDate].filter(Boolean))}`;
         }
         ChartFactory.clearChart(container);
@@ -159,26 +159,15 @@ window.AnalyticsCharts = {
         return model;
     },
     renderCountry(container, country, type, settings) {
-        const service = window.dataService;
+        const service = settings?.service || window.AtlasWorkspaces?.get('country') || window.dataService;
         this.controls(document.getElementById('analysisChartOptions'), type, this.countryOptions, options => {
-            if (type === 'scatter') {
-                const previous = ChartControls.timeline || [], timeline = this.timeline(service, type, 'country', options);
-                if (previous.length && timeline.length && (previous.length !== timeline.length || previous.some((date, index) => date !== timeline[index]))) {
-                    const dates = this.bounds(service, ChartControls.state.dateRange, previous);
-                    const nextStart = timeline.findIndex(date => date >= dates.startDate);
-                    const start = nextStart < 0 ? timeline.length - 1 : nextStart;
-                    const end = Math.max(start, timeline.findLastIndex(date => date <= dates.endDate));
-                    const last = timeline.length - 1;
-                    ChartControls.state.dateRange = { start: last ? start / last * 100 : 0, end: last ? end / last * 100 : 100 };
-                }
-            }
             this.countryOptions = options; changeVisualization();
         }, 'country');
         const options = this.normalizedOptions(service, type, this.countryOptions, 'country');
         const timeline = this.timeline(service, type, 'country', options);
-        settings = settings || ChartControls.initialize(container, country, type, { column: service.currentColumn, timeline });
+        settings = settings || ChartControls.initialize(container, country, type, { column: service.currentColumn, timeline }, service);
         const range = document.getElementById('chartControlsContainer'); if (range) range.hidden = false;
         this.render(container, type, { scope: 'country', country, countries: [country],
-            dateRange: settings.dateRange, timeline: settings.timeline, options: this.countryOptions });
+            dateRange: settings.dateRange, timeline: settings.timeline, options: this.countryOptions, service });
     }
 };

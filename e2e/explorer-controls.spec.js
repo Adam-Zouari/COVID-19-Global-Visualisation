@@ -152,6 +152,24 @@ test('hospital occupancy supports daily snapshots and seven-day means without sm
     await expect(page.locator('#compareSmoothingSelector')).toHaveValue('raw');
     await expect(page.locator('#compareChartContainer .chart-subtitle')).toContainText('Reported cumulative values');
     await page.locator('#navExplore').click();
+    await expect(page.locator('.smoothing-group')).toBeVisible();
+    await expect(page.locator('#dataSelector')).toHaveValue('current_hospitalized_patients');
+    await expect(page.locator('#countryPrimary .primary-metric-value')).toHaveText('70');
+    await expect(page.locator('#analysisMetricSelector')).toHaveValue('current_hospitalized_patients');
+    await expect(page.locator('#analysisValue')).toHaveText('70');
+    await page.locator('#analysisRawBtn').click();
+    await expect(page.locator('#analysisValue')).toHaveText('100');
+    await expect(page.locator('#chartContainer .chart-subtitle')).toContainText('Reported daily patient snapshots');
+    await expect(page.locator('#countryPrimary .primary-metric-value')).toHaveText('70');
+    await page.locator('#analysisAverageBtn').click();
+    await expect(page.locator('#analysisValue')).toHaveText('70');
+    await expect(page.locator('#chartContainer .chart-subtitle')).toContainText('7-day average of daily patient snapshots');
+    await page.locator('#analysisMetricSelector').selectOption('cumulative_hospitalized_patients');
+    await expect(page.locator('#analysisReportingGroup')).toBeHidden();
+    await expect(page.locator('#analysisValue')).toHaveText('1,000');
+    await expect(page.locator('#chartContainer .chart-subtitle')).toContainText('Reported cumulative values');
+    await expect(page.locator('#countryPrimary .primary-metric-value')).toHaveText('70');
+    await page.locator('#dataSelector').selectOption('cumulative_hospitalized_patients');
     await expect(page.locator('.smoothing-group')).toBeHidden();
     await expect(page.locator('#countryPrimary .primary-metric-value')).toHaveText('1,000');
     await page.locator('#dataSelector').selectOption('new_hospitalized_patients');
@@ -159,6 +177,10 @@ test('hospital occupancy supports daily snapshots and seven-day means without sm
     await expect(page.locator('#countryPrimary .primary-metric-value')).toHaveText('30');
     await page.locator('#averageBtn').click();
     await expect(page.locator('#countryPrimary .primary-metric-value')).toHaveText('21');
+    await expect(page.locator('#analysisValue')).toHaveText('1,000');
+    await expect(page.locator('#analysisMetricSelector')).toHaveValue('cumulative_hospitalized_patients');
+    expect(await page.evaluate(() => ({ metric: AtlasWorkspaces.get('compare').currentColumn,
+        smoothing: AtlasWorkspaces.get('compare').smoothing }))).toEqual({ metric: 'cumulative_hospitalized_patients', smoothing: 'raw' });
     await coverage(page);
     await page.locator('#dateSlider').focus();
     await page.keyboard.press('Home');

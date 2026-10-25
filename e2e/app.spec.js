@@ -145,9 +145,11 @@ test('population units preserve compact axes and the timeline stays above the gl
     await expect(page.locator('#chartContainer .axis-unit-label')).toHaveText('Deaths per 100,000 people');
     await expect(page.locator('#chartContainer .y-axis')).toContainText('2.0k');
     expect(await page.locator('#chartContainer .data-line').evaluate(node => node.__data__.at(-1).value)).toBe(2000);
-    await page.locator('#unitSelector').selectOption('per1m');
+    await page.locator('#analysisUnitSelector').selectOption('per1m');
     await expect(page.locator('#chartContainer .axis-unit-label')).toHaveText('Deaths per 1,000,000 people');
     expect(await page.locator('#chartContainer .data-line').evaluate(node => node.__data__.at(-1).value)).toBe(20000);
+    await expect(page.locator('#unitSelector')).toHaveValue('per100k');
+    await page.locator('#unitSelector').selectOption('per1m');
     await page.locator('#addToCompareBtn').click();
     await expect(page.locator('#compareUnitSelector')).toHaveValue('per1m');
     await page.locator('#addCountryBtn').click();
@@ -157,8 +159,15 @@ test('population units preserve compact axes and the timeline stays above the gl
     await expect(page.locator('.country-chart-container .axis-unit-label')).toHaveText(['Deaths per 1,000,000 people', 'Deaths per 1,000,000 people']);
     await page.locator('#compareUnitSelector').selectOption('per100k');
     await expect(page.locator('.country-chart-container .axis-unit-label')).toHaveText(['Deaths per 100,000 people', 'Deaths per 100,000 people']);
+    expect(await page.evaluate(() => dataService.displayUnit)).toBe('per1m');
     await page.reload();
     await expect(page.locator('#compareUnitSelector')).toHaveValue('per100k');
+    expect(await page.evaluate(() => ({ globe: dataService.displayUnit, country: AtlasWorkspaces.get('country').displayUnit })))
+        .toEqual({ globe: 'per1m', country: 'per1m' });
+    await page.locator('#navExplore').click();
+    await expect(page.locator('#unitSelector')).toHaveValue('per1m');
+    await expect(page.locator('#analysisUnitSelector')).toHaveValue('per1m');
+    await expect(page.locator('#chartContainer .axis-unit-label')).toHaveText('Deaths per 1,000,000 people');
 });
 
 test('desktop exploration keeps the still globe and communicates metric, source, timeline and country context', async ({ page }) => {

@@ -2,14 +2,20 @@ window.CompareMode = {
     state: { active: false, countries: [], displayMode: 'combined', chartType: 'line',
         dateRange: { start: 0, end: 100 }, scale: 'shared', chartOptions: {} },
 
+    service() {
+        return window.AtlasWorkspaces?.peek('compare') || window.dataService || window.globeInstance?.dataService;
+    },
+
     enter({ focus = true } = {}) {
         const globe = window.globeInstance;
         if (this.state.active || !globe?.dataService.availableDates.length) return;
         window.stopTimeline?.();
+        const firstVisit = !window.AtlasWorkspaces || !window.AtlasWorkspaces.peek('compare');
+        window.AtlasWorkspaces?.ensure('compare');
         this.state.active = true;
         globe.stopAutoRotation?.(); globe.cancelRotationAnimation?.();
         const code = globe.selectedCountryCode;
-        if (code && !this.state.countries.includes(code) && this.state.countries.length < this.countryLimit()) this.state.countries.push(code);
+        if (firstVisit && !this.state.countries.length && code) this.state.countries.push(code);
         CompareUI.matchExploreBottomSpacing();
         AtlasView.render('compare');
         CompareUI.initialize({ focus }); this.updateComparisonView();
@@ -68,12 +74,14 @@ window.CompareMode = {
     updateDateRange(start, end) {
         window.AnalyticsCharts?.preserveRange();
         const clamp = value => Math.max(0, Math.min(100, Number(value) || 0));
-        this.state.dateRange = { start: Math.min(clamp(start), clamp(end)), end: Math.max(clamp(start), clamp(end)) };
+        const range = { start: Math.min(clamp(start), clamp(end)), end: Math.max(clamp(start), clamp(end)) };
+        if (range.start === this.state.dateRange.start && range.end === this.state.dateRange.end) return;
+        this.state.dateRange = range;
         this.updateComparisonView(); window.syncAtlasState?.();
     },
 
     syncControls() {
-        const service = window.globeInstance?.dataService;
+        const service = this.service();
         if (!service) return;
         if (window.ChartTypes && !ChartTypes[this.state.chartType]?.compare) this.state.chartType = 'line';
         const description = document.querySelector('.compare-heading p');
@@ -91,7 +99,7 @@ window.CompareMode = {
         if (selector) {
             updateSelectOptions(selector, columns.map(value => ({ value, label: ChartFactory.metadata(value).label })));
             selector.value = column;
-            selector.onchange = () => atlasActions.setMetric(selector.value);
+            selector.onchange = () => atlasActions.setMetric(selector.value, 'compare');
         }
         const units = document.getElementById('compareUnitSelector');
         if (units) {
@@ -100,13 +108,13 @@ window.CompareMode = {
                 disabled: value !== 'count' && !populationAvailable })));
             units.title = populationAvailable ? 'Use population-adjusted values to compare countries of different sizes.' : 'Population data is unavailable; counts remain available.';
             units.value = service.displayUnit || 'count';
-            units.onchange = () => atlasActions.setUnit(units.value);
+            units.onchange = () => atlasActions.setUnit(units.value, 'compare');
         }
         const smoothing = document.getElementById('compareSmoothingSelector');
         if (smoothing) {
             const group = smoothing.closest('.control-group'); if (group) group.hidden = !metric.smoothingAllowed;
             smoothing.disabled = !metric.smoothingAllowed; smoothing.value = metric.smoothingAllowed ? service.smoothing || 'raw' : 'raw';
-            smoothing.onchange = () => atlasActions.setSmoothing(smoothing.value);
+            smoothing.onchange = () => atlasActions.setSmoothing(smoothing.value, 'compare');
         }
         const type = document.getElementById('compareChartType'); if (type) type.value = this.state.chartType;
         if (window.AnalyticsCharts) this.state.chartOptions = AnalyticsCharts.normalizedOptions(service, this.state.chartType, this.state.chartOptions);
@@ -136,11 +144,12 @@ window.CompareMode = {
         if (!this.state.countries.length) { this.message(); return CompareUI.showNoCountriesMessage(); }
         if (this.state.countries.length === 1) this.message('Add another country to compare trends on the same dates.');
         else if (document.getElementById('compareMessage')?.textContent.startsWith('Add another')) this.message();
-        const settings = { dateRange: this.state.dateRange, selectedColumn: window.globeInstance.dataService.currentColumn,
-            unit: window.globeInstance.dataService.displayUnit || 'count', smoothing: window.globeInstance.dataService.smoothing || 'raw' };
+        const service = this.service();
+        const settings = { service, dateRange: this.state.dateRange, selectedColumn: service.currentColumn,
+            unit: service.displayUnit || 'count', smoothing: service.smoothing || 'raw' };
         if (window.AnalyticsCharts?.isAnalytical(this.state.chartType)) {
             return AnalyticsCharts.render(container, this.state.chartType, { scope: 'compare', countries: this.state.countries,
-                dateRange: this.state.dateRange, options: this.state.chartOptions });
+                service, dateRange: this.state.dateRange, options: this.state.chartOptions });
         }
         if (this.state.displayMode === 'combined') {
             const chart = document.createElement('div'); chart.className = 'combined-chart-container'; container.appendChild(chart);

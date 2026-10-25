@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { JSDOM } from 'jsdom';
 import * as d3 from 'd3';
+import { createWorkspaces } from '../src/ui/workspaces.js';
+import { getMetricMetadata, getUnitLabel } from '../src/dataService/metrics.js';
 
 const importedName = '<img src=x onerror="alert(1)"><script>alert(2)</script>';
 
@@ -140,6 +142,39 @@ test('comparison sliders reach every active metric date and labels agree with fi
     assert.equal(prepared[0].dates[0], service.availableDates[107]); assert.equal(prepared[1].dates[0], prepared[0].dates[0]);
 });
 
+test('comparison period input redraws chart axes before release without replacing either date handle', t => {
+    const { window, document, service, compare, factory } = harness(t);
+    compare.state.countries = ['tn', 'fr']; compare.enter();
+    const start = document.getElementById('startDateSlider'), end = document.getElementById('endDateSlider');
+    const initialAxis = document.querySelector('#compareChartContainer .x-axis').textContent;
+    const render = compare.updateComparisonView.bind(compare);
+    let renders = 0;
+    compare.updateComparisonView = (...args) => { renders++; return render(...args); };
+    start.value = '100'; start.dispatchEvent(new window.Event('input'));
+    end.value = '500'; end.dispatchEvent(new window.Event('input'));
+    assert.equal(compare.state.dateRange.start, 10); assert.equal(compare.state.dateRange.end, 50);
+    assert.notEqual(document.querySelector('#compareChartContainer .x-axis').textContent, initialAxis);
+    assert.ok(document.querySelector('#compareChartContainer .chart-subtitle').textContent.includes(
+        factory.periodLabel([service.availableDates[100], service.availableDates[500]])));
+    assert.equal(document.getElementById('startDateSlider'), start);
+    assert.equal(document.getElementById('endDateSlider'), end);
+    assert.equal(renders, 2);
+    end.dispatchEvent(new window.Event('change'));
+    assert.equal(renders, 2, 'releasing an already-rendered range does not redraw it twice');
+});
+
+test('comparison preparation uses its local metric and units when no service is explicitly supplied', t => {
+    const { window, service, comparison } = harness(t);
+    const local = Object.assign(Object.create(service), { currentColumn: 'new_tested', displayUnit: 'per100k', smoothing: '7day' });
+    window.AtlasWorkspaces = { peek: scope => scope === 'compare' ? local : null };
+    const prepared = comparison.prepare(['tn', 'us'], { dateRange: { start: 10, end: 20 } });
+    for (const country of prepared) {
+        assert.equal(country.column, 'new_tested'); assert.equal(country.unit, 'per100k'); assert.equal(country.smoothing, '7day');
+        assert.equal(country.series.new_tested[0], 200);
+    }
+    assert.equal(service.currentColumn, 'new_confirmed'); assert.equal(service.displayUnit, 'count'); assert.equal(service.smoothing, 'raw');
+});
+
 test('single-date chart arrows step calendar days through sparse observations and stay synchronized', t => {
     const { window, document, context, service } = harness(t);
     vm.runInContext(readFileSync(new URL('../src/ui/analytics.js', import.meta.url), 'utf8'), context);
@@ -213,6 +248,35 @@ test('comparison preserves selected country, date and analysis context when exit
     assert.equal(globe.selectedCountryCode, 'sg'); assert.equal(service.currentDate, originalDate);
     assert.equal(document.getElementById('visualizationPanel').hidden, false); assert.equal(resetCount(), 0);
     assert.equal(resizeCount(), 1, 'returning from the hidden view remeasures the globe');
+});
+
+test('an established comparison keeps its countries when returning from a different globe country', t => {
+    const { window, service, globe, compare } = harness(t);
+    let local;
+    window.AtlasWorkspaces = {
+        peek: scope => scope === 'compare' ? local : null,
+        ensure: () => local ||= Object.create(service)
+    };
+    globe.selectedCountryCode = 'tn'; compare.enter();
+    assert.deepEqual(Array.from(compare.state.countries), ['tn'], 'the first visit starts from the globe country');
+    compare.addCountry('us'); compare.exit();
+    globe.selectedCountryCode = 'fr'; compare.enter();
+    assert.deepEqual(Array.from(compare.state.countries), ['tn', 'us'], 'navigation preserves the established comparison');
+    assert.equal(globe.selectedCountryCode, 'fr');
+    compare.exit(); compare.addCountry('fr'); compare.enter();
+    assert.deepEqual(Array.from(compare.state.countries), ['tn', 'us', 'fr'], 'an explicit add still includes the new globe country');
+});
+
+test('an explicit initial comparison country list is preserved independently of the globe country', t => {
+    const { window, service, globe, compare } = harness(t);
+    let local;
+    window.AtlasWorkspaces = {
+        peek: scope => scope === 'compare' ? local : null,
+        ensure: () => local ||= Object.create(service)
+    };
+    globe.selectedCountryCode = 'tn'; compare.state.countries = ['us', 'fr']; compare.enter();
+    assert.deepEqual(Array.from(compare.state.countries), ['us', 'fr']);
+    assert.equal(globe.selectedCountryCode, 'tn');
 });
 
 test('comparison limits selection to four countries, ignores duplicates and explains how to continue', t => {
@@ -321,39 +385,82 @@ test('comparison keeps select options and focus during updates and updates popul
     assert.equal(rateOption.disabled, false);
 });
 
-test('country analysis settings mirror current dataset, units and reporting without replacing focused controls', t => {
+test('country analysis dataset buttons filter local metrics and retain independent settings and focus', t => {
     const { window, document, service, globe } = harness(t);
     globe.selectedCountryCode = 'tn';
-    const metadata = service.getMetricMetadata.bind(service);
-    service.getMetricMetadata = (column = service.currentColumn) => column === 'cumulative_confirmed' ? {
-        ...metadata(column), label: 'Total confirmed cases', kind: 'cumulative', smoothingAllowed: false
-    } : metadata(column);
-    service.availableColumns.epidem.push('cumulative_confirmed');
+    service.getMetricMetadata = getMetricMetadata;
+    service.getUnitLabel = getUnitLabel;
+    service.availableColumns = {
+        epidem: ['new_confirmed', 'new_tested', 'cumulative_confirmed'],
+        hospitalizations: ['current_hospitalized_patients'],
+        vaccinations: ['cumulative_persons_vaccinated']
+    };
+    window.AtlasWorkspaces = createWorkspaces(service);
+    const country = window.AtlasWorkspaces.ensure('country');
     window.updateAtlasPresentation();
     const metrics = document.getElementById('analysisMetricSelector');
     const units = document.getElementById('analysisUnitSelector');
     const reporting = document.getElementById('analysisReportingGroup');
+    assert.equal(document.querySelector('label[for="analysisMetricSelector"]').parentElement, metrics.parentElement);
+    for (const [localId, mainId] of [['analysisEpidemBtn', 'epidemBtn'], ['analysisHospBtn', 'hospBtn'], ['analysisVaccBtn', 'vaccBtn']]) {
+        const local = document.getElementById(localId), main = document.getElementById(mainId);
+        assert.equal(local.classList.contains('dataset-btn'), true);
+        assert.equal(local.querySelector('path').getAttribute('d'), main.querySelector('path').getAttribute('d'));
+    }
     assert.deepEqual(Array.from(metrics.options, option => option.value), service.availableColumns.epidem);
+    assert.equal(metrics.querySelectorAll('optgroup').length, 0);
+    assert.equal(document.getElementById('analysisEpidemBtn').getAttribute('aria-pressed'), 'true');
+    assert.equal(document.getElementById('analysisHospBtn').getAttribute('aria-pressed'), 'false');
+    assert.equal(document.getElementById('analysisVaccBtn').getAttribute('aria-pressed'), 'false');
     assert.equal(metrics.value, 'new_confirmed'); assert.equal(units.value, 'count');
     assert.equal(reporting.hidden, false);
     const metricOption = metrics.options[0], rateOption = units.querySelector('[value="per100k"]');
     metrics.focus();
-    service.currentColumn = 'new_tested'; service.displayUnit = 'per100k'; service.smoothing = '7day';
+    window.AtlasWorkspaces.update('country', { metric: 'new_tested', unit: 'per100k', smoothing: '7day' });
     window.updateAtlasPresentation();
     assert.equal(metrics.value, 'new_tested'); assert.equal(units.value, 'per100k');
-    assert.equal(document.getElementById('unitSelector').value, 'per100k');
+    assert.equal(service.currentColumn, 'new_confirmed');
+    assert.equal(document.getElementById('unitSelector').value, 'count');
+    assert.equal(document.getElementById('rawBtn').getAttribute('aria-pressed'), 'true');
     assert.equal(document.getElementById('analysisAverageBtn').getAttribute('aria-pressed'), 'true');
     assert.equal(document.getElementById('analysisRawBtn').getAttribute('aria-pressed'), 'false');
     assert.equal(document.activeElement, metrics); assert.equal(metrics.options[0], metricOption);
     assert.equal(units.querySelector('[value="per100k"]'), rateOption);
+    service.currentDataset = 'vaccinations'; service.currentColumn = 'cumulative_persons_vaccinated';
+    service.displayUnit = 'percent'; service.smoothing = 'raw';
+    window.updateAtlasPresentation();
+    assert.equal(metrics.value, 'new_tested'); assert.equal(units.value, 'per100k');
+    assert.equal(country.currentDataset, 'epidem');
+    assert.equal(document.querySelector('label[for="analysisMetricSelector"]').textContent, 'Metric');
+    assert.equal(document.getElementById('analysisEpidemBtn').getAttribute('aria-pressed'), 'true');
+    assert.equal(document.getElementById('vaccBtn').getAttribute('aria-pressed'), 'true');
     service.getPopulation = () => null;
+    window.AtlasWorkspaces.revalidate();
     window.updateAtlasPresentation();
     assert.equal(rateOption.disabled, true);
-    service.availableColumns.vaccinations = ['cumulative_confirmed'];
-    service.currentDataset = 'vaccinations'; service.currentColumn = 'cumulative_confirmed';
-    service.displayUnit = 'count'; service.smoothing = 'raw';
+    assert.equal(country.displayUnit, 'count'); assert.equal(units.value, 'count');
+    service.getPopulation = () => 1000000;
+    window.AtlasWorkspaces.update('country', { category: 'vaccinations', metric: 'cumulative_persons_vaccinated', unit: 'percent', smoothing: '7day' });
     window.updateAtlasPresentation();
-    assert.deepEqual(Array.from(metrics.options, option => option.value), ['cumulative_confirmed']);
-    assert.equal(metrics.value, 'cumulative_confirmed'); assert.equal(reporting.hidden, true);
+    assert.equal(metrics.value, 'cumulative_persons_vaccinated'); assert.equal(units.value, 'percent');
+    assert.deepEqual(Array.from(metrics.options, option => option.value), service.availableColumns.vaccinations);
+    assert.equal(document.getElementById('analysisVaccBtn').getAttribute('aria-pressed'), 'true');
+    assert.equal(document.getElementById('analysisEpidemBtn').getAttribute('aria-pressed'), 'false');
+    assert.equal(reporting.hidden, true); assert.equal(country.smoothing, 'raw');
     assert.equal(document.getElementById('analysisAverageBtn').disabled, true);
+    service.availableColumns.vaccinations = ['new_persons_vaccinated'];
+    window.AtlasWorkspaces.revalidate();
+    window.updateAtlasPresentation();
+    assert.equal(country.currentColumn, 'new_persons_vaccinated');
+    assert.equal(metrics.value, 'new_persons_vaccinated'); assert.equal(units.value, 'count');
+    assert.equal(reporting.hidden, false);
+    assert.equal(document.getElementById('analysisAverageBtn').disabled, false);
+    assert.equal(metrics.querySelector('[value="cumulative_persons_vaccinated"]'), null);
+    assert.equal(document.activeElement, metrics);
+    const chart = document.getElementById('vizTypeSelector');
+    chart.value = 'scatter'; window.updateCountryAnalysisControls();
+    assert.equal(document.getElementById('analysisMetricControl').hidden, true);
+    chart.value = 'line'; window.updateCountryAnalysisControls();
+    assert.equal(document.getElementById('analysisMetricControl').hidden, false);
+    assert.equal(document.getElementById('analysisVaccBtn').getAttribute('aria-pressed'), 'true');
 });
